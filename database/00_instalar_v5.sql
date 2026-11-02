@@ -1,8 +1,10 @@
 -- =============================================================================
--- Cautiva Spa E.I.R.L. · Base de datos Oracle 19c · VERSIÓN 5 · Instalación completa
--- Ejecutar en SQL Developer (F5) conectado como el dueño de un esquema VACÍO
--- (por ejemplo un usuario nuevo CAUTIVA5, o CAUTIVA después de 99_eliminar_v5.sql
--- y de retirar los objetos v4). Todos los archivos deben estar en la misma carpeta.
+-- Cautiva Spa E.I.R.L. · Base de datos Oracle (19c o 23ai/26ai Free) · VERSIÓN 5 · Instalación completa
+-- Ejecutar con SQL*Plus o SQLcl (SQL Developer F5, o DBeaver > Herramientas > Execute in SQL*Plus)
+-- conectado como el dueño de un esquema VACÍO. Todos los archivos deben estar en la misma carpeta.
+-- Este script instala 01 a 12. Para el back-end faltan, en este orden (ver README.md):
+--   14_cuenta_aplicacion.sql como DBA, 13_permisos.sql como dueño, 15_datos_iteracion1.sql como dueño
+--   (solo local y pruebas), la clave de CAUTIVA_APP y 16_verificar_cuenta_aplicacion.sql como CAUTIVA_APP.
 --
 --   01 a 05  tablas, PK, UNIQUE, CHECK, COMMENT, FOREIGN KEY e índices (modelo de 55 tablas)
 --   06       reglas de las jerarquías y del documento (2 funciones y 7 triggers)
@@ -12,8 +14,8 @@
 --   10       triggers de auditoría (uno por tabla, salvo AUDITORIA)
 --   11       vistas de pantallas y reportes
 --   12       datos iniciales (parámetros, roles, permisos, sede, recursos, catálogo)
---   13       permisos a los roles de la aplicación: OPCIONAL, solo si el DBA ya creó
---            ROL_CAUTIVA_APLICACION y ROL_CAUTIVA_REPORTES (script 01 de v4)
+--   13       permisos a los roles de la aplicación: OBLIGATORIO para el back-end; se corre aparte,
+--            después de 14_cuenta_aplicacion.sql, que crea ROL_CAUTIVA_APLICACION y ROL_CAUTIVA_REPORTES
 -- =============================================================================
 SET DEFINE OFF
 SET ECHO OFF
@@ -33,7 +35,7 @@ WHENEVER SQLERROR CONTINUE
 @@11_vistas.sql
 @@12_datos_iniciales.sql
 WHENEVER SQLERROR CONTINUE
--- @@13_permisos.sql
+-- 13_permisos.sql se corre aparte, después de 14_cuenta_aplicacion.sql (ver README.md)
 
 PROMPT ==== Errores de compilación (debe salir vacío) ====
 SELECT name, type, line, position, SUBSTR(text, 1, 200) AS error
