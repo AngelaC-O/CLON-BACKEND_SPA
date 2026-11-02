@@ -26,7 +26,7 @@ public abstract class OracleTestcontainer {
 	private static final String SERVICIO = "//localhost:1521/FREEPDB1";
 	private static final Pattern ERROR_SQLPLUS = Pattern.compile("(ORA|PLS|SP2)-\\d+");
 
-	protected static final OracleContainer ORACLE = new OracleContainer("gvenzl/oracle-free:latest")
+	protected static final OracleContainer ORACLE = new OracleContainer("gvenzl/oracle-free:23.26.2")
 			.withUsername(DUENO)
 			.withPassword(CLAVE_DUENO)
 			.withStartupTimeout(Duration.ofMinutes(5))
