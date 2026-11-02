@@ -1,0 +1,13 @@
+# Perfil de las pruebas de integración: sin .env. La conexión la entrega OracleTestcontainer.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+cautiva:
+  integraciones:
+    apisperu:
+      modo: falso
+    izipay:
+      modo: falso
