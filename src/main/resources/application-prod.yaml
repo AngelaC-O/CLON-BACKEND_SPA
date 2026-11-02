@@ -1,0 +1,24 @@
+# Producción (ambiente produccion de ADR-17). Todo dato sensible llega por variables de entorno del servidor, nunca por .env.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+logging:
+  level:
+    root: INFO
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: true
+
+# Puertos de APIs externas (ADR-09): adaptadores reales; su URL y credenciales se agregan en B2 y B4
+cautiva:
+  integraciones:
+    apisperu:
+      modo: real
+    izipay:
+      modo: real
