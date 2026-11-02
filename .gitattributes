@@ -1,0 +1,6 @@
+/mvnw text eol=lf
+*.cmd text eol=crlf
+# Scripts de Oracle en Windows-1252 con CRLF: git no cambia sus bytes
+database/** -text
+*.drawio -text
+*.xlsx binary
