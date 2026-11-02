@@ -1,3 +1,31 @@
+# Configuración común a todos los entornos. Ningún secreto va escrito aquí.
 spring:
   application:
     name: Synapsis_Spa_Cautiva
+  profiles:
+    default: dev
+  datasource:
+    url: ${CAUTIVA_DB_URL}
+    # CAUTIVA_APP: el back-end nunca se conecta con la cuenta dueña del esquema
+    username: ${CAUTIVA_DB_USER}
+    password: ${CAUTIVA_DB_PASSWORD}
+    hikari:
+      connection-init-sql: ALTER SESSION SET CURRENT_SCHEMA = ${CAUTIVA_DB_SCHEMA}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: ${CAUTIVA_DB_SCHEMA}
+        jdbc:
+          time_zone: America/Lima
+  jackson:
+    time-zone: America/Lima
+
+server:
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: strict

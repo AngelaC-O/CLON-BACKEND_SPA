@@ -1,0 +1,34 @@
+# Desarrollo en la PC (ambiente local de ADR-17). La conexión se lee de .env (plantilla: .env.example).
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+
+server:
+  servlet:
+    session:
+      cookie:
+        # http://localhost no tiene TLS
+        secure: false
+
+# Puertos de APIs externas (ADR-09): adaptadores falsos; se implementan en B2 y B4
+cautiva:
+  integraciones:
+    apisperu:
+      modo: falso
+    izipay:
+      modo: falso
