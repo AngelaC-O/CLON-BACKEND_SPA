@@ -98,6 +98,12 @@ public class ServicioAtencion implements AtencionApi {
 	}
 
 	@Override
+	@Transactional(readOnly = true)
+	public Long obtenerIdVariante(Long idAtencion) {
+		return buscarAtencion(idAtencion).getIdVariante();
+	}
+
+	@Override
 	@Transactional
 	public void finalizarSinCita(Long idAtencion) {
 		Atencion oAtencion = buscarAtencion(idAtencion);
