@@ -9,6 +9,10 @@ public interface AtencionApi {
 
 	Long registrarSinCita(Long idCliente, String nombreClientePaso, Long idPersonal, Long idRecurso, Long idVariante, Integer tiempoDeclaradoMin);
 
+	/** CUS13 cobra en el acto, y Oracle solo cobra una atención FINALIZADA: su fin es el tiempo declarado, para que siga ocupando la agenda (DF-37). */
+	void finalizarSinCita(Long idAtencion);
+
+	/** 409 si ya se cobró; 422 si aún no termina (RF21). */
 	AtencionCobrable obtenerAtencionCobrable(Long idAtencion);
 
 }

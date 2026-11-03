@@ -51,6 +51,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 			"UQ_AREA_NOMBRE", "Ya existe un área con ese nombre.",
 			"UQ_SERVICIO_ID_AREA_NOMBRE", "El área ya tiene un servicio con ese nombre.",
 			"UQ_RECURSO_ID_SEDE_NOMBRE", "La sede ya tiene un recurso con ese nombre.",
+			"UQ_CAJA_ABIERTA_SEDE", "La sede ya tiene una caja abierta (RN30).",
 			"CK_CAJA_ARQUEO_OBSERVACION", "Toda diferencia del arqueo lleva una observación (RN30).");
 
 	private final UsuarioActual usuarioActual;

@@ -29,3 +29,11 @@ server:
       cookie:
         http-only: true
         same-site: strict
+
+cautiva:
+  archivos:
+    directorio: ${CAUTIVA_ARCHIVOS_DIR:./archivos}
+  integraciones:
+    izipay:
+      # Sin clave, ninguna notificación de la pasarela es válida
+      hmac-clave: ${CAUTIVA_IZIPAY_HMAC_CLAVE:}

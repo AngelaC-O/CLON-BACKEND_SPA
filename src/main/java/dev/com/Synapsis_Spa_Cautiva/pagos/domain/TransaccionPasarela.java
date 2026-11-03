@@ -108,6 +108,25 @@ public class TransaccionPasarela {
 		this.fechaExpiracion = fechaExpiracion;
 	}
 
+	/** El webhook busca la transacción por este código: se guarda al crear el enlace (D-05). */
+	public void registrarEnlace(String enlacePago, LocalDateTime fechaExpiracion, String codigoOperacion) {
+		registrarEnlace(enlacePago, fechaExpiracion);
+		registrarCodigoOperacion(codigoOperacion);
+	}
+
+	/** Un cobro PENDIENTE guarda el código con el que llegará el webhook. */
+	public void registrarCodigoOperacion(String codigoOperacion) {
+		this.codigoOperacion = codigoOperacion;
+	}
+
+	public void rechazar() {
+		if (estado != EstadoTransaccion.PENDIENTE) {
+			throw new ReglaNegocioException("RN42", "La transacción está " + estado + " y no se puede rechazar.");
+		}
+		this.estado = EstadoTransaccion.RECHAZADA;
+		this.fechaRespuesta = LocalDateTime.now();
+	}
+
 	/** RN42: una notificación repetida de la pasarela no cambia nada (webhook idempotente). */
 	public void aprobar(String codigoOperacion) {
 		if (estado == EstadoTransaccion.APROBADA && codigoOperacion.equals(this.codigoOperacion)) {

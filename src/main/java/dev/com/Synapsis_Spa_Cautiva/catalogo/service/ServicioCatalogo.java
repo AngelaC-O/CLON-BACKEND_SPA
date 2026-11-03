@@ -1,5 +1,8 @@
 package dev.com.Synapsis_Spa_Cautiva.catalogo.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.List;
 
 import dev.com.Synapsis_Spa_Cautiva.catalogo.api.CatalogoApi;
@@ -10,8 +13,11 @@ import dev.com.Synapsis_Spa_Cautiva.catalogo.controller.MapperCatalogo;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.controller.ServicioDTO;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.controller.VarianteDTO;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.Area;
+import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.EstadoPromocion;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.LineaNegocio;
+import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.Promocion;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.Servicio;
+import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.TipoDescuentoPromocion;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.VarianteServicio;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.repository.RepositorioArea;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.repository.RepositorioServicio;
@@ -25,6 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ServicioCatalogo implements CatalogoApi {
+
+	private static final BigDecimal CIEN = BigDecimal.valueOf(100);
 
 	private final RepositorioArea repositorioArea;
 
@@ -62,6 +70,37 @@ public class ServicioCatalogo implements CatalogoApi {
 			.orElseThrow(() -> new ReglaNegocioException("RN40", "La variante " + idVariante + " no existe.", HttpStatus.NOT_FOUND));
 		return new DatosVariante(idVariante, oServicio.getIdServicio(), oServicio.getIdArea(), oServicio.getDuracionRefMin(),
 				oServicio.getTipoRecurso().name());
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public BigDecimal precioVigente(Long idVariante, Long idPaquete, Long idPromocion) {
+		if (idVariante != null) {
+			BigDecimal precio = repositorioServicio.findVariante(idVariante)
+				.orElseThrow(() -> new ReglaNegocioException("RN40", "La variante " + idVariante + " no existe.", HttpStatus.NOT_FOUND))
+				.getPrecio();
+			return idPromocion == null ? precio : conPromocion(precio, idPromocion);
+		}
+		if (idPaquete != null) {
+			return repositorioServicio.findPaquete(idPaquete)
+				.orElseThrow(() -> new ReglaNegocioException("RF31", "El paquete " + idPaquete + " no existe.", HttpStatus.NOT_FOUND))
+				.getPrecio();
+		}
+		throw new ReglaNegocioException("RF31", "Indique la variante o el paquete.");
+	}
+
+	/** Mismo cálculo que TRG_VENTA_DETALLE_REGLAS (RN25). */
+	private BigDecimal conPromocion(BigDecimal precio, Long idPromocion) {
+		Promocion oPromocion = repositorioServicio.findPromocion(idPromocion)
+			.orElseThrow(() -> new ReglaNegocioException("RN25", "La promoción " + idPromocion + " no existe.", HttpStatus.NOT_FOUND));
+		LocalDate hoy = LocalDate.now();
+		if (oPromocion.getEstado() != EstadoPromocion.ACTIVA || hoy.isBefore(oPromocion.getFechaInicio()) || hoy.isAfter(oPromocion.getFechaFin())) {
+			throw new ReglaNegocioException("RN25", "La promoción " + oPromocion.getNombre() + " no está vigente.");
+		}
+		BigDecimal descuento = oPromocion.getTipoDescuento() == TipoDescuentoPromocion.PORCENTAJE
+				? precio.multiply(oPromocion.getValor()).divide(CIEN, 2, RoundingMode.HALF_UP)
+				: oPromocion.getValor().min(precio);
+		return precio.subtract(descuento);
 	}
 
 	private void definirInsumos(Servicio oServicio, Long idVariante, VarianteDTO oVarianteDTO) {

@@ -32,3 +32,4 @@ cautiva:
       modo: falso
     izipay:
       modo: falso
+      respuesta-falsa: APROBADA

@@ -1,11 +1,13 @@
 package dev.com.Synapsis_Spa_Cautiva.agenda.service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import dev.com.Synapsis_Spa_Cautiva.agenda.api.SaldoFavorApi;
 import dev.com.Synapsis_Spa_Cautiva.agenda.controller.ClienteDTO;
 import dev.com.Synapsis_Spa_Cautiva.agenda.controller.MapperCliente;
 import dev.com.Synapsis_Spa_Cautiva.agenda.domain.Cliente;
@@ -22,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class ServicioCliente {
+public class ServicioCliente implements SaldoFavorApi {
 
 	private static final String NATURAL = "NATURAL";
 
@@ -60,6 +62,15 @@ public class ServicioCliente {
 		Cliente oCliente = new Cliente(idPersona, oClienteDTO.fechaCumpleanos(), oClienteDTO.observaciones());
 		oCliente.registrarConsentimiento(oClienteDTO.aceptaComunicaciones(), LocalDateTime.now());
 		return mapperCliente.aDTO(repositorioCliente.save(oCliente), personaApi.obtenerPersona(idPersona));
+	}
+
+	@Override
+	@Transactional
+	public void usarSaldo(Long idCliente, BigDecimal saldoFavorAplicado, Long idVenta) {
+		Cliente oCliente = repositorioCliente.findById(idCliente)
+			.orElseThrow(() -> new ReglaNegocioException("RF25", "La clienta " + idCliente + " no existe."));
+		oCliente.usarSaldo(saldoFavorAplicado, idVenta);
+		repositorioCliente.saveAndFlush(oCliente);
 	}
 
 }

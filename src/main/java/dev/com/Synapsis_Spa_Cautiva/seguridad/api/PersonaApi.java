@@ -9,6 +9,8 @@ public interface PersonaApi {
 
 	ResultadoConsulta consultarDocumento(Long idTipoDocumento, String numeroDocumento);
 
+	Long obtenerIdTipoDocumento(String codigoSunat);
+
 	/** Si la persona ya existe con ese documento o teléfono, devuelve su id: un subtipo nuevo comparte la misma PERSONA. */
 	Long registrarPersona(PersonaDTO oPersonaDTO);
 

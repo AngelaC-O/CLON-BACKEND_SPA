@@ -48,6 +48,16 @@ public class ClientePaquete {
 	protected ClientePaquete() {
 	}
 
+	/** Sesiones, vencimiento y estado los calcula TRG_CLIENTE_PAQUETE_REGLAS; estos valores solo pasan el NOT NULL. */
+	public ClientePaquete(Long idCliente, Long idPaquete, Long idDetalle) {
+		this.idCliente = idCliente;
+		this.idPaquete = idPaquete;
+		this.idDetalle = idDetalle;
+		this.sesionesTotales = 0;
+		this.fechaCompra = LocalDate.now();
+		this.estado = EstadoClientePaquete.ACTIVO;
+	}
+
 	/** RN36 y RN37: las sesiones usadas no superan las compradas, con el paquete activo y vigente. */
 	public boolean verificarSesionDisponible(Integer sesionesUsadas) {
 		boolean vigente = fechaVencimiento == null || !fechaVencimiento.isBefore(LocalDate.now());

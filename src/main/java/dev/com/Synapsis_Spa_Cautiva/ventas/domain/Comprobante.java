@@ -1,5 +1,6 @@
 package dev.com.Synapsis_Spa_Cautiva.ventas.domain;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -130,6 +131,10 @@ public class Comprobante {
 
 	public Long getIdVenta() {
 		return venta.getIdVenta();
+	}
+
+	public BigDecimal getTotalVenta() {
+		return venta.getTotal();
 	}
 
 }

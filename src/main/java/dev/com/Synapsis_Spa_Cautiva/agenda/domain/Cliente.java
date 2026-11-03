@@ -1,5 +1,6 @@
 package dev.com.Synapsis_Spa_Cautiva.agenda.domain;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -69,6 +70,10 @@ public class Cliente {
 	public void registrarConsentimiento(Boolean aceptaComunicaciones, LocalDateTime fechaConsentimiento) {
 		this.aceptaComunicaciones = aceptaComunicaciones;
 		this.fechaConsentimiento = fechaConsentimiento;
+	}
+
+	public void usarSaldo(BigDecimal monto, Long idVenta) {
+		movimientosSaldo.add(new SaldoFavorMov(this, idVenta, monto));
 	}
 
 	public List<SaldoFavorMov> getMovimientosSaldo() {

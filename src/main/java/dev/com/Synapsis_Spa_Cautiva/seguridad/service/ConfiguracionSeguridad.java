@@ -22,6 +22,9 @@ public class ConfiguracionSeguridad {
 
 	private static final String LOGIN = "/api/v1/auth/login";
 
+	/** El webhook de Izipay no tiene sesión: lo valida su firma HMAC (ControladorNotificacionPasarela). */
+	private static final String NOTIFICACIONES_PASARELA = "/api/v1/pagos/notificaciones";
+
 	@Bean
 	SecurityContextRepository repositorioDeContexto() {
 		return new HttpSessionSecurityContextRepository();
@@ -37,10 +40,10 @@ public class ConfiguracionSeguridad {
 	SecurityFilterChain cadenaDeSeguridad(HttpSecurity http, SecurityContextRepository repositorioDeContexto,
 			@Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolutorDeErrores) throws Exception {
 		return http
-			.csrf(csrf -> csrf.spa().ignoringRequestMatchers(LOGIN))
+			.csrf(csrf -> csrf.spa().ignoringRequestMatchers(LOGIN, NOTIFICACIONES_PASARELA))
 			.securityContext(contexto -> contexto.securityContextRepository(repositorioDeContexto))
 			.authorizeHttpRequests(permisos -> permisos
-				.requestMatchers(HttpMethod.POST, LOGIN).permitAll()
+				.requestMatchers(HttpMethod.POST, LOGIN, NOTIFICACIONES_PASARELA).permitAll()
 				.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 				.anyRequest().authenticated())
 			.exceptionHandling(errores -> errores
