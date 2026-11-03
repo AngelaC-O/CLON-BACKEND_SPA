@@ -48,7 +48,7 @@ public class ConfiguracionSeguridad {
 			.authorizeHttpRequests(permisos -> permisos
 				.requestMatchers(HttpMethod.POST, LOGIN, NOTIFICACIONES_PASARELA).permitAll()
 				.requestMatchers(HttpMethod.GET, COMPROBANTE_PUBLICO).permitAll()
-				.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+				.requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 				.anyRequest().authenticated())
 			.exceptionHandling(errores -> errores
 				.authenticationEntryPoint((request, response, ex) -> resolutorDeErrores.resolveException(request, response, null, ex))

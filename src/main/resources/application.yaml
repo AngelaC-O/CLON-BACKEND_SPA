@@ -23,6 +23,14 @@ spring:
   jackson:
     time-zone: America/Lima
 
+# Swagger UI y el contrato solo donde un perfil los encienda (dev y sandbox). Las claves ordenadas hacen estable docs/openapi.yaml
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+  writer-with-order-by-keys: true
+
 server:
   servlet:
     session:

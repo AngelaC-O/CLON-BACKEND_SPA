@@ -105,6 +105,16 @@ Izipay debe poder llamar a `POST /api/v1/pagos/notificaciones`: configure esa UR
 
 Los contratos de los proveedores aún no se probaron contra sus servicios: lo que falta verificar está en DF-49 de [docs/NOTAS_IT1.md](docs/NOTAS_IT1.md).
 
+## Contrato OpenAPI
+
+`docs/openapi.yaml` es la salida de springdoc, unida a los ejemplos de `src/main/resources/openapi/contrato.yaml`. `ContratoOpenApiTest` falla si se desactualiza. Para exportarlo otra vez:
+
+```bash
+./mvnw test -Dtest=ContratoOpenApiTest -Dcautiva.openapi.exportar=true
+```
+
+Swagger UI y `/v3/api-docs` solo existen en los perfiles `dev` y `sandbox`.
+
 ## Pruebas
 
 ```bash

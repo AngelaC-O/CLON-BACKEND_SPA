@@ -1,0 +1,382 @@
+# Lo que el código no dice de cada operación: resumen, CUS, estados y ejemplos (docs/U2.md §5.4). ContratoOpenApi lo une a lo que genera springdoc.
+# Los 401 y 403 se agregan solos a las operaciones que no son públicas.
+
+"POST /api/v1/auth/login":
+  resumen: Iniciar sesión
+  cus: CUS50
+  publica: true
+  solicitud: { nombreUsuario: recepcion, clave: "ClaveDeEjemplo2026" }
+  respuestas:
+    "200":
+      descripcion: Sesión creada, con las cookies de sesión y XSRF-TOKEN
+      ejemplo: { idUsuario: 2, nombreUsuario: recepcion, idSede: 1, debeCambiarClave: false, permisos: [ "AGENDA:VER", "CLIENTAS:CREAR", "VENTAS:CREAR" ] }
+    "400": { descripcion: Faltan el usuario o la clave, regla: VALIDACION }
+    "401": { descripcion: Usuario o clave incorrectos, regla: RF77 }
+    "423": { descripcion: La cuenta está bloqueada por intentos fallidos o inactiva, regla: RF77 }
+
+"POST /api/v1/auth/logout":
+  resumen: Cerrar sesión
+  cus: CUS51
+  respuestas:
+    "200": { descripcion: Sesión cerrada y auditada }
+
+"POST /api/v1/auth/cambio-clave":
+  resumen: Cambiar la clave propia (no está en el draw.io, DF-18)
+  cus: CUS50
+  solicitud: { claveActual: "ClaveDeEjemplo2026", claveNueva: "ClaveNueva2026" }
+  respuestas:
+    "200": { descripcion: Clave cambiada }
+    "400": { descripcion: La clave nueva no tiene de 8 a 72 caracteres, regla: VALIDACION }
+    "422": { descripcion: La clave actual no coincide, regla: RF82 }
+
+"GET /api/v1/roles":
+  resumen: Listar los roles con sus permisos
+  cus: CUS52
+  respuestas:
+    "200":
+      descripcion: Roles
+      ejemplo: [ { idRol: 2, nombre: RECEPCIONISTA, descripcion: "Clientas, agenda, cobros y caja.", estado: ACTIVO, permisos: [ { modulo: AGENDA, accion: VER } ] } ]
+
+"POST /api/v1/usuarios":
+  resumen: Registrar un usuario
+  cus: CUS52
+  solicitud: { idPersonal: 3, idRol: 2, nombreUsuario: recepcion2, clave: "ClaveTemporal2026" }
+  respuestas:
+    "201":
+      descripcion: Usuario creado; debe cambiar su clave al entrar
+      ejemplo: { idUsuario: 5, idPersonal: 3, idRol: 2, nombreUsuario: recepcion2, estado: ACTIVO, debeCambiarClave: true }
+    "400": { descripcion: Datos incompletos, regla: VALIDACION }
+    "409": { descripcion: Ese nombre de usuario ya existe, regla: UQ_USUARIO_NOMBRE_USUARIO }
+
+"PATCH /api/v1/usuarios/{idUsuario}/rol":
+  resumen: Asignar un rol
+  cus: CUS53
+  solicitud: { idRol: 3 }
+  respuestas:
+    "200":
+      descripcion: Rol asignado
+      ejemplo: { idUsuario: 5, idPersonal: 3, idRol: 3, nombreUsuario: recepcion2, estado: ACTIVO, debeCambiarClave: false }
+    "404": { descripcion: El usuario o el rol no existen, regla: RF53 }
+
+"PUT /api/v1/roles/{idRol}/permisos":
+  resumen: Reemplazar los permisos de un rol (vale desde el siguiente ingreso)
+  cus: CUS53
+  solicitud: { nombre: RECEPCIONISTA, estado: ACTIVO, permisos: [ { modulo: AGENDA, accion: VER }, { modulo: VENTAS, accion: CREAR } ] }
+  respuestas:
+    "200":
+      descripcion: Permisos reemplazados
+      ejemplo: { idRol: 2, nombre: RECEPCIONISTA, descripcion: "Clientas, agenda, cobros y caja.", estado: ACTIVO, permisos: [ { modulo: AGENDA, accion: VER }, { modulo: VENTAS, accion: CREAR } ] }
+    "404": { descripcion: El rol no existe, regla: RF53 }
+
+"GET /api/v1/areas":
+  resumen: Listar las áreas
+  cus: CUS57
+  respuestas:
+    "200":
+      descripcion: Áreas
+      ejemplo: [ { idArea: 1, linea: SALON, nombreArea: "Peluquería y Estilismo" } ]
+
+"POST /api/v1/areas":
+  resumen: Registrar un área
+  cus: CUS57
+  solicitud: { linea: SPA, nombreArea: "Masajes" }
+  respuestas:
+    "201":
+      descripcion: Área creada
+      ejemplo: { idArea: 6, linea: SPA, nombreArea: "Masajes" }
+    "409": { descripcion: Ya existe un área con ese nombre, regla: UQ_AREA_NOMBRE }
+
+"POST /api/v1/servicios":
+  resumen: Registrar un servicio con sus variantes e insumos
+  cus: CUS57
+  solicitud: { idArea: 1, nombre: "Corte de novia", duracionRefMin: 60, tipoRecurso: SILLON, variantes: [ { nombreVariante: "Estándar", precio: 80.00, insumos: [ { idProducto: 4, cantidadEstimada: 1.5 } ] } ] }
+  respuestas:
+    "201":
+      descripcion: Servicio creado
+      ejemplo: { idServicio: 21, idArea: 1, nombre: "Corte de novia", duracionRefMin: 60, tipoRecurso: SILLON, estado: ACTIVO, variantes: [ { idVariante: 30, nombreVariante: "Estándar", precio: 80.00 } ] }
+    "422": { descripcion: Cada variante tiene un precio fijo mayor o igual a 0, regla: RN40 }
+
+"POST /api/v1/recursos":
+  resumen: Registrar un recurso con su limpieza
+  cus: CUS61
+  solicitud: { idSede: 1, nombre: "Sillón 11", tipo: SILLON, minutosLimpieza: 15 }
+  respuestas:
+    "201":
+      descripcion: Recurso creado
+      ejemplo: { idRecurso: 21, idSede: 1, nombre: "Sillón 11", tipo: SILLON, minutosLimpieza: 15, estado: DISPONIBLE }
+    "422": { descripcion: El tiempo de limpieza va de 0 a LIMPIEZA_MAX_MIN minutos, regla: RN03 }
+
+"GET /api/v1/clientes":
+  resumen: Buscar clientas por nombre o teléfono
+  cus: CUS01
+  respuestas:
+    "200":
+      descripcion: Clientas encontradas; una persona que no es clienta no aparece
+      ejemplo: [ { idCliente: 407, nombres: "Marisol", apellidos: "Quispe", telefono: "987654321", origenDatos: MANUAL, aceptaComunicaciones: true, estado: ACTIVO } ]
+
+"GET /api/v1/clientes/consulta-documento":
+  resumen: Consultar un DNI o RUC en APISPERU
+  cus: CUS02
+  respuestas:
+    "200":
+      descripcion: Encontrado; fechaVerificacion vuelve al registrar para que la ficha quede VERIFICADO
+      ejemplo: { idTipoDocumento: 1, resultado: ENCONTRADO, nombres: "ANA", apellidos: "QUISPE ROJAS", fechaVerificacion: "2026-10-22T10:15:00" }
+    "202":
+      descripcion: NO_ENCONTRADO o ERROR; los datos se ingresan a mano y la ficha queda MANUAL (RN45)
+      ejemplo: { idTipoDocumento: 1, resultado: ERROR }
+    "422": { descripcion: El número no cumple su TIPO_DOCUMENTO o ese tipo no se consulta, regla: RN45 }
+
+"POST /api/v1/clientes":
+  resumen: Registrar una clienta (PERSONA y CLIENTE en una transacción)
+  cus: CUS02
+  solicitud: { nombres: "Marisol", apellidos: "Quispe", telefono: "987654321", fechaCumpleanos: "1990-05-20", observaciones: "Alergia al tinte", aceptaComunicaciones: true }
+  respuestas:
+    "201":
+      descripcion: Clienta creada
+      ejemplo: { idCliente: 407, nombres: "Marisol", apellidos: "Quispe", telefono: "987654321", origenDatos: MANUAL, fechaCumpleanos: "1990-05-20", aceptaComunicaciones: true, fechaConsentimiento: "2026-10-22T10:15:00", observaciones: "Alergia al tinte", estado: ACTIVO }
+    "400": { descripcion: Faltan el nombre, el teléfono o el consentimiento (RN27), regla: VALIDACION }
+    "409": { descripcion: El teléfono o el documento ya pertenecen a otra ficha, regla: RF05 }
+
+"GET /api/v1/citas/disponibilidad":
+  resumen: Horas libres de una variante en un día
+  cus: CUS05
+  respuestas:
+    "200":
+      descripcion: Horas con las especialistas y recursos libres; la limpieza ya está descontada
+      ejemplo: [ { inicio: "2026-11-09T09:00:00", duracionMin: 30, idsPersonal: [ 4 ], idsRecurso: [ 1, 2, 3 ] } ]
+    "404": { descripcion: La variante no existe, regla: RN40 }
+
+"POST /api/v1/citas":
+  resumen: Agendar una cita
+  cus: CUS05
+  solicitud: { idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30 }
+  respuestas:
+    "201":
+      descripcion: Cita creada; Oracle calcula el fin con la limpieza del recurso
+      ejemplo: { idCita: 950, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-09T11:00:00", estado: PENDIENTE, idUsuario: 2, adelantoMonto: 0.00 }
+    "409": { descripcion: Cruce de horario de la especialista o del recurso, con limpieza, regla: RN02 }
+    "422": { descripcion: La especialista no tiene el área del servicio (-20012) o la clienta no existe, regla: RF83 }
+
+"POST /api/v1/citas/lista-espera":
+  resumen: Anotar en la lista de espera
+  cus: CUS06
+  solicitud: { idCliente: 407, idVariante: 2, fechaDeseada: "2026-11-09", horaDesde: "15:00", horaHasta: "18:00" }
+  respuestas:
+    "201":
+      descripcion: Anotada; trae otras horas libres para ofrecer antes de dejarla en espera
+      ejemplo: { idEspera: 31, idCliente: 407, idSede: 1, idVariante: 2, fechaDeseada: "2026-11-09", horaDesde: "15:00", horaHasta: "18:00", estado: PENDIENTE, idUsuario: 2, horasLibres: [ { inicio: "2026-11-09T09:00:00", duracionMin: 30, idsPersonal: [ 4 ], idsRecurso: [ 1 ] } ] }
+    "400": { descripcion: Una hora no tiene el formato HH:MM, regla: VALIDACION }
+    "422": { descripcion: La clienta no existe, regla: FK_LISTA_ESPERA_CLIENTE }
+
+"POST /api/v1/citas/{idCita}/adelanto":
+  resumen: Registrar el adelanto en efectivo
+  cus: CUS07
+  solicitud: { adelantoMonto: 50.00, idMedioPago: 1 }
+  respuestas:
+    "200":
+      descripcion: Adelanto registrado en la caja abierta
+      ejemplo: { idCita: 950, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, estado: PENDIENTE, adelantoMonto: 50.00, idMedioPago: 1, fechaAdelanto: "2026-10-22T10:20:00", idCaja: 214 }
+    "404": { descripcion: La cita no existe, regla: RF10 }
+    "422": { descripcion: El medio es digital, no hay caja abierta o la cita no está PENDIENTE, regla: RN42 }
+
+"POST /api/v1/citas/{idCita}/enlace-adelanto":
+  resumen: Generar el enlace de pago del adelanto
+  cus: CUS07
+  solicitud: { adelantoMonto: 50.00, idMedioPago: 4 }
+  respuestas:
+    "201":
+      descripcion: Enlace creado; el adelanto se registra cuando el webhook lo aprueba (RN04)
+      ejemplo: { idTransaccion: 5521, estado: PENDIENTE, canal: LINK, enlacePago: "https://enlace-de-izipay.example/abc", fechaExpiracion: "2026-10-23T15:30:00" }
+    "404": { descripcion: La cita no existe, regla: RF10 }
+    "422": { descripcion: El medio no se cobra por la pasarela o Izipay rechazó el enlace, regla: RN42 }
+    "503": { descripcion: Izipay no respondió, regla: RF104 }
+
+"GET /api/v1/citas/agenda":
+  resumen: Consultar la agenda del día
+  cus: CUS08
+  respuestas:
+    "200":
+      descripcion: Franjas ocupadas (con limpieza) y libres; LIBRE es de una especialista o de un recurso
+      ejemplo: [ { franja: OCUPADA, origen: CITA, idOrigen: 950, idPersonal: 4, idRecurso: 1, idVariante: 2, inicio: "2026-11-09T10:00:00", fin: "2026-11-09T11:00:00", estado: PENDIENTE }, { franja: LIBRE, idPersonal: 4, inicio: "2026-11-09T11:00:00", fin: "2026-11-09T19:00:00" } ]
+    "400": { descripcion: Falta la fecha, regla: VALIDACION }
+
+"POST /api/v1/atenciones":
+  resumen: Iniciar la atención de una cita
+  cus: CUS11
+  solicitud: { idCita: 950, tiempoDeclaradoMin: 45 }
+  respuestas:
+    "201":
+      descripcion: Atención EN_CURSO y cita EN_ATENCION
+      ejemplo: { idAtencion: 1532, idCita: 950, idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, horaInicio: "2026-11-09T10:02:00", tiempoDeclaradoMin: 45, estado: EN_CURSO }
+    "404": { descripcion: La cita no existe, regla: RF13 }
+    "409": { descripcion: El tiempo declarado choca con otra cita, regla: RN02 }
+    "422": { descripcion: Solo se atiende una cita PENDIENTE, regla: RF13 }
+
+"PATCH /api/v1/atenciones/{idAtencion}/fin":
+  resumen: Finalizar la atención
+  cus: CUS11
+  solicitud: { observaciones: "Sin novedad" }
+  respuestas:
+    "200":
+      descripcion: Atención y cita FINALIZADAS; con un paquete activo, la sesión se descuenta
+      ejemplo: { idAtencion: 1532, idCita: 950, idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, horaInicio: "2026-11-09T10:02:00", horaFin: "2026-11-09T10:45:00", tiempoDeclaradoMin: 45, observaciones: "Sin novedad", estado: FINALIZADA }
+    "404": { descripcion: La atención no existe, regla: RF13 }
+    "422": { descripcion: Solo se finaliza una atención EN_CURSO, regla: RF13 }
+
+"POST /api/v1/ventas":
+  resumen: Crear la venta desde una atención
+  cus: CUS18
+  solicitud: { idAtencion: 1532 }
+  respuestas:
+    "201":
+      descripcion: Venta ABIERTA en la caja abierta
+      ejemplo: { idVenta: 8812, idSede: 1, idCaja: 214, idCliente: 407, estado: ABIERTA, detalles: [ { idDetalle: 20311, tipoItem: SERVICIO, idAtencion: 1532, cantidad: 1, precioUnitario: 60.00, descuento: 0.00, subtotal: 60.00, idPersonal: 9 } ], subtotal: 60.00, igv: 0.00, descuento: 0.00, adelantoAplicado: 0.00, saldoFavorAplicado: 0.00, total: 60.00, pagos: [ ], pagado: 0, pendiente: 60.00, cobrosPendientes: [ ] }
+    "404": { descripcion: La atención no existe, regla: RF13 }
+    "409": { descripcion: La atención ya está COBRADA, regla: RF21 }
+    "422": { descripcion: No hay caja abierta o la atención no está FINALIZADA, regla: RN30 }
+
+"PATCH /api/v1/ventas/{idVenta}/descuentos":
+  resumen: Aplicar promoción, adelanto de la cita y saldo a favor
+  cus: CUS18
+  solicitud: { idPromocion: 3, saldoFavorAplicado: 5.00 }
+  respuestas:
+    "200":
+      descripcion: Totales recalculados
+      ejemplo: { idVenta: 8812, idSede: 1, idCaja: 214, idCliente: 407, estado: ABIERTA, subtotal: 60.00, igv: 0.00, descuento: 0.00, adelantoAplicado: 10.00, saldoFavorAplicado: 5.00, total: 45.00, pagos: [ ], pagado: 0, pendiente: 45.00, cobrosPendientes: [ ] }
+    "404": { descripcion: La venta no existe, regla: RF21 }
+    "422": { descripcion: La promoción no aplica (-20047) o el saldo no alcanza (-20064), regla: ORA-20064 }
+
+"POST /api/v1/ventas/{idVenta}/pagos":
+  resumen: Registrar pagos
+  cus: CUS18
+  solicitud: { pagos: [ { idMedioPago: 2, monto: 40.00, canal: QR }, { idMedioPago: 1, monto: 20.00 } ] }
+  respuestas:
+    "200":
+      descripcion: Pagos registrados
+      ejemplo: { idVenta: 8812, estado: ABIERTA, total: 60.00, pagos: [ { idPago: 9901, idMedioPago: 2, monto: 40.00, idTransaccion: 5510, referencia: "IZ-000184322" }, { idPago: 9902, idMedioPago: 1, monto: 20.00 } ], pagado: 60.00, pendiente: 0.00, cobrosPendientes: [ ] }
+    "202":
+      descripcion: Un cobro quedó PENDIENTE en Izipay y no suma; con el webhook aprobado se reenvía con idTransaccion (RN42)
+      ejemplo: { idVenta: 8812, estado: ABIERTA, total: 60.00, pagos: [ ], pagado: 0, pendiente: 60.00, cobrosPendientes: [ { idTransaccion: 5510, enlacePago: "https://enlace-de-izipay.example/abc" } ] }
+    "404": { descripcion: La venta no existe, regla: RF21 }
+    "422": { descripcion: La pasarela rechazó el cobro o la transacción aún no está APROBADA, regla: RF103 }
+
+"GET /api/v1/ventas/consulta-ruc/{ruc}":
+  resumen: Consultar el RUC del comprador
+  cus: CUS19
+  respuestas:
+    "200":
+      descripcion: Encontrado
+      ejemplo: { idTipoDocumento: 3, resultado: ENCONTRADO, razonSocial: "EMPRESA DEMO S.A.C.", fechaVerificacion: "2026-10-22T10:15:00" }
+    "202":
+      descripcion: NO_ENCONTRADO o ERROR; el comprador se ingresa a mano (RN45)
+      ejemplo: { idTipoDocumento: 3, resultado: ERROR }
+    "422": { descripcion: El número no cumple el formato de RUC, regla: RN45 }
+
+"POST /api/v1/ventas/{idVenta}/cierre":
+  resumen: Cerrar la venta y emitir el comprobante
+  cus: CUS18, CUS19
+  solicitud: { tipo: FACTURA, idTipoDocComprador: 3, nroDocComprador: "20601234567", nombreComprador: "EMPRESA DEMO S.A.C." }
+  respuestas:
+    "200":
+      descripcion: Venta CERRADA con su estado SUNAT; si el proveedor no responde queda PENDIENTE (RN46)
+      ejemplo: { idVenta: 8812, estado: CERRADA, total: 60.00, comprobante: { idComprobante: 7120, tipo: FACTURA, serie: F001, numero: "00000125", fechaEmision: "2026-10-22", estadoSunat: ACEPTADO, codigoRespuesta: "0" } }
+    "404": { descripcion: La venta no existe, regla: RF21 }
+    "422": { descripcion: Los pagos no suman el total (RN11) o falta el comprador (RN08), regla: RN11 }
+
+"GET /api/v1/comprobantes/{idComprobante}/representacion":
+  resumen: Representación impresa en PDF con QR y hash
+  cus: CUS20
+  respuestas:
+    "200": { descripcion: PDF del comprobante, tipo: application/pdf }
+    "404": { descripcion: El comprobante no existe, regla: RF102 }
+
+"GET /api/v1/comprobantes/{idComprobante}/enlace":
+  resumen: Enlace público firmado, con vencimiento
+  cus: CUS20
+  respuestas:
+    "200":
+      descripcion: Enlace para compartir por correo o WhatsApp
+      ejemplo: { enlace: "https://backoffice.example/api/v1/comprobantes/publico/7120?expira=1793000000&firma=ab12", canal: CORREO, correo: "clienta@ejemplo.com" }
+    "404": { descripcion: El comprobante no existe, regla: RF102 }
+    "503": { descripcion: Falta configurar la clave de los enlaces, regla: RF102 }
+
+"GET /api/v1/comprobantes/publico/{idComprobante}":
+  resumen: Abrir el comprobante desde el enlace firmado (no está en el draw.io, DF-53)
+  cus: CUS20
+  publica: true
+  respuestas:
+    "200": { descripcion: PDF del comprobante, tipo: application/pdf }
+    "403": { descripcion: El enlace no es válido o ya venció, regla: RF102 }
+
+"POST /api/v1/proformas":
+  resumen: Armar una proforma (no se guarda)
+  cus: CUS21
+  solicitud: { nombreCliente: "Novia", fechaValidez: "2026-11-30", items: [ { tipoItem: SERVICIO, idVariante: 2, cantidad: 2 } ] }
+  respuestas:
+    "200":
+      descripcion: Cotización sin valor tributario (RN09)
+      ejemplo: { nombreCliente: "Novia", fechaValidez: "2026-11-30", items: [ { tipoItem: SERVICIO, idVariante: 2, cantidad: 2, precioUnitario: 35.00, subtotal: 70.00 } ], total: 70.00 }
+    "400": { descripcion: No trae ítems, regla: VALIDACION }
+    "404": { descripcion: La variante no existe, regla: RN40 }
+
+"GET /api/v1/ventas/rapidas/libres":
+  resumen: Especialistas y recursos libres ahora
+  cus: CUS13
+  respuestas:
+    "200":
+      descripcion: Vacía si no hay especialista o recurso libres
+      ejemplo: [ { inicio: "2026-10-22T10:15:00", duracionMin: 30, idsPersonal: [ 4 ], idsRecurso: [ 1, 2 ] } ]
+    "400": { descripcion: Falta la variante, regla: VALIDACION }
+
+"POST /api/v1/ventas/rapidas":
+  resumen: Atención sin cita, cobro y comprobante en una transacción
+  cus: CUS13
+  solicitud: { nombreClientePaso: "De paso", idPersonal: 4, idRecurso: 1, idVariante: 2, tiempoDeclaradoMin: 30, idMedioPago: 1, monto: 35.00, tipo: BOLETA }
+  respuestas:
+    "201":
+      descripcion: Venta CERRADA; con Izipay real, un pago digital aún no se puede cerrar aquí (DF-51)
+      ejemplo: { idVenta: 8813, idSede: 1, idCaja: 214, estado: CERRADA, total: 35.00, pagado: 35.00, pendiente: 0.00, comprobante: { idComprobante: 7121, tipo: BOLETA, serie: B001, numero: "00000420", fechaEmision: "2026-10-22", estadoSunat: PENDIENTE } }
+    "409": { descripcion: La especialista o el recurso están ocupados, regla: RN34 }
+    "422": { descripcion: El monto no coincide con el total; no queda atención huérfana, regla: RN11 }
+
+"POST /api/v1/cajas":
+  resumen: Abrir la caja de la sede
+  cus: CUS44
+  solicitud: { montoInicial: 100.00 }
+  respuestas:
+    "201":
+      descripcion: Caja ABIERTA
+      ejemplo: { idCaja: 214, idSede: 1, idUsuarioApertura: 2, fechaApertura: "2026-10-22T08:55:00", montoInicial: 100.00, estado: ABIERTA, arqueos: [ ] }
+    "409": { descripcion: La sede ya tiene una caja abierta, regla: RN30 }
+
+"GET /api/v1/cajas/{idCaja}/esperado":
+  resumen: Lo esperado por medio de pago, lo aprobado y los comprobantes pendientes
+  cus: CUS45
+  respuestas:
+    "200":
+      descripcion: Esperado de V_CAJA_ESPERADO y aprobados de la pasarela
+      ejemplo: { idCaja: 214, estado: ABIERTA, montoInicial: 100.00, medios: [ { idMedioPago: 1, medioPago: EFECTIVO, esperado: 160.00, aprobadoPasarela: 0 }, { idMedioPago: 2, medioPago: YAPE, esperado: 40.00, aprobadoPasarela: 40.00 } ], comprobantesPendientes: [ { idComprobante: 7121, tipo: BOLETA, serie: B001, numero: "00000420", estadoSunat: PENDIENTE, fechaLimite: "2026-10-25" } ] }
+    "404": { descripcion: La caja no existe, regla: RN30 }
+
+"POST /api/v1/cajas/{idCaja}/cierre":
+  resumen: Cerrar la caja con egresos y arqueo
+  cus: CUS45
+  solicitud: { egresos: [ { concepto: "Compra menor", monto: 10.00 } ], arqueos: [ { idMedioPago: 1, montoContado: 145.00, observacion: "Faltan cinco soles" }, { idMedioPago: 2, montoContado: 40.00 } ] }
+  respuestas:
+    "200":
+      descripcion: Caja CERRADA; Oracle calcula lo esperado y la diferencia
+      ejemplo: { idCaja: 214, idSede: 1, idUsuarioApertura: 2, montoInicial: 100.00, idUsuarioCierre: 2, fechaCierre: "2026-10-22T20:05:00", estado: CERRADA, arqueos: [ { idMedioPago: 1, montoEsperado: 150.00, montoContado: 145.00, diferencia: -5.00, observacion: "Faltan cinco soles" } ] }
+    "404": { descripcion: La caja no existe, regla: RN30 }
+    "422": { descripcion: Diferencia sin observación, medio sin arqueo (RF64) o ventas abiertas, regla: RN30 }
+
+"POST /api/v1/pagos/notificaciones":
+  resumen: Webhook de Izipay
+  cus: CUS07
+  publica: true
+  tipoSolicitud: application/x-www-form-urlencoded
+  solicitud: "kr-answer=%7B%22orderCycle%22%3A%22CLOSED%22%2C%22orderStatus%22%3A%22PAID%22%2C%22orderDetails%22%3A%7B%22orderId%22%3A%22CS-1%22%7D%7D&kr-hash=ab12&kr-hash-algorithm=sha256_hmac"
+  respuestas:
+    "200": { descripcion: Procesada; si ya estaba registrada, sin cambios (idempotente) }
+    "400": { descripcion: El cuerpo no se puede leer, regla: RN42 }
+    "401": { descripcion: La firma HMAC no es válida, regla: RN42 }
+    "404": { descripcion: No hay una transacción con ese código de operación, regla: RN42 }
