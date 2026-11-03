@@ -35,3 +35,4 @@ build/
 ### Secretos y archivos locales (Cautiva Spa) ###
 .env
 .local/
+archivos/

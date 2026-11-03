@@ -11,3 +11,7 @@ cautiva:
       modo: falso
     izipay:
       modo: falso
+      respuesta-falsa: APROBADA
+      hmac-clave: clave-hmac-solo-de-pruebas
+  archivos:
+    directorio: ${java.io.tmpdir}/cautiva-pruebas
