@@ -1,5 +1,6 @@
 package dev.com.Synapsis_Spa_Cautiva.seguridad.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
@@ -21,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class ServicioPersona implements PersonaApi {
 
+	private static final String ENCONTRADO = "ENCONTRADO";
+
 	private final RepositorioTipoDocumento repositorioTipoDocumento;
 
 	private final ConsultaDocumentoPort consultaDocumentoPort;
@@ -41,8 +44,17 @@ class ServicioPersona implements PersonaApi {
 			throw new ReglaNegocioException("RN45", "El " + oTipoDocumento.getAbreviatura() + " no se consulta: ingrese los datos a mano.");
 		}
 		DatosPersona oDatosPersona = consultaDocumentoPort.consultar(oTipoDocumento.getCodigoSunat(), numeroDocumento);
+		LocalDateTime fechaVerificacion = ENCONTRADO.equals(oDatosPersona.resultado()) ? LocalDateTime.now() : null;
 		return new ResultadoConsulta(idTipoDocumento, oDatosPersona.resultado(), oDatosPersona.nombres(), oDatosPersona.apellidos(),
-				oDatosPersona.razonSocial());
+				oDatosPersona.razonSocial(), fechaVerificacion);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public String obtenerCodigoSunat(Long idTipoDocumento) {
+		return repositorioTipoDocumento.findById(idTipoDocumento)
+			.map(TipoDocumento::getCodigoSunat)
+			.orElseThrow(() -> new ReglaNegocioException("RN45", "El tipo de documento " + idTipoDocumento + " no existe."));
 	}
 
 	@Override

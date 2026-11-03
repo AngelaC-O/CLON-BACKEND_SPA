@@ -11,8 +11,8 @@ import jakarta.validation.constraints.Positive;
 
 public record PagosDTO(@NotEmpty List<@Valid Pago> pagos) {
 
-	/** canal: solo para los pagos digitales. */
-	public record Pago(@NotNull Long idMedioPago, @NotNull @Positive BigDecimal monto, @Pattern(regexp = "POS|QR|API") String canal) {
+	/** canal: solo para los pagos digitales. idTransaccion: el cobro que quedó pendiente y ya se aprobó; con él no se cobra otra vez (DF-51). */
+	public record Pago(@NotNull Long idMedioPago, @NotNull @Positive BigDecimal monto, @Pattern(regexp = "POS|QR|LINK|API") String canal, Long idTransaccion) {
 	}
 
 }

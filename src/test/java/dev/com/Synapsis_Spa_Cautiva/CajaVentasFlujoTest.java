@@ -8,6 +8,7 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -322,13 +323,10 @@ class CajaVentasFlujoTest extends VentasFlujoApoyo {
 		Long idComprobante = idDe(ventaCerrada(), "comprobante.idComprobante");
 
 		enviar(get("/api/v1/comprobantes/" + idComprobante + "/representacion"), null).andExpect(status().isOk())
-			.andExpect(jsonPath("$.tipo").value("BOLETA"))
-			.andExpect(jsonPath("$.total").value(35.0))
-			.andExpect(jsonPath("$.estadoSunat").value("PENDIENTE"))
-			.andExpect(jsonPath("$.textoQr").value(containsString("BOLETA|")));
+			.andExpect(content().contentType(MediaType.APPLICATION_PDF));
 		enviar(get("/api/v1/comprobantes/" + idComprobante + "/enlace").param("canal", "CORREO").param("correo", "clienta@ejemplo.com"), null)
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.enlace").value(containsString("/comprobantes/" + idComprobante)))
+			.andExpect(jsonPath("$.enlace").value(containsString("/comprobantes/publico/" + idComprobante + "?expira=")))
 			.andExpect(jsonPath("$.correo").value("clienta@ejemplo.com"));
 	}
 

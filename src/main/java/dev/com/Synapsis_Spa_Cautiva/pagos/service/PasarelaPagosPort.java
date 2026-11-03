@@ -1,6 +1,6 @@
 package dev.com.Synapsis_Spa_Cautiva.pagos.service;
 
-/** Puerto de Izipay (ADR-09). El adaptador real, AdaptadorIzipay, llega en B5. Nunca recibe datos de tarjeta (RN43). */
+/** Puerto de Izipay (ADR-09). Nunca recibe datos de tarjeta (RN43). */
 public interface PasarelaPagosPort {
 
 	RespuestaPasarela crearCobro(SolicitudCobro oSolicitudCobro);

@@ -23,7 +23,11 @@ public interface MapperVenta {
 
 	List<PagoVentaDTO> pagosADTO(List<VentaPago> pagos);
 
-	default VentaDTO aDTO(Venta oVenta, int cobrosPendientes) {
+	default VentaDTO aDTO(Venta oVenta) {
+		return aDTO(oVenta, List.of());
+	}
+
+	default VentaDTO aDTO(Venta oVenta, List<CobroPendienteDTO> cobrosPendientes) {
 		BigDecimal pagado = oVenta.getPagos().stream().map(VentaPago::getMonto).reduce(BigDecimal.ZERO, BigDecimal::add);
 		ComprobanteDTO comprobante = oVenta.getComprobantes().stream().findFirst().map(this::aDTO).orElse(null);
 		return new VentaDTO(oVenta.getIdVenta(), oVenta.getIdSede(), oVenta.getIdCaja(), oVenta.getIdCliente(), oVenta.getEstado(),

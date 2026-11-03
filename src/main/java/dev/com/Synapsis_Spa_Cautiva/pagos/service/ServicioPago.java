@@ -53,7 +53,9 @@ public class ServicioPago implements PagosApi {
 	@Transactional
 	public TransaccionDTO cobrar(Long idVenta, Long idMedioPago, BigDecimal monto, String canal) {
 		CanalTransaccionPasarela oCanal = canalDeCobro(canal);
-		RespuestaPasarela oRespuesta = pasarelaPagosPort.crearCobro(new SolicitudCobro(idVenta, null, idMedioPago, monto, oCanal.name()));
+		LocalDateTime fechaExpiracion = vencimientoDelEnlace();
+		RespuestaPasarela oRespuesta = pasarelaPagosPort
+			.crearCobro(new SolicitudCobro(idVenta, null, idMedioPago, monto, oCanal.name(), fechaExpiracion));
 		EstadoTransaccion estado = EstadoTransaccion.valueOf(oRespuesta.estado());
 		if (estado == EstadoTransaccion.RECHAZADA) {
 			throw new ReglaNegocioException("RF103", "La pasarela rechazó el cobro de S/ " + monto + ": " + oRespuesta.mensaje());
@@ -64,10 +66,20 @@ public class ServicioPago implements PagosApi {
 			oTransaccion.aprobar(oRespuesta.codigoOperacion());
 		}
 		else {
-			oTransaccion.registrarCodigoOperacion(oRespuesta.codigoOperacion());
+			oTransaccion.registrarEnlace(oRespuesta.enlacePago(), fechaExpiracion, oRespuesta.codigoOperacion());
 		}
 		repositorioTransaccionPasarela.saveAndFlush(oTransaccion);
 		return aDTO(oTransaccion);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public void exigirAprobada(Long idTransaccion) {
+		TransaccionPasarela oTransaccion = repositorioTransaccionPasarela.findById(idTransaccion)
+			.orElseThrow(() -> new ReglaNegocioException("RN42", "La transacción " + idTransaccion + " no existe."));
+		if (oTransaccion.getEstado() != EstadoTransaccion.APROBADA) {
+			throw new ReglaNegocioException("RN42", "La transacción " + idTransaccion + " está " + oTransaccion.getEstado() + ": aún no respalda un pago.");
+		}
 	}
 
 	@Override
@@ -78,10 +90,16 @@ public class ServicioPago implements PagosApi {
 		}
 		TransaccionPasarela oTransaccion = new TransaccionPasarela(idSede, idMedioPago, TipoOperacion.COBRO, CanalTransaccionPasarela.LINK,
 				adelantoMonto, idCita, usuarioActual.idUsuario());
+		LocalDateTime fechaExpiracion = vencimientoDelEnlace();
 		RespuestaPasarela oRespuesta = pasarelaPagosPort
-			.crearEnlace(new SolicitudCobro(null, idCita, idMedioPago, adelantoMonto, CanalTransaccionPasarela.LINK.name()));
-		long vigenciaHoras = parametroApi.valorNumero("LINK_PAGO_VIGENCIA_HORAS").longValue();
-		oTransaccion.registrarEnlace(oRespuesta.enlacePago(), LocalDateTime.now().plusHours(vigenciaHoras), oRespuesta.codigoOperacion());
+			.crearEnlace(new SolicitudCobro(null, idCita, idMedioPago, adelantoMonto, CanalTransaccionPasarela.LINK.name(), fechaExpiracion));
+		if (EstadoTransaccion.RECHAZADA.name().equals(oRespuesta.estado())) {
+			throw new ReglaNegocioException("RF104", "La pasarela rechazó el enlace: " + oRespuesta.mensaje());
+		}
+		if (oRespuesta.enlacePago() == null) {
+			throw new ReglaNegocioException("RF104", "La pasarela no respondió: intente de nuevo.", HttpStatus.SERVICE_UNAVAILABLE);
+		}
+		oTransaccion.registrarEnlace(oRespuesta.enlacePago(), fechaExpiracion, oRespuesta.codigoOperacion());
 		repositorioTransaccionPasarela.save(oTransaccion);
 		return new EnlacePagoDTO(oTransaccion.getIdTransaccion(), oTransaccion.getEstado().name(), oTransaccion.getCanal().name(),
 				oTransaccion.getEnlacePago(), oTransaccion.getFechaExpiracion());
@@ -92,11 +110,12 @@ public class ServicioPago implements PagosApi {
 	public void confirmar(String codigoOperacion, String estado) {
 		TransaccionPasarela oTransaccion = repositorioTransaccionPasarela.findByCodigoOperacion(codigoOperacion)
 			.orElseThrow(() -> new ReglaNegocioException("RN42", "No hay una transacción con ese código de operación.", HttpStatus.NOT_FOUND));
-		if (oTransaccion.getEstado() != EstadoTransaccion.PENDIENTE) {
+		EstadoTransaccion oEstado = EstadoTransaccion.valueOf(estado);
+		if (oTransaccion.getEstado() != EstadoTransaccion.PENDIENTE || oEstado == EstadoTransaccion.PENDIENTE) {
 			return;
 		}
 		sesionOracle.iniciar(oTransaccion.getIdUsuario());
-		if (EstadoTransaccion.valueOf(estado) == EstadoTransaccion.APROBADA) {
+		if (oEstado == EstadoTransaccion.APROBADA) {
 			oTransaccion.aprobar(codigoOperacion);
 			repositorioTransaccionPasarela.saveAndFlush(oTransaccion);
 			if (oTransaccion.getIdCita() != null) {
@@ -122,16 +141,20 @@ public class ServicioPago implements PagosApi {
 			.orElseThrow(() -> new ReglaNegocioException("RF26", "El medio de pago " + idMedioPago + " no existe."));
 	}
 
-	/** LINK no: CK_TRANS_PAS_LINK exige fecha de expiración y el enlace es para los adelantos. */
 	private CanalTransaccionPasarela canalDeCobro(String canal) {
 		if (canal == null) {
-			throw new ReglaNegocioException("RF26", "Un pago digital indica el canal: POS, QR o API.");
+			throw new ReglaNegocioException("RF26", "Un pago digital indica el canal: POS, QR, LINK o API.");
 		}
 		return CanalTransaccionPasarela.valueOf(canal);
 	}
 
+	private LocalDateTime vencimientoDelEnlace() {
+		return LocalDateTime.now().plusHours(parametroApi.valorNumero("LINK_PAGO_VIGENCIA_HORAS").longValue());
+	}
+
 	private TransaccionDTO aDTO(TransaccionPasarela oTransaccion) {
-		return new TransaccionDTO(oTransaccion.getIdTransaccion(), oTransaccion.getEstado().name(), oTransaccion.getCodigoOperacion());
+		return new TransaccionDTO(oTransaccion.getIdTransaccion(), oTransaccion.getEstado().name(), oTransaccion.getCodigoOperacion(),
+				oTransaccion.getEnlacePago());
 	}
 
 }

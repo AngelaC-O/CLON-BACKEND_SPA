@@ -9,8 +9,11 @@ public interface PagosApi {
 	/** El efectivo se cobra y se cuenta en caja: no pasa por cobrar (RN42). */
 	boolean usaPasarela(Long idMedioPago);
 
-	/** canal: POS, QR o API. Una respuesta RECHAZADA responde 422 (RF103); PENDIENTE no respalda ningún pago (RN42). */
+	/** canal: POS, QR, LINK o API. Una respuesta RECHAZADA responde 422 (RF103); PENDIENTE no respalda ningún pago (RN42). */
 	TransaccionDTO cobrar(Long idVenta, Long idMedioPago, BigDecimal monto, String canal);
+
+	/** El cobro que quedó PENDIENTE y el webhook ya aprobó: 422 si aún no lo está (RN42). */
+	void exigirAprobada(Long idTransaccion);
 
 	/** El adelanto no se registra aquí: lo hace agenda cuando llega AdelantoAprobado (RN04). */
 	EnlacePagoDTO generarEnlace(Long idCita, BigDecimal adelantoMonto, Long idMedioPago, Long idSede);

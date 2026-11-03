@@ -25,6 +25,9 @@ public class ConfiguracionSeguridad {
 	/** El webhook de Izipay no tiene sesión: lo valida su firma HMAC (ControladorNotificacionPasarela). */
 	private static final String NOTIFICACIONES_PASARELA = "/api/v1/pagos/notificaciones";
 
+	/** Quien recibe el comprobante no tiene cuenta: lo valida la firma con vencimiento del enlace (ControladorComprobante). */
+	private static final String COMPROBANTE_PUBLICO = "/api/v1/comprobantes/publico/**";
+
 	@Bean
 	SecurityContextRepository repositorioDeContexto() {
 		return new HttpSessionSecurityContextRepository();
@@ -44,6 +47,7 @@ public class ConfiguracionSeguridad {
 			.securityContext(contexto -> contexto.securityContextRepository(repositorioDeContexto))
 			.authorizeHttpRequests(permisos -> permisos
 				.requestMatchers(HttpMethod.POST, LOGIN, NOTIFICACIONES_PASARELA).permitAll()
+				.requestMatchers(HttpMethod.GET, COMPROBANTE_PUBLICO).permitAll()
 				.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 				.anyRequest().authenticated())
 			.exceptionHandling(errores -> errores
