@@ -57,6 +57,10 @@ public class Rol {
 		}
 	}
 
+	public void revocarPermiso(Long idPermiso) {
+		permisos.removeIf(permiso -> permiso.getIdPermiso().equals(idPermiso));
+	}
+
 	public List<RolPermiso> getPermisos() {
 		return Collections.unmodifiableList(permisos);
 	}

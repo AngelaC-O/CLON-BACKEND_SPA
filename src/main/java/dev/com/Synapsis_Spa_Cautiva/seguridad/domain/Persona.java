@@ -79,6 +79,16 @@ public class Persona {
 		this.fechaRegistro = LocalDateTime.now();
 	}
 
+	/** Si el documento cambia, TRG_PERSONA_REGLAS devuelve la ficha a MANUAL. */
+	public void actualizar(String nombres, String apellidos, Long idTipoDocumento, String numeroDocumento, String telefono, String correo) {
+		this.nombres = nombres;
+		this.apellidos = apellidos;
+		this.idTipoDocumento = idTipoDocumento;
+		this.numeroDocumento = numeroDocumento;
+		this.telefono = telefono;
+		this.correo = correo;
+	}
+
 	/** RN45: solo queda VERIFICADO un documento consultado en APISPERU; si no, la ficha sigue MANUAL. */
 	public void marcarVerificado(LocalDateTime fechaVerificacion) {
 		if (numeroDocumento == null || fechaVerificacion == null) {
