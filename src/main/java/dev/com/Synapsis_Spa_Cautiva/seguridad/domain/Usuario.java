@@ -81,15 +81,15 @@ public class Usuario {
 		this.fechaCreacion = LocalDateTime.now();
 	}
 
-	/** Un bloqueo vencido se levanta antes de comparar, para que un nuevo error vuelva a contar (RF77). */
+	/**
+	 * Quien llama ya comprobó con RepositorioUsuario.tieneBloqueoVigente que el bloqueo venció: se compara con el reloj de Oracle,
+	 * que es el que lo escribió. Se levanta antes de comparar la clave, para que un nuevo error vuelva a contar (RF77).
+	 */
 	public boolean autenticar(String clave) {
 		if (estado == EstadoUsuario.INACTIVO) {
 			return false;
 		}
 		if (estado == EstadoUsuario.BLOQUEADO) {
-			if (bloqueadoHasta != null && LocalDateTime.now().isBefore(bloqueadoHasta)) {
-				return false;
-			}
 			estado = EstadoUsuario.ACTIVO;
 			intentosFallidos = 0;
 			bloqueadoHasta = null;
@@ -104,6 +104,12 @@ public class Usuario {
 	public void registrarAcceso(LocalDateTime ultimoAcceso) {
 		this.ultimoAcceso = ultimoAcceso;
 		this.intentosFallidos = 0;
+	}
+
+	/** TRG_USUARIO_REGLAS pone los intentos en 0 al cambiar la clave. */
+	public void cambiarClave(String claveHash) {
+		this.claveHash = claveHash;
+		this.debeCambiarClave = Boolean.FALSE;
 	}
 
 	public void asignarRol(Long idRol) {

@@ -66,7 +66,7 @@ cp .env.example .env
 
 La aplicación queda en `http://localhost:8080`. El back-end se conecta como `CAUTIVA_APP`, nunca con la cuenta dueña.
 
-Swagger UI está en `http://localhost:8080/swagger-ui/index.html`. Mientras no exista la configuración de seguridad del proyecto, pide el usuario `user` y la clave generada que Spring Boot imprime al arrancar.
+Swagger UI está en `http://localhost:8080/swagger-ui/index.html` y abre sin sesión. Para probar los endpoints, primero haz `POST /api/v1/auth/login`; los POST, PUT y PATCH además piden la cabecera `X-XSRF-TOKEN` con el valor de la cookie `XSRF-TOKEN`.
 
 ## Perfiles
 

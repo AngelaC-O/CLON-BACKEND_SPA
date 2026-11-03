@@ -141,9 +141,9 @@ class MapeoEntidadesTest extends OracleTestcontainer {
 
 	@Test
 	void autenticarUsaLaClaveBcryptDeLosDatosIniciales() {
-		Usuario admin = repositorioUsuario.findByNombreUsuario("admin").orElseThrow();
-		assertThat(admin.autenticar("CambiarAlEntrar2026")).isTrue();
-		assertThat(admin.autenticar("otraClave")).isFalse();
+		Usuario especialista = repositorioUsuario.findByNombreUsuario("especialista1").orElseThrow();
+		assertThat(especialista.autenticar("CambiarAlEntrar2026")).isTrue();
+		assertThat(especialista.autenticar("otraClave")).isFalse();
 	}
 
 	@Test
