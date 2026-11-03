@@ -15,6 +15,9 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
+
 @Entity
 @Table(name = "VENTA_PAGO")
 @Getter
@@ -36,6 +39,7 @@ public class VentaPago {
 	@Column(name = "monto", nullable = false, precision = 10, scale = 2)
 	private BigDecimal monto;
 
+	@Generated(event = EventType.INSERT, writable = true)
 	@Column(name = "referencia", length = 30)
 	private String referencia;
 

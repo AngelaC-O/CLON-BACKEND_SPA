@@ -1,0 +1,73 @@
+package dev.com.Synapsis_Spa_Cautiva.ventas.controller;
+
+import java.net.URI;
+
+import dev.com.Synapsis_Spa_Cautiva.seguridad.api.ResultadoConsulta;
+import dev.com.Synapsis_Spa_Cautiva.ventas.service.ServicioVenta;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/v1")
+@RequiredArgsConstructor
+public class ControladorVenta {
+
+	private static final String ENCONTRADO = "ENCONTRADO";
+
+	private final ServicioVenta servicioVenta;
+
+	@PostMapping("/ventas")
+	@PreAuthorize("hasAuthority('VENTAS:CREAR')")
+	public ResponseEntity<VentaDTO> crearDesdeAtencion(@Valid @RequestBody CrearVentaDTO oCrearVentaDTO) {
+		VentaDTO creada = servicioVenta.crearDesdeAtencion(oCrearVentaDTO.idAtencion());
+		return ResponseEntity.created(URI.create("/api/v1/ventas/" + creada.idVenta())).body(creada);
+	}
+
+	@PatchMapping("/ventas/{idVenta}/descuentos")
+	@PreAuthorize("hasAuthority('VENTAS:CREAR')")
+	public ResponseEntity<VentaDTO> aplicarDescuentos(@PathVariable Long idVenta, @Valid @RequestBody DescuentosDTO oDescuentosDTO) {
+		return ResponseEntity.ok(servicioVenta.aplicarDescuentos(idVenta, oDescuentosDTO));
+	}
+
+	/** 200; 202 si algún cobro quedó PENDIENTE en la pasarela (U2 §5). */
+	@PostMapping("/ventas/{idVenta}/pagos")
+	@PreAuthorize("hasAuthority('VENTAS:CREAR')")
+	public ResponseEntity<VentaDTO> registrarPagos(@PathVariable Long idVenta, @Valid @RequestBody PagosDTO oPagosDTO) {
+		VentaDTO oVentaDTO = servicioVenta.registrarPagos(idVenta, oPagosDTO);
+		return ResponseEntity.status(oVentaDTO.cobrosPendientes() > 0 ? HttpStatus.ACCEPTED : HttpStatus.OK).body(oVentaDTO);
+	}
+
+	/** 200 con los datos; 202 si no se encontró o la consulta falló, para seguir a mano (RN45). */
+	@GetMapping("/ventas/consulta-ruc/{ruc}")
+	@PreAuthorize("hasAuthority('VENTAS:VER')")
+	public ResponseEntity<ResultadoConsulta> consultarRuc(@PathVariable String ruc) {
+		ResultadoConsulta oResultadoConsulta = servicioVenta.consultarRuc(ruc);
+		HttpStatus estado = ENCONTRADO.equals(oResultadoConsulta.resultado()) ? HttpStatus.OK : HttpStatus.ACCEPTED;
+		return ResponseEntity.status(estado).body(oResultadoConsulta);
+	}
+
+	@PostMapping("/ventas/{idVenta}/cierre")
+	@PreAuthorize("hasAuthority('VENTAS:CREAR')")
+	public ResponseEntity<VentaDTO> cerrar(@PathVariable Long idVenta, @Valid @RequestBody CierreVentaDTO oCierreVentaDTO) {
+		return ResponseEntity.ok(servicioVenta.cerrar(idVenta, oCierreVentaDTO));
+	}
+
+	/** 200 y no 201: la proforma no se guarda (RN09). */
+	@PostMapping("/proformas")
+	@PreAuthorize("hasAuthority('VENTAS:CREAR')")
+	public ResponseEntity<ProformaDTO> armarProforma(@Valid @RequestBody ProformaDTO oProformaDTO) {
+		return ResponseEntity.ok(servicioVenta.armarProforma(oProformaDTO));
+	}
+
+}
