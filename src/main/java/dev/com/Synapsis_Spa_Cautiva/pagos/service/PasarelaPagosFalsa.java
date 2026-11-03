@@ -12,6 +12,8 @@ import javax.crypto.spec.SecretKeySpec;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -19,10 +21,12 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Sin llamadas externas hasta B5. El cobro responde lo que diga la propiedad: APROBADA en dev y PENDIENTE si no se configura, para no
+ * Solo para desarrollo y pruebas (DF-50). El cobro responde lo que diga la propiedad: APROBADA en dev y PENDIENTE si no se configura, para no
  * contar dinero que nadie cobró. El enlace siempre queda PENDIENTE hasta el webhook. Sin clave configurada, ninguna firma es válida.
  */
 @Component
+@Profile({ "dev", "test" })
+@ConditionalOnProperty(name = "cautiva.integraciones.izipay.modo", havingValue = "falso")
 class PasarelaPagosFalsa implements PasarelaPagosPort {
 
 	private static final String PENDIENTE = "PENDIENTE";
