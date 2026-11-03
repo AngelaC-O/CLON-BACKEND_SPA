@@ -29,6 +29,7 @@ public abstract class OracleTestcontainer {
 	protected static final OracleContainer ORACLE = new OracleContainer("gvenzl/oracle-free:23.26.2")
 			.withUsername(DUENO)
 			.withPassword(CLAVE_DUENO)
+			.withEnv("TZ", "America/Lima")
 			.withStartupTimeout(Duration.ofMinutes(5))
 			.withCopyFileToContainer(MountableFile.forHostPath("database"), "/database");
 
