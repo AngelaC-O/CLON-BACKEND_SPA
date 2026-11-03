@@ -55,6 +55,15 @@ public class SaldoFavorMov {
 	protected SaldoFavorMov() {
 	}
 
+	/** Oracle bloquea a la clienta y rechaza el uso si el saldo no alcanza (TRG_SALDO_FAVOR_REGLAS). */
+	SaldoFavorMov(Cliente cliente, Long idVenta, BigDecimal monto) {
+		this.cliente = cliente;
+		this.idVenta = idVenta;
+		this.tipo = TipoSaldoFavorMov.USO;
+		this.monto = monto;
+		this.fecha = LocalDateTime.now();
+	}
+
 	public Long getIdCliente() {
 		return cliente.getIdCliente();
 	}

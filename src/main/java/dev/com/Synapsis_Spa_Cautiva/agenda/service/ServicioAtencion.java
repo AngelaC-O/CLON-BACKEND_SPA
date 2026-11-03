@@ -1,5 +1,6 @@
 package dev.com.Synapsis_Spa_Cautiva.agenda.service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -85,11 +86,23 @@ public class ServicioAtencion implements AtencionApi {
 	@Transactional(readOnly = true)
 	public AtencionCobrable obtenerAtencionCobrable(Long idAtencion) {
 		Atencion oAtencion = buscarAtencion(idAtencion);
+		if (oAtencion.getEstado() == EstadoAtencion.COBRADA) {
+			throw new ReglaNegocioException("RF21", "La atención " + idAtencion + " ya está COBRADA.", HttpStatus.CONFLICT);
+		}
 		if (oAtencion.getEstado() != EstadoAtencion.FINALIZADA) {
 			throw new ReglaNegocioException("RF21", "Solo se cobra una atención FINALIZADA; esta está " + oAtencion.getEstado() + ".");
 		}
+		BigDecimal adelantoMonto = oAtencion.getIdCita() == null ? BigDecimal.ZERO : buscarCita(oAtencion.getIdCita()).getAdelantoMonto();
 		return new AtencionCobrable(oAtencion.getIdAtencion(), oAtencion.getIdCliente(), oAtencion.getNombreClientePaso(), oAtencion.getIdPersonal(),
-				oAtencion.getIdVariante(), oAtencion.getIdClientePaquete());
+				oAtencion.getIdVariante(), oAtencion.getIdClientePaquete(), adelantoMonto);
+	}
+
+	@Override
+	@Transactional
+	public void finalizarSinCita(Long idAtencion) {
+		Atencion oAtencion = buscarAtencion(idAtencion);
+		oAtencion.finalizar(oAtencion.getHoraInicio().plusMinutes(oAtencion.getTiempoDeclaradoMin()));
+		repositorioAtencion.saveAndFlush(oAtencion);
 	}
 
 	/** Si el servicio está en un paquete activo con sesiones, la sesión es esta atención (RN36, RN37, RN38). TRG_ATENCION_PAQUETE lo repite. */
