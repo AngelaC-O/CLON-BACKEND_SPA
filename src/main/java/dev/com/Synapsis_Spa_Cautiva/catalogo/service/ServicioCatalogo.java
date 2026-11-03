@@ -2,6 +2,8 @@ package dev.com.Synapsis_Spa_Cautiva.catalogo.service;
 
 import java.util.List;
 
+import dev.com.Synapsis_Spa_Cautiva.catalogo.api.CatalogoApi;
+import dev.com.Synapsis_Spa_Cautiva.catalogo.api.DatosVariante;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.controller.AreaDTO;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.controller.InsumoDTO;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.controller.MapperCatalogo;
@@ -13,14 +15,16 @@ import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.Servicio;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.VarianteServicio;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.repository.RepositorioArea;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.repository.RepositorioServicio;
+import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class ServicioCatalogo {
+public class ServicioCatalogo implements CatalogoApi {
 
 	private final RepositorioArea repositorioArea;
 
@@ -49,6 +53,15 @@ public class ServicioCatalogo {
 			definirInsumos(oServicio, guardadas.get(i).getIdVariante(), oServicioDTO.variantes().get(i));
 		}
 		return mapperCatalogo.aDTO(repositorioServicio.saveAndFlush(oServicio));
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public DatosVariante obtenerVariante(Long idVariante) {
+		Servicio oServicio = repositorioServicio.findByVariante(idVariante)
+			.orElseThrow(() -> new ReglaNegocioException("RN40", "La variante " + idVariante + " no existe.", HttpStatus.NOT_FOUND));
+		return new DatosVariante(idVariante, oServicio.getIdServicio(), oServicio.getIdArea(), oServicio.getDuracionRefMin(),
+				oServicio.getTipoRecurso().name());
 	}
 
 	private void definirInsumos(Servicio oServicio, Long idVariante, VarianteDTO oVarianteDTO) {
