@@ -25,10 +25,11 @@ server:
         # http://localhost no tiene TLS
         secure: false
 
-# Puertos de APIs externas (ADR-09): adaptadores falsos; se implementan en B2 y B4
+# Puertos de APIs externas (ADR-09): adaptadores falsos, solo en este perfil y en las pruebas
 cautiva:
   integraciones:
     apisperu:
       modo: falso
     izipay:
       modo: falso
+      respuesta-falsa: APROBADA

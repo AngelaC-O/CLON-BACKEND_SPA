@@ -1,0 +1,29 @@
+# Sandbox (ambiente sandbox de ADR-17): APIs reales en modo de pruebas. Todo secreto llega por variables de entorno (ver README.md).
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+server:
+  servlet:
+    session:
+      cookie:
+        # En http://localhost, CAUTIVA_COOKIE_SECURE=false
+        secure: ${CAUTIVA_COOKIE_SECURE:true}
+
+cautiva:
+  integraciones:
+    apisperu:
+      modo: real
+      consulta-url: ${APISPERU_CONSULTA_URL:https://dniruc.apisperu.com/api/v1}
+      token: ${APISPERU_TOKEN}
+      facturacion-url: ${APISPERU_FACTURACION_URL:https://facturacion.apisperu.com/api/v1}
+      facturacion-token: ${APISPERU_FACTURACION_TOKEN}
+    izipay:
+      modo: real
+      api-url: ${IZIPAY_API_URL:https://api.micuentaweb.pe}
+      # Las credenciales de TEST del Back Office: con ellas Izipay no cobra de verdad
+      usuario: ${IZIPAY_USUARIO}
+      clave: ${IZIPAY_CLAVE}
+      hmac-clave: ${IZIPAY_HMAC_CLAVE}

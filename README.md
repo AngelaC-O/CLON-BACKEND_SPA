@@ -66,7 +66,7 @@ cp .env.example .env
 
 La aplicación queda en `http://localhost:8080`. El back-end se conecta como `CAUTIVA_APP`, nunca con la cuenta dueña.
 
-Swagger UI está en `http://localhost:8080/swagger-ui/index.html`. Mientras no exista la configuración de seguridad del proyecto, pide el usuario `user` y la clave generada que Spring Boot imprime al arrancar.
+Swagger UI está en `http://localhost:8080/swagger-ui/index.html` y abre sin sesión. Para probar los endpoints, primero haz `POST /api/v1/auth/login`; los POST, PUT y PATCH además piden la cabecera `X-XSRF-TOKEN` con el valor de la cookie `XSRF-TOKEN`.
 
 ## Perfiles
 
@@ -74,7 +74,46 @@ Swagger UI está en `http://localhost:8080/swagger-ui/index.html`. Mientras no e
 | --- | --- | --- |
 | (común) | `application.yaml` | Conexión por variables de entorno, JPA, zona horaria y cookie de sesión |
 | `dev` | `application-dev.yaml` | PC de desarrollo: `.env`, Swagger UI, logs SQL y adaptadores falsos de APISPERU e Izipay |
+| `sandbox` | `application-sandbox.yaml` | APIs reales de APISPERU e Izipay en modo de pruebas, con secretos por variables de entorno |
 | `prod` | `application-prod.yaml` | Producción: sin Swagger UI, cookie Secure y adaptadores reales; todo por variables de entorno del servidor |
+
+Los adaptadores falsos solo existen en `dev` y en las pruebas. En `sandbox` y `prod`, si falta una variable obligatoria la aplicación no arranca.
+
+## Arrancar con el perfil sandbox
+
+`sandbox` no lee `.env`: exporte las variables en la terminal. Use credenciales de prueba de cada proveedor, nunca las de producción.
+
+| Variable | Obligatoria | Para qué |
+| --- | --- | --- |
+| `CAUTIVA_DB_URL`, `CAUTIVA_DB_USER`, `CAUTIVA_DB_PASSWORD`, `CAUTIVA_DB_SCHEMA` | Sí | Conexión a Oracle, como en `dev` |
+| `APISPERU_TOKEN` | Sí | Token de la consulta de DNI y RUC |
+| `APISPERU_FACTURACION_TOKEN` | Sí | Token de la empresa en la facturación de APISPERU |
+| `IZIPAY_USUARIO`, `IZIPAY_CLAVE` | Sí | Usuario y contraseña de TEST de la API REST en el Back Office de Izipay |
+| `IZIPAY_HMAC_CLAVE` | Sí | Clave con la que Izipay firma `kr-hash`; compruebe en el Back Office cuál corresponde a la notificación |
+| `CAUTIVA_ENLACE_CLAVE` | Para los enlaces públicos | Firma los enlaces públicos de los comprobantes; sin ella no se generan |
+| `CAUTIVA_URL_PUBLICA` | No | URL base de esos enlaces; por defecto `http://localhost:8080` |
+| `CAUTIVA_EMPRESA_RUC`, `CAUTIVA_EMPRESA_RAZON_SOCIAL`, `CAUTIVA_EMPRESA_DIRECCION`, `CAUTIVA_EMPRESA_UBIGEO`, `CAUTIVA_EMPRESA_DEPARTAMENTO`, `CAUTIVA_EMPRESA_PROVINCIA`, `CAUTIVA_EMPRESA_DISTRITO` | Para emitir | Datos del emisor en el comprobante y su PDF |
+| `CAUTIVA_ARCHIVOS_DIR` | No | Carpeta de los XML y CDR; por defecto `./archivos` |
+| `CAUTIVA_COOKIE_SECURE` | No | `false` para probar en `http://localhost`; por defecto `true` |
+| `APISPERU_CONSULTA_URL`, `APISPERU_FACTURACION_URL`, `IZIPAY_API_URL` | No | Cambian las URL de los proveedores |
+
+```bash
+SPRING_PROFILES_ACTIVE=sandbox ./mvnw spring-boot:run
+```
+
+Izipay debe poder llamar a `POST /api/v1/pagos/notificaciones`: configure esa URL pública en su Back Office, en las reglas de notificación. Mientras no llegue la notificación, los cobros digitales siguen PENDIENTES.
+
+Los contratos de los proveedores aún no se probaron contra sus servicios: lo que falta verificar está en DF-49 de [docs/NOTAS_IT1.md](docs/NOTAS_IT1.md).
+
+## Contrato OpenAPI
+
+`docs/openapi.yaml` es la salida de springdoc, unida a los ejemplos de `src/main/resources/openapi/contrato.yaml`. `ContratoOpenApiTest` falla si se desactualiza. Para exportarlo otra vez:
+
+```bash
+./mvnw test -Dtest=ContratoOpenApiTest -Dcautiva.openapi.exportar=true
+```
+
+Swagger UI y `/v3/api-docs` solo existen en los perfiles `dev` y `sandbox`.
 
 ## Pruebas
 

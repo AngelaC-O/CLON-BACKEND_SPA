@@ -23,9 +23,40 @@ spring:
   jackson:
     time-zone: America/Lima
 
+# Swagger UI y el contrato solo donde un perfil los encienda (dev y sandbox). Las claves ordenadas hacen estable docs/openapi.yaml
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+  writer-with-order-by-keys: true
+
 server:
   servlet:
     session:
       cookie:
         http-only: true
         same-site: strict
+
+cautiva:
+  archivos:
+    directorio: ${CAUTIVA_ARCHIVOS_DIR:./archivos}
+  # Lo que se muestra en el comprobante y se envía a SUNAT: no está en ninguna tabla
+  empresa:
+    ruc: ${CAUTIVA_EMPRESA_RUC:}
+    razon-social: ${CAUTIVA_EMPRESA_RAZON_SOCIAL:}
+    direccion: ${CAUTIVA_EMPRESA_DIRECCION:}
+    ubigeo: ${CAUTIVA_EMPRESA_UBIGEO:}
+    departamento: ${CAUTIVA_EMPRESA_DEPARTAMENTO:}
+    provincia: ${CAUTIVA_EMPRESA_PROVINCIA:}
+    distrito: ${CAUTIVA_EMPRESA_DISTRITO:}
+  comprobantes:
+    # Sin clave no se generan enlaces públicos y ninguno es válido
+    enlace-clave: ${CAUTIVA_ENLACE_CLAVE:}
+    enlace-vigencia-horas: 72
+    url-publica: ${CAUTIVA_URL_PUBLICA:http://localhost:8080}
+    reenvio-cron: "0 0 * * * *"
+  integraciones:
+    izipay:
+      # Sin clave, ninguna notificación de la pasarela es válida
+      hmac-clave: ${IZIPAY_HMAC_CLAVE:}

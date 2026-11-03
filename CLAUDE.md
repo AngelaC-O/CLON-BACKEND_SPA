@@ -9,6 +9,10 @@
 
 Prohibido inventar tablas, columnas, actores, endpoints o módulos. Si algo falta o se contradice, no lo resuelvas por tu cuenta: anótalo en `docs/NOTAS_IT1.md` y pregunta.
 
+`docs/Diagramas_secuencia_clase_ADS.drawio` es el modelo general de los 67 CUS: solo se consulta como contexto (por ejemplo, para CUS de otras iteraciones). Para los 20 CUS de esta iteración manda `docs/Iteracion_1_Cautiva_Spa.drawio`; si se contradicen, gana Iteracion_1 y se anota en «Diferencias encontradas».
+
+La versión vigente de cada ADR es la que resume este archivo. La presentación de la Semana 5 es de la versión 4 (65 tablas) y tiene partes superadas por el modelo v5; si una regla no está aquí, pregunta.
+
 `docs/` y `database/` no se modifican, salvo `docs/NOTAS_IT1.md`. Nunca leas ni copies `.local/`.
 
 ## Alcance
@@ -46,7 +50,7 @@ Cuatro capas por módulo, y `api` para lo que publica:
 - `domain`: entidades JPA y enums.
 - `api`: interfaces publicadas (paquete con `@NamedInterface("api")`, para que Spring Modulith lo exponga).
 
-Un módulo nunca usa clases internas de otro: solo sus interfaces publicadas (PersonaApi, AtencionApi, CajaAbiertaProvider, PagosApi, PaqueteClienteApi, SaldoFavorApi, VentasConsultaApi, CatalogoApi, InventarioApi, PersonalApi, RecursoApi), los SPI de `comun` (UsuarioActual, ParametroApi, AuditoriaApi, AlmacenArchivosPort) o el evento síncrono AdelantoAprobado.
+Un módulo nunca usa clases internas de otro: solo sus interfaces publicadas (PersonaApi, AtencionApi, PagosApi, PaqueteClienteApi, SaldoFavorApi, VentasConsultaApi, CatalogoApi, InventarioApi, PersonalApi, RecursoApi), los SPI de `comun` (UsuarioActual, ParametroApi, CajaAbiertaProvider, AuditoriaApi, AlmacenArchivosPort) o el evento síncrono AdelantoAprobado. CajaAbiertaProvider lo implementa `caja` (ServicioCaja).
 
 Las APIs externas van por puertos y adaptadores (ADR-09): AdaptadorApisPeruConsulta, AdaptadorApisPeruFacturacion, AdaptadorIzipay.
 

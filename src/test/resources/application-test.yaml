@@ -11,3 +11,12 @@ cautiva:
       modo: falso
     izipay:
       modo: falso
+      respuesta-falsa: APROBADA
+      hmac-clave: clave-hmac-solo-de-pruebas
+  archivos:
+    directorio: ${java.io.tmpdir}/cautiva-pruebas
+  comprobantes:
+    enlace-clave: clave-enlace-solo-de-pruebas
+    url-publica: http://localhost
+    # El job se prueba llamándolo: "-" apaga el reloj
+    reenvio-cron: "-"
