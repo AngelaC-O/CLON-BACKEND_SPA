@@ -46,6 +46,14 @@ class ServicioPersona implements PersonaApi {
 	}
 
 	@Override
+	@Transactional(readOnly = true)
+	public Long obtenerIdTipoDocumento(String codigoSunat) {
+		return repositorioTipoDocumento.findByCodigoSunat(codigoSunat)
+			.map(TipoDocumento::getIdTipoDocumento)
+			.orElseThrow(() -> new ReglaNegocioException("RN45", "No existe el tipo de documento con código " + codigoSunat + "."));
+	}
+
+	@Override
 	@Transactional
 	public Long registrarPersona(PersonaDTO oPersonaDTO) {
 		validarDocumentoOpcional(oPersonaDTO);
