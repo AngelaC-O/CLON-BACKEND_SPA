@@ -45,7 +45,7 @@ public class ControladorVenta {
 	@PreAuthorize("hasAuthority('VENTAS:CREAR')")
 	public ResponseEntity<VentaDTO> registrarPagos(@PathVariable Long idVenta, @Valid @RequestBody PagosDTO oPagosDTO) {
 		VentaDTO oVentaDTO = servicioVenta.registrarPagos(idVenta, oPagosDTO);
-		return ResponseEntity.status(oVentaDTO.cobrosPendientes() > 0 ? HttpStatus.ACCEPTED : HttpStatus.OK).body(oVentaDTO);
+		return ResponseEntity.status(oVentaDTO.cobrosPendientes().isEmpty() ? HttpStatus.OK : HttpStatus.ACCEPTED).body(oVentaDTO);
 	}
 
 	/** 200 con los datos; 202 si no se encontró o la consulta falló, para seguir a mano (RN45). */

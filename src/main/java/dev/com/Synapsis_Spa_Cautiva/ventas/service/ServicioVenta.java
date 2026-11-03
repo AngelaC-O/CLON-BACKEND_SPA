@@ -1,6 +1,7 @@
 package dev.com.Synapsis_Spa_Cautiva.ventas.service;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 import dev.com.Synapsis_Spa_Cautiva.agenda.api.AtencionApi;
@@ -17,6 +18,7 @@ import dev.com.Synapsis_Spa_Cautiva.pagos.api.TransaccionDTO;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.PersonaApi;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.ResultadoConsulta;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.CierreVentaDTO;
+import dev.com.Synapsis_Spa_Cautiva.ventas.controller.CobroPendienteDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.DescuentosDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.MapperVenta;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.PagosDTO;
@@ -81,7 +83,7 @@ public class ServicioVenta {
 		BigDecimal precioUnitario = oAtencionCobrable.idClientePaquete() != null ? BigDecimal.ZERO
 				: catalogoApi.precioVigente(oAtencionCobrable.idVariante(), null, null);
 		oVenta.agregarServicio(idAtencion, precioUnitario, oAtencionCobrable.idPersonal());
-		return mapperVenta.aDTO(repositorioVenta.save(oVenta), 0);
+		return mapperVenta.aDTO(repositorioVenta.save(oVenta));
 	}
 
 	/** El flush hace que Oracle calcule el descuento de la promoción antes de leer los totales (DF-11). */
@@ -101,22 +103,26 @@ public class ServicioVenta {
 		if (total.compareTo(oVenta.getTotal()) != 0) {
 			throw new IllegalStateException("La venta " + idVenta + " calcula un total distinto del que guarda");
 		}
-		return mapperVenta.aDTO(repositorioVenta.saveAndFlush(oVenta), 0);
+		return mapperVenta.aDTO(repositorioVenta.saveAndFlush(oVenta));
 	}
 
 	/** Un cobro digital sin aprobar no registra pago (RN42): cuenta en cobrosPendientes y el controlador responde 202. */
 	@Transactional
 	public VentaDTO registrarPagos(Long idVenta, PagosDTO oPagosDTO) {
 		Venta oVenta = buscar(idVenta);
-		int cobrosPendientes = 0;
+		List<CobroPendienteDTO> cobrosPendientes = new ArrayList<>();
 		for (PagosDTO.Pago oPago : oPagosDTO.pagos()) {
-			if (pagosApi.usaPasarela(oPago.idMedioPago())) {
+			if (oPago.idTransaccion() != null) {
+				pagosApi.exigirAprobada(oPago.idTransaccion());
+				oVenta.registrarPago(oPago.idMedioPago(), oPago.monto(), oPago.idTransaccion());
+			}
+			else if (pagosApi.usaPasarela(oPago.idMedioPago())) {
 				TransaccionDTO oTransaccionDTO = pagosApi.cobrar(idVenta, oPago.idMedioPago(), oPago.monto(), oPago.canal());
 				if (oTransaccionDTO.aprobada()) {
 					oVenta.registrarPago(oPago.idMedioPago(), oPago.monto(), oTransaccionDTO.idTransaccion());
 				}
 				else {
-					cobrosPendientes++;
+					cobrosPendientes.add(new CobroPendienteDTO(oTransaccionDTO.idTransaccion(), oTransaccionDTO.enlacePago()));
 				}
 			}
 			else {
@@ -144,7 +150,7 @@ public class ServicioVenta {
 		repositorioVenta.saveAndFlush(oVenta);
 		Comprobante oComprobante = oVenta.getComprobantes().getFirst();
 		servicioFacturacionElectronica.emitirComprobante(oComprobante.getIdComprobante());
-		return mapperVenta.aDTO(oVenta, 0);
+		return mapperVenta.aDTO(oVenta);
 	}
 
 	public ProformaDTO armarProforma(ProformaDTO oProformaDTO) {

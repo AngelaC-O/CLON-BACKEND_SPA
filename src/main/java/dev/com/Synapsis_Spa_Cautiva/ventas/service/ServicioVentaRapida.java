@@ -33,7 +33,7 @@ public class ServicioVentaRapida {
 		atencionApi.finalizarSinCita(idAtencion);
 		Long idVenta = servicioVenta.crearDesdeAtencion(idAtencion).idVenta();
 		servicioVenta.registrarPagos(idVenta,
-				new PagosDTO(List.of(new PagosDTO.Pago(oVentaRapidaDTO.idMedioPago(), oVentaRapidaDTO.monto(), oVentaRapidaDTO.canal()))));
+				new PagosDTO(List.of(new PagosDTO.Pago(oVentaRapidaDTO.idMedioPago(), oVentaRapidaDTO.monto(), oVentaRapidaDTO.canal(), null))));
 		return servicioVenta.cerrar(idVenta, new CierreVentaDTO(oVentaRapidaDTO.tipo(), oVentaRapidaDTO.idTipoDocComprador(),
 				oVentaRapidaDTO.nroDocComprador(), oVentaRapidaDTO.nombreComprador()));
 	}

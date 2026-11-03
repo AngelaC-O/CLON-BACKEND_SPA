@@ -3,6 +3,7 @@ package dev.com.Synapsis_Spa_Cautiva.ventas.domain;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -133,8 +134,17 @@ public class Comprobante {
 		return venta.getIdVenta();
 	}
 
-	public BigDecimal getTotalVenta() {
-		return venta.getTotal();
+	/** Lo que documenta el comprobante: sin restar el adelanto ni el saldo a favor (DF-52). */
+	public BigDecimal getImporteVenta() {
+		return venta.getSubtotal().add(venta.getIgv());
+	}
+
+	public List<VentaDetalle> getDetallesVenta() {
+		return venta.getDetalles();
+	}
+
+	public Long getIdUsuarioVenta() {
+		return venta.getIdUsuario();
 	}
 
 }
