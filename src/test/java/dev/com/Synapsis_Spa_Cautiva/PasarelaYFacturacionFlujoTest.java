@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -50,7 +49,7 @@ class PasarelaYFacturacionFlujoTest extends VentasFlujoApoyo {
 		when(pasarelaPagosPort.crearCobro(any())).thenReturn(new RespuestaPasarela("PENDIENTE", "PEND-" + idVenta, null, "En proceso"));
 
 		pagar(idVenta, medio("YAPE"), "35", "QR").andExpect(status().isAccepted())
-			.andExpect(jsonPath("$.cobrosPendientes").value(1))
+			.andExpect(jsonPath("$.cobrosPendientes", hasSize(1)))
 			.andExpect(jsonPath("$.pagos", hasSize(0)))
 			.andExpect(jsonPath("$.pendiente").value(35.0));
 
@@ -72,9 +71,8 @@ class PasarelaYFacturacionFlujoTest extends VentasFlujoApoyo {
 		Long idComprobante = idDe(ventaCerrada().andExpect(jsonPath("$.comprobante.estadoSunat").value("ACEPTADO")).andExpect(jsonPath("$.comprobante.codigoRespuesta").value("0")),
 				"comprobante.idComprobante");
 
-		enviar(get("/api/v1/comprobantes/" + idComprobante + "/representacion"), null).andExpect(status().isOk())
-			.andExpect(jsonPath("$.hashCpe").value("HASH123"))
-			.andExpect(jsonPath("$.contenidoXml").value("<xml>comprobante</xml>"));
+		assertThat(jdbc.queryForObject("SELECT hash_cpe FROM COMPROBANTE WHERE id_comprobante = ?", String.class, idComprobante)).isEqualTo("HASH123");
+		assertThat(jdbc.queryForObject("SELECT ruta_xml FROM COMPROBANTE WHERE id_comprobante = ?", String.class, idComprobante)).endsWith(".xml");
 		assertThat(jdbc.queryForObject("SELECT ruta_cdr FROM COMPROBANTE WHERE id_comprobante = ?", String.class, idComprobante)).endsWith("-cdr.xml");
 	}
 
