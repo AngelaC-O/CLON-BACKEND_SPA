@@ -20,4 +20,8 @@ public interface RepositorioClientePaquete extends JpaRepository<ClientePaquete,
 			""")
 	Optional<ClientePaquete> findActivoPorCliente(@Param("idCliente") Long idCliente, @Param("idServicio") Long idServicio);
 
+	/** Las sesiones usadas se cuentan, no se guardan (RN36, RN37). */
+	@Query(nativeQuery = true, value = "SELECT sesiones_usadas FROM V_SESIONES_PAQUETE WHERE id_cliente_paquete = :idClientePaquete")
+	Integer contarSesionesUsadas(@Param("idClientePaquete") Long idClientePaquete);
+
 }
