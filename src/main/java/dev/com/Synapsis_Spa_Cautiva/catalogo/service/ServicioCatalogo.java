@@ -69,7 +69,7 @@ public class ServicioCatalogo implements CatalogoApi {
 		Servicio oServicio = repositorioServicio.findByVariante(idVariante)
 			.orElseThrow(() -> new ReglaNegocioException("RN40", "La variante " + idVariante + " no existe.", HttpStatus.NOT_FOUND));
 		return new DatosVariante(idVariante, oServicio.getIdServicio(), oServicio.getIdArea(), oServicio.getDuracionRefMin(),
-				oServicio.getTipoRecurso().name());
+				oServicio.getTipoRecurso().name(), oServicio.getNombre());
 	}
 
 	@Override
