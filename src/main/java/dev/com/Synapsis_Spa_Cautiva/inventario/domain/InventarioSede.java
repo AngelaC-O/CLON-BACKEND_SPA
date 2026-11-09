@@ -12,6 +12,13 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
+
+/**
+ * El stock lo pone en 0 TRG_INVENTARIO_SEDE_REGLAS al insertar y solo lo cambia el kardex (TRG_KARDEX_APLICAR):
+ * Java nunca lo escribe (RN14, RN18).
+ */
 @Entity
 @Table(name = "INVENTARIO_SEDE")
 @Getter
@@ -26,7 +33,8 @@ public class InventarioSede {
 	@JoinColumn(name = "id_producto")
 	private Producto producto;
 
-	@Column(name = "stock_actual", nullable = false)
+	@Generated(event = EventType.INSERT)
+	@Column(name = "stock_actual", insertable = false, updatable = false)
 	private Integer stockActual;
 
 	@Column(name = "stock_minimo", nullable = false)
@@ -36,6 +44,18 @@ public class InventarioSede {
 	private String ubicacion;
 
 	protected InventarioSede() {
+	}
+
+	InventarioSede(Producto producto, Long idSede, Integer stockMinimo, String ubicacion) {
+		this.producto = producto;
+		this.id = new InventarioSedeId(idSede);
+		this.stockMinimo = stockMinimo;
+		this.ubicacion = ubicacion;
+	}
+
+	void definirMinimo(Integer stockMinimo, String ubicacion) {
+		this.stockMinimo = stockMinimo;
+		this.ubicacion = ubicacion;
 	}
 
 	public Long getIdProducto() {
