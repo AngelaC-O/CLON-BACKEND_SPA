@@ -1,7 +1,11 @@
 package dev.com.Synapsis_Spa_Cautiva.agenda.domain;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -9,13 +13,16 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 
+import lombok.AccessLevel;
 import lombok.Getter;
 
 import org.hibernate.annotations.DynamicUpdate;
+import org.springframework.http.HttpStatus;
 
 @Entity
 @Table(name = "ATENCION")
@@ -65,6 +72,10 @@ public class Atencion {
 	@Column(name = "estado", nullable = false, length = 15)
 	private EstadoAtencion estado;
 
+	@Getter(AccessLevel.NONE)
+	@OneToMany(mappedBy = "atencion", cascade = CascadeType.ALL, orphanRemoval = true)
+	private List<RecomendacionProducto> recomendaciones = new ArrayList<>();
+
 	protected Atencion() {
 	}
 
@@ -101,6 +112,27 @@ public class Atencion {
 		}
 		this.horaFin = horaFin;
 		this.estado = EstadoAtencion.FINALIZADA;
+	}
+
+	/** RN50: solo la especialista asignada, o la Administradora, inicia y finaliza la atención (403). */
+	public void verificarEspecialista(Long idPersonalSesion, boolean esAdministradora) {
+		if (!esAdministradora && !idPersonal.equals(idPersonalSesion)) {
+			throw new ReglaNegocioException("RN50", "Solo la especialista asignada o la Administradora atiende esta atención.",
+					HttpStatus.FORBIDDEN);
+		}
+	}
+
+	/** RF16: la especialista recomienda un producto una sola vez por atención (UQ_RECOM_ATENCION_PRODUCTO). */
+	public void recomendarProducto(Long idProducto, String observacion) {
+		boolean yaRecomendado = recomendaciones.stream().anyMatch(recomendacion -> recomendacion.getIdProducto().equals(idProducto));
+		if (yaRecomendado) {
+			throw new ReglaNegocioException("RF16", "El producto ya se recomendó en esta atención.", HttpStatus.CONFLICT);
+		}
+		recomendaciones.add(new RecomendacionProducto(this, idProducto, observacion));
+	}
+
+	public List<RecomendacionProducto> getRecomendaciones() {
+		return Collections.unmodifiableList(recomendaciones);
 	}
 
 	/** RN36 y RN38: la atención cubierta por un paquete no se cobra ni comisiona. */

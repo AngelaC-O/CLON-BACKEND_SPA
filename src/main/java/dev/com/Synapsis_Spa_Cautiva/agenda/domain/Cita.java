@@ -19,9 +19,11 @@ import lombok.Getter;
 import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
+import org.springframework.http.HttpStatus;
 
 /**
- * fechaHoraFin la calcula TRG_CITA_REGLAS: inicio + duración + limpieza del recurso (RN03).
+ * fechaHoraFin la calcula TRG_CITA_REGLAS: inicio + duración + limpieza del recurso (RN03). El mismo trigger fija
+ * quién registró la cita y cuándo (idUsuario y fechaRegistro), así que Hibernate los vuelve a leer al insertar.
  */
 @Entity
 @Table(name = "CITA")
@@ -84,9 +86,11 @@ public class Cita {
 	@Column(name = "fecha_recordatorio")
 	private LocalDateTime fechaRecordatorio;
 
+	@Generated(event = EventType.INSERT, writable = true)
 	@Column(name = "id_usuario", nullable = false)
 	private Long idUsuario;
 
+	@Generated(event = EventType.INSERT, writable = true)
 	@Column(name = "fecha_registro", updatable = false, nullable = false)
 	private LocalDateTime fechaRegistro;
 
@@ -106,6 +110,48 @@ public class Cita {
 		this.estado = EstadoCita.PENDIENTE;
 		this.adelantoMonto = BigDecimal.ZERO;
 		this.fechaRegistro = LocalDateTime.now();
+	}
+
+	/** Cita nueva de una reprogramación: misma clienta, sede, servicio y duración, con el adelanto de la original (RN05). */
+	private Cita(Cita origen, LocalDateTime fechaHoraInicio, Long idPersonal, Long idRecurso) {
+		this(origen.idCliente, origen.idSede, idPersonal, idRecurso, origen.idVariante, fechaHoraInicio, origen.duracionMin,
+				origen.idUsuario);
+		this.adelantoMonto = origen.adelantoMonto;
+		this.idMedioPago = origen.idMedioPago;
+		this.fechaAdelanto = origen.fechaAdelanto;
+		this.idCaja = origen.idCaja;
+		this.idCitaOrigen = origen.idCita;
+	}
+
+	/**
+	 * RF12, RN05: la cita queda REPROGRAMADA y nace otra PENDIENTE con id_cita_origen, que hereda el adelanto completo.
+	 * La fecha futura (RN49) y el cruce (RN02) los valida el servicio antes, como al agendar.
+	 */
+	public Cita reprogramar(LocalDateTime fechaHoraInicio, Long idPersonal, Long idRecurso) {
+		exigirPendiente("RF12", "reprograma");
+		this.estado = EstadoCita.REPROGRAMADA;
+		return new Cita(this, fechaHoraInicio, idPersonal, idRecurso);
+	}
+
+	/**
+	 * RF12, RN05: se cancela con motivo, también cuando la clienta no se presenta (motivo «No se presentó»: CITA no tiene
+	 * estado NO_ASISTIO). El adelanto pasa a saldo a favor con Cliente.abonarSaldo.
+	 */
+	public void cancelar(String motivoCancelacion) {
+		exigirPendiente("RF12", "cancela");
+		if (motivoCancelacion == null || motivoCancelacion.isBlank()) {
+			throw new ReglaNegocioException("RF12", "Indique el motivo de la cancelación.");
+		}
+		this.motivoCancelacion = motivoCancelacion.trim();
+		this.estado = EstadoCita.CANCELADA;
+	}
+
+	/** RN50: solo la especialista asignada a la cita, o la Administradora, inicia y finaliza su atención (403). */
+	public void verificarEspecialista(Long idPersonalSesion, boolean esAdministradora) {
+		if (!esAdministradora && !idPersonal.equals(idPersonalSesion)) {
+			throw new ReglaNegocioException("RN50", "Solo la especialista asignada a la cita o la Administradora la atiende.",
+					HttpStatus.FORBIDDEN);
+		}
 	}
 
 	public void registrarAdelanto(BigDecimal adelantoMonto, Long idMedioPago, LocalDateTime fechaAdelanto, Long idCaja) {
@@ -134,6 +180,12 @@ public class Cita {
 			throw new ReglaNegocioException("RF13", "Solo se finaliza una cita EN_ATENCION; esta está " + estado + ".");
 		}
 		this.estado = EstadoCita.FINALIZADA;
+	}
+
+	private void exigirPendiente(String regla, String accion) {
+		if (estado != EstadoCita.PENDIENTE) {
+			throw new ReglaNegocioException(regla, "Solo se " + accion + " una cita PENDIENTE; esta está " + estado + ".");
+		}
 	}
 
 }
