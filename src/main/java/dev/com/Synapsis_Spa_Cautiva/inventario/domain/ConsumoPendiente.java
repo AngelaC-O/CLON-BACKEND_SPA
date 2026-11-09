@@ -15,6 +15,8 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 
 import lombok.Getter;
 
+import org.springframework.http.HttpStatus;
+
 import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
@@ -125,7 +127,7 @@ public class ConsumoPendiente {
 
 	private void exigirPendiente() {
 		if (estado != EstadoConsumoPendiente.PENDIENTE) {
-			throw new ReglaNegocioException("RN53", "El consumo pendiente ya está " + estado + " y no cambia.");
+			throw new ReglaNegocioException("RN53", "El consumo pendiente ya está " + estado + " y no cambia.", HttpStatus.CONFLICT);
 		}
 	}
 

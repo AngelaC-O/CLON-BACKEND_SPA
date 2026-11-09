@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -40,6 +41,9 @@ import org.springframework.http.HttpStatus;
 public class Producto {
 
 	private static final BigDecimal CIEN = BigDecimal.valueOf(100);
+
+	/** [It. 2 · RN54] Las unidades mínimas de un insumo (comentario de PRODUCTO.unidad en el script 17). */
+	private static final Set<String> UNIDADES_MINIMAS = Set.of("ML", "G", "UND");
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -99,17 +103,31 @@ public class Producto {
 	protected Producto() {
 	}
 
-	/** RF44, RF45, RN13: el precio de venta lo fija calcularPrecioVenta con el margen de PARAMETRO (RF87). */
+	/**
+	 * RF44, RF45, RN13: el precio de venta lo fija calcularPrecioVenta con el margen de PARAMETRO (RF87). [It. 2 · RN54] Un insumo se
+	 * registra en su unidad mínima (ML, G o UND), para que su consumo estimado se descuente en unidades enteras.
+	 */
 	public Producto(String codigo, String nombre, String marca, Long idCategoria, String unidad, TipoUsoProducto tipoUso,
 			BigDecimal costo) {
+		if (tipoUso == null) {
+			throw new ReglaNegocioException("RN13", "Indique si el producto es de VENTA o un INSUMO de uso interno.");
+		}
 		if (costo == null || costo.signum() < 0) {
 			throw new ReglaNegocioException("RN14", "El costo del producto es mayor o igual a 0.");
+		}
+		String unidadNormal = unidad == null ? null : unidad.trim().toUpperCase();
+		if (unidadNormal == null || unidadNormal.isEmpty()) {
+			throw new ReglaNegocioException("RF44", "Indique la unidad de medida del producto.");
+		}
+		if (tipoUso == TipoUsoProducto.INSUMO && !UNIDADES_MINIMAS.contains(unidadNormal)) {
+			throw new ReglaNegocioException("RN54",
+					"Los insumos se registran en su unidad mínima: ml (ML), g (G) o unidad (UND); se indicó «" + unidad.trim() + "».");
 		}
 		this.codigo = codigo;
 		this.nombre = nombre;
 		this.marca = marca;
 		this.idCategoria = idCategoria;
-		this.unidad = unidad;
+		this.unidad = unidadNormal;
 		this.tipoUso = tipoUso;
 		this.costo = costo;
 		this.precioVenta = costo;
@@ -127,6 +145,14 @@ public class Producto {
 		}
 		BigDecimal factor = BigDecimal.ONE.add(margen.divide(CIEN, 6, RoundingMode.HALF_UP));
 		this.precioVenta = costo.multiply(factor).setScale(2, RoundingMode.HALF_UP);
+	}
+
+	/**
+	 * [It. 2 · RN14] Un producto premium usa MARGEN_PREMIUM_PCT en vez de MARGEN_PRODUCTO_PCT. No está en el diagrama de CUS32
+	 * (DF-91): sin él, PRODUCTO.es_premium quedaría siempre en N.
+	 */
+	public void definirPremium(Boolean esPremium) {
+		this.esPremium = Boolean.TRUE.equals(esPremium);
 	}
 
 	/** RF86, RN16: el mínimo y la ubicación son por sede; el stock nace en 0 y solo lo cambia el kardex. */
