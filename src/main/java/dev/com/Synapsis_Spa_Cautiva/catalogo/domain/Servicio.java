@@ -70,12 +70,32 @@ public class Servicio {
 		variantes.add(new VarianteServicio(this, nombreVariante, precio));
 	}
 
+	/** RF83: desactivar un servicio es estado = INACTIVO; no se borra porque lo usan citas y ventas. */
+	public void actualizarDatos(String nombre, Integer duracionRefMin, TipoRecurso tipoRecurso, EstadoServicio estado) {
+		if (duracionRefMin == null || duracionRefMin < 5 || duracionRefMin > 600) {
+			throw new ReglaNegocioException("RF83", "La duración de referencia va de 5 a 600 minutos.");
+		}
+		this.nombre = nombre;
+		this.duracionRefMin = duracionRefMin;
+		this.tipoRecurso = tipoRecurso;
+		this.estado = estado;
+	}
+
+	/** Un insumo ya definido cambia su cantidad (CUS58); uno nuevo se agrega (CUS57). Va en su unidad mínima (RN54). */
 	public void definirInsumo(Long idVariante, Long idProducto, BigDecimal cantidadEstimada) {
-		VarianteServicio variante = variantes.stream()
+		buscarVariante(idVariante).definirInsumo(idProducto, cantidadEstimada);
+	}
+
+	/** RN25: el precio anterior y el nuevo los guarda TRG_AUD_VARIANTE_SERVICIO en AUDITORIA. */
+	public void cambiarPrecio(Long idVariante, BigDecimal precioNuevo) {
+		buscarVariante(idVariante).cambiarPrecio(precioNuevo);
+	}
+
+	private VarianteServicio buscarVariante(Long idVariante) {
+		return variantes.stream()
 			.filter(candidata -> idVariante.equals(candidata.getIdVariante()))
 			.findFirst()
 			.orElseThrow(() -> new ReglaNegocioException("RF49", "La variante " + idVariante + " no es de este servicio."));
-		variante.definirInsumo(idProducto, cantidadEstimada);
 	}
 
 	public List<VarianteServicio> getVariantes() {

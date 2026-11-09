@@ -40,6 +40,10 @@ public class ServicioInsumo {
 		this.cantidadEstimada = cantidadEstimada;
 	}
 
+	void cambiarCantidad(BigDecimal cantidadEstimada) {
+		this.cantidadEstimada = cantidadEstimada;
+	}
+
 	public Long getIdVariante() {
 		return id.getIdVariante();
 	}
