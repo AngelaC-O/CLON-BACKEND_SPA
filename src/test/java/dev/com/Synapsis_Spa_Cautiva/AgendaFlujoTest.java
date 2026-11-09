@@ -266,7 +266,7 @@ class AgendaFlujoTest extends OracleTestcontainer {
 		Long idCliente = registrarClienta("Disponibilidad");
 		agendar(idCliente, idEspecialista, recurso("SILLON", 0), idVariante, dia.atTime(9, 0), 30).andExpect(status().isCreated());
 
-		// Ocupa 09:00 a 10:00 por la limpieza de 30 min: la única especialista del área no queda libre hasta las 10:00
+		// Ocupa 09:00 a 09:40 con la limpieza de 10 min (v5.1): con horas cada 30 min, la siguiente libre es las 10:00
 		enviar("recepcion", get("/api/v1/citas/disponibilidad").param("idVariante", idVariante.toString()).param("fecha", dia.toString()), null)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$[0].inicio").value(containsString("10:00")));
@@ -288,7 +288,7 @@ class AgendaFlujoTest extends OracleTestcontainer {
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.estado").value("PENDIENTE"))
 			.andExpect(jsonPath("$.idSede").value(idSede()))
-			.andExpect(jsonPath("$.fechaHoraFin").value(containsString("11:00")));
+			.andExpect(jsonPath("$.fechaHoraFin").value(containsString("10:40")));
 
 		Long idCita = idDe(resultado, "idCita");
 		resultado.andExpect(header().string("Location", "/api/v1/citas/" + idCita));
@@ -303,18 +303,18 @@ class AgendaFlujoTest extends OracleTestcontainer {
 		LocalDate dia = lunes(12);
 		agendar(idCliente, idEspecialista, recurso("SILLON", 0), idVariante, dia.atTime(10, 0), 30).andExpect(status().isCreated());
 
-		// La misma especialista en otro sillón, dentro del servicio y dentro de la limpieza (termina 11:00)
+		// La misma especialista en otro sillón, dentro del servicio (10:00 a 10:30; con la limpieza de 10 min termina 10:40)
 		agendar(idCliente, idEspecialista, recurso("SILLON", 1), idVariante, dia.atTime(10, 15), 30).andExpect(status().isConflict())
 			.andExpect(jsonPath("$.regla").value("RN02"))
 			.andExpect(jsonPath("$.detail").value(containsString("especialista")));
-		agendar(idCliente, idEspecialista, recurso("SILLON", 1), idVariante, dia.atTime(10, 45), 30).andExpect(status().isConflict());
+		agendar(idCliente, idEspecialista, recurso("SILLON", 1), idVariante, dia.atTime(10, 20), 30).andExpect(status().isConflict());
 
-		// El mismo sillón con otra especialista: el recurso también choca
-		agendar(idCliente, idPersonal("especialista2"), recurso("SILLON", 0), idVariante, dia.atTime(10, 45), 30).andExpect(status().isConflict())
+		// El mismo sillón con otra especialista, dentro de la limpieza: el recurso también choca
+		agendar(idCliente, idPersonal("especialista2"), recurso("SILLON", 0), idVariante, dia.atTime(10, 35), 30).andExpect(status().isConflict())
 			.andExpect(jsonPath("$.detail").value(containsString("recurso")));
 
 		// Justo al terminar la limpieza ya no hay cruce
-		agendar(idCliente, idEspecialista, recurso("SILLON", 0), idVariante, dia.atTime(11, 0), 30).andExpect(status().isCreated());
+		agendar(idCliente, idEspecialista, recurso("SILLON", 0), idVariante, dia.atTime(10, 40), 30).andExpect(status().isCreated());
 	}
 
 	@Test
@@ -403,9 +403,9 @@ class AgendaFlujoTest extends OracleTestcontainer {
 			.andExpect(jsonPath("$[1].franja").value("OCUPADA"))
 			.andExpect(jsonPath("$[1].origen").value("CITA"))
 			.andExpect(jsonPath("$[1].idOrigen").value(idCita))
-			.andExpect(jsonPath("$[1].fin").value(containsString("11:00")))
+			.andExpect(jsonPath("$[1].fin").value(containsString("10:40")))
 			.andExpect(jsonPath("$[2].franja").value("LIBRE"))
-			.andExpect(jsonPath("$[2].inicio").value(containsString("11:00")))
+			.andExpect(jsonPath("$[2].inicio").value(containsString("10:40")))
 			.andExpect(jsonPath("$[2].fin").value(containsString("19:00")));
 
 		enviar("recepcion", get("/api/v1/citas/agenda").param("fecha", dia.toString()).param("idRecurso", idRecurso.toString()), null)
@@ -443,9 +443,9 @@ class AgendaFlujoTest extends OracleTestcontainer {
 		Long idAtencion = idDe(inicio, "idAtencion");
 		inicio.andExpect(header().string("Location", "/api/v1/atenciones/" + idAtencion));
 
-		// RF13: la cita pasa a EN_ATENCION y el tiempo declarado actualiza su bloque, con la limpieza (45 + 30)
+		// RF13: la cita pasa a EN_ATENCION y el tiempo declarado actualiza su bloque, con la limpieza (45 + 10)
 		assertThat(jdbc.queryForObject("SELECT estado FROM CITA WHERE id_cita = ?", String.class, idCita)).isEqualTo("EN_ATENCION");
-		assertThat(jdbc.queryForObject("SELECT TO_CHAR(fecha_hora_fin, 'HH24:MI') FROM CITA WHERE id_cita = ?", String.class, idCita)).isEqualTo("11:15");
+		assertThat(jdbc.queryForObject("SELECT TO_CHAR(fecha_hora_fin, 'HH24:MI') FROM CITA WHERE id_cita = ?", String.class, idCita)).isEqualTo("10:55");
 
 		// Una atención no se inicia dos veces
 		enviar("especialista1", post("/api/v1/atenciones"), "{\"idCita\":" + idCita + ",\"tiempoDeclaradoMin\":45}")

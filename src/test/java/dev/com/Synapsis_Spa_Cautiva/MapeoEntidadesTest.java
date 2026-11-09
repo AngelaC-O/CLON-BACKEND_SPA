@@ -183,7 +183,7 @@ class MapeoEntidadesTest extends OracleTestcontainer {
 				"SELECT id_personal FROM USUARIO WHERE nombre_usuario = 'especialista2'", Long.class);
 		Long idCuidadoFacial = jdbcTemplate.queryForObject("SELECT id_area FROM AREA WHERE nombre = 'Cuidado Facial'", Long.class);
 		Recurso recurso = repositorioRecurso.saveAndFlush(new Recurso(idSede, "Cabina de mapeo",
-				dev.com.Synapsis_Spa_Cautiva.sedes.domain.TipoRecurso.CABINA, 15));
+				dev.com.Synapsis_Spa_Cautiva.sedes.domain.TipoRecurso.CABINA, 10));
 		Servicio servicio = new Servicio(idCuidadoFacial, "Limpieza de mapeo", 30, TipoRecurso.CABINA);
 		servicio.agregarVariante("Única", new BigDecimal("50.00"));
 		repositorioServicio.saveAndFlush(servicio);
@@ -192,12 +192,12 @@ class MapeoEntidadesTest extends OracleTestcontainer {
 				servicio.getVariantes().getFirst().getIdVariante(), lunes.atTime(10, 0), 30, idAdmin);
 		repositorioCita.saveAndFlush(cita);
 
-		assertThat(cita.getFechaHoraFin()).isEqualTo(lunes.atTime(10, 45));
+		assertThat(cita.getFechaHoraFin()).isEqualTo(lunes.atTime(10, 40));
 		assertThat(repositorioCita.findOcupacion(idSede, lunes)).containsExactly(cita);
 
 		cita.iniciarAtencion(40);
 		repositorioCita.saveAndFlush(cita);
-		assertThat(cita.getFechaHoraFin()).isEqualTo(lunes.atTime(10, 55));
+		assertThat(cita.getFechaHoraFin()).isEqualTo(lunes.atTime(10, 50));
 	}
 
 	@Test

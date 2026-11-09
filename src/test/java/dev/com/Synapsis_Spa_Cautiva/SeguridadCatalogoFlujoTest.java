@@ -268,7 +268,9 @@ class SeguridadCatalogoFlujoTest extends OracleTestcontainer {
 
 		assertThat(id("SELECT COUNT(*) FROM AUDITORIA WHERE accion = 'ACCESO_DENEGADO' AND id_usuario = " + idRecepcion)).isEqualTo(antes + 1);
 		assertThat(id("SELECT COUNT(*) FROM USUARIO WHERE nombre_usuario = 'intruso'")).isZero();
-		enviar(sesion, get("/api/v1/areas"), null).andExpect(status().isForbidden());
+		// [v5.1] RECEPCIONISTA tiene CATALOGO:VER (script 17), pero no CATALOGO:CREAR
+		enviar(sesion, get("/api/v1/areas"), null).andExpect(status().isOk());
+		enviar(sesion, post("/api/v1/areas"), "{\"linea\":\"SALON\",\"nombreArea\":\"Intrusa\"}").andExpect(status().isForbidden());
 		enviar(sesion, post("/api/v1/recursos"), "{\"idSede\":1,\"nombre\":\"Intruso\",\"tipo\":\"CABINA\",\"minutosLimpieza\":5}")
 			.andExpect(status().isForbidden());
 	}
@@ -330,10 +332,11 @@ class SeguridadCatalogoFlujoTest extends OracleTestcontainer {
 	@Test
 	void cus61RegistraRecursoConLaLimpiezaDelParametro() throws Exception {
 		Sesion sesion = admin();
-		String recurso = "{\"idSede\":" + idSede() + ",\"nombre\":\"Camilla de prueba\",\"tipo\":\"CAMILLA\",\"minutosLimpieza\":15}";
+		// LIMPIEZA_MAX_MIN = 10 desde v5.1 (RN03)
+		String recurso = "{\"idSede\":" + idSede() + ",\"nombre\":\"Camilla de prueba\",\"tipo\":\"CAMILLA\",\"minutosLimpieza\":10}";
 		enviar(sesion, post("/api/v1/recursos"), recurso).andExpect(status().isCreated()).andExpect(jsonPath("$.estado").value("DISPONIBLE"));
 		enviar(sesion, post("/api/v1/recursos"), recurso).andExpect(status().isConflict());
-		enviar(sesion, post("/api/v1/recursos"), recurso.replace("Camilla de prueba", "Otra").replace("15", "31"))
+		enviar(sesion, post("/api/v1/recursos"), recurso.replace("Camilla de prueba", "Otra").replace("\"minutosLimpieza\":10", "\"minutosLimpieza\":11"))
 			.andExpect(status().isUnprocessableContent())
 			.andExpect(jsonPath("$.regla").value("RN03"));
 	}

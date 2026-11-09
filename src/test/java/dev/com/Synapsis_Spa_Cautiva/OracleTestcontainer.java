@@ -13,7 +13,8 @@ import org.testcontainers.utility.MountableFile;
 
 /**
  * Clase base de las pruebas de integración: un solo Oracle Free por ejecución, con database/
- * instalado como dice database/README.md. La aplicación se conecta como CAUTIVA_APP con
+ * instalado como dice database/README.md (00, 14, 13, 15 y la migración v5.1 de 17).
+ * La aplicación se conecta como CAUTIVA_APP con
  * CURRENT_SCHEMA = dueño, igual que en los ambientes reales.
  */
 @ActiveProfiles("test")
@@ -53,19 +54,36 @@ public abstract class OracleTestcontainer {
 		sqlplus(system, "@/database/14_cuenta_aplicacion.sql");
 		sqlplus(dueno, "@/database/13_permisos.sql");
 		sqlplus(dueno, "@/database/15_datos_iteracion1.sql");
+		sqlplus(dueno, "@/database/17_datos_iteracion2.sql");
 		sqlplus(system, "ALTER USER " + CUENTA_APP + " IDENTIFIED BY \"" + CLAVE_APP + "\" ACCOUNT UNLOCK;");
 	}
 
-	/** Corre en /tmp porque 00 hace SPOOL en la carpeta actual y /database no es escribible. */
 	private static void sqlplus(String cuenta, String instruccion) {
+		String salida = ejecutarSqlplus(cuenta, instruccion);
+		if (ERROR_SQLPLUS.matcher(salida).find()) {
+			throw new IllegalStateException("Falló " + instruccion + ":\n" + salida);
+		}
+	}
+
+	/**
+	 * Corre un script de prueba de database/ como dueño y devuelve su salida. Los scripts de prueba
+	 * imprimen los ORA- esperados de cada caso, así que aquí no se revisan: lo hace la prueba con OK y FALLO.
+	 */
+	protected static String sqlplusComoDueno(String instruccion) {
+		return ejecutarSqlplus(DUENO + "/" + CLAVE_DUENO, instruccion);
+	}
+
+	/** Corre en /tmp porque 00 hace SPOOL en la carpeta actual y /database no es escribible. */
+	private static String ejecutarSqlplus(String cuenta, String instruccion) {
 		String comando = "cd /tmp && export NLS_LANG=AMERICAN_AMERICA.WE8MSWIN1252 && printf '%s\\nEXIT\\n' '" + instruccion
 				+ "' | sqlplus -s -L " + cuenta + "@" + SERVICIO;
 		try {
 			ExecResult resultado = ORACLE.execInContainer("bash", "-c", comando);
 			String salida = resultado.getStdout() + resultado.getStderr();
-			if (resultado.getExitCode() != 0 || ERROR_SQLPLUS.matcher(salida).find()) {
+			if (resultado.getExitCode() != 0) {
 				throw new IllegalStateException("Falló " + instruccion + ":\n" + salida);
 			}
+			return salida;
 		}
 		catch (IOException ex) {
 			throw new IllegalStateException("No se pudo ejecutar " + instruccion, ex);
