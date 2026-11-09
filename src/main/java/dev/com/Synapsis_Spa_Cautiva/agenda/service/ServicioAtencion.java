@@ -12,6 +12,7 @@ import dev.com.Synapsis_Spa_Cautiva.agenda.controller.AtencionDTO;
 import dev.com.Synapsis_Spa_Cautiva.agenda.controller.CitaAtencionDTO;
 import dev.com.Synapsis_Spa_Cautiva.agenda.controller.DetalleAtencionDTO;
 import dev.com.Synapsis_Spa_Cautiva.agenda.controller.MapperAtencion;
+import dev.com.Synapsis_Spa_Cautiva.agenda.controller.RecomendacionDTO;
 import dev.com.Synapsis_Spa_Cautiva.agenda.domain.Atencion;
 import dev.com.Synapsis_Spa_Cautiva.agenda.domain.Cita;
 import dev.com.Synapsis_Spa_Cautiva.agenda.domain.EstadoAtencion;
@@ -24,6 +25,7 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.UsuarioActual;
 import dev.com.Synapsis_Spa_Cautiva.inventario.api.ConsumoPendienteDTO;
 import dev.com.Synapsis_Spa_Cautiva.inventario.api.InventarioApi;
+import dev.com.Synapsis_Spa_Cautiva.inventario.api.ProductoStockDTO;
 import dev.com.Synapsis_Spa_Cautiva.sedes.api.DatosRecurso;
 import dev.com.Synapsis_Spa_Cautiva.sedes.api.RecursoApi;
 import lombok.RequiredArgsConstructor;
@@ -102,6 +104,29 @@ public class ServicioAtencion implements AtencionApi {
 		List<ConsumoPendienteDTO> pendientes = inventarioApi.registrarConsumoAtencion(idAtencion, usuarioActual.idSede(),
 				catalogoApi.insumosDeVariante(oAtencion.getIdVariante()));
 		return mapperAtencion.aDTO(oAtencion).conConsumosPendientes(pendientes);
+	}
+
+	/** [It. 2 · CUS12, RF16] Productos de VENTA de la sede de la sesión para recomendar (InventarioApi.buscar, sin marca ni categoría). */
+	@Transactional(readOnly = true)
+	public List<ProductoStockDTO> buscarProductos(String nombre) {
+		return inventarioApi.buscar(nombre, null, null, usuarioActual.idSede());
+	}
+
+	/**
+	 * [It. 2 · CUS12, RF16] La recomendación queda en RECOMENDACION_PRODUCTO, ligada a la atención. RN50: solo su especialista o la
+	 * Administradora (403). save() de una atención existente hace merge, así que la recomendación guardada se lee de la colección.
+	 */
+	@Transactional
+	public RecomendacionDTO recomendarProducto(Long idAtencion, Long idProducto, String observacion) {
+		Atencion oAtencion = buscarAtencion(idAtencion);
+		oAtencion.verificarEspecialista(usuarioActual.idPersonal(), usuarioActual.esAdministradora(usuarioActual.idUsuario()));
+		oAtencion.recomendarProducto(idProducto, observacion);
+		Atencion guardada = repositorioAtencion.saveAndFlush(oAtencion);
+		return guardada.getRecomendaciones().stream()
+			.filter(recomendacion -> recomendacion.getIdProducto().equals(idProducto))
+			.findFirst()
+			.map(mapperAtencion::aDTO)
+			.orElseThrow();
 	}
 
 	@Override
