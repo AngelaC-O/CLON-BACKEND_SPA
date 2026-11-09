@@ -18,4 +18,7 @@ public interface AtencionApi {
 	/** 409 si ya se cobró; 422 si aún no termina (RF21). */
 	AtencionCobrable obtenerAtencionCobrable(Long idAtencion);
 
+	/** [It. 2] CUS18: las atenciones FINALIZADAS de la sede, aún sin cobrar (RF21). Ventas quita las que ya están en una venta ABIERTA. */
+	List<AtencionCobrable> listarCobrables(Long idSede);
+
 }

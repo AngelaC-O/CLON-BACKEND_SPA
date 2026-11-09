@@ -3,6 +3,9 @@ package dev.com.Synapsis_Spa_Cautiva.ventas.service;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import dev.com.Synapsis_Spa_Cautiva.agenda.api.AtencionApi;
 import dev.com.Synapsis_Spa_Cautiva.agenda.api.AtencionCobrable;
@@ -21,7 +24,9 @@ import dev.com.Synapsis_Spa_Cautiva.ventas.controller.CierreVentaDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.CobroPendienteDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.DescuentosDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.MapperVenta;
+import dev.com.Synapsis_Spa_Cautiva.ventas.controller.PagoVentaDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.PagosDTO;
+import dev.com.Synapsis_Spa_Cautiva.ventas.controller.PorCobrarDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.ProformaDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.VentaDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.Comprobante;
@@ -73,6 +78,33 @@ public class ServicioVenta {
 
 	private final MapperVenta mapperVenta;
 
+	/** [It. 2] CUS18: las atenciones FINALIZADAS sin venta y las ventas ABIERTAS de la sede, para cobrarlas o retomarlas (RN52). */
+	@Transactional(readOnly = true)
+	public PorCobrarDTO listarPorCobrar(Long idSede) {
+		List<Venta> abiertas = repositorioVenta.findAbiertasPorSede(idSede);
+		Set<Long> enVenta = abiertas.stream()
+			.flatMap(oVenta -> oVenta.getDetalles().stream())
+			.map(VentaDetalle::getIdAtencion)
+			.filter(Objects::nonNull)
+			.collect(Collectors.toSet());
+		List<AtencionCobrable> atenciones = atencionApi.listarCobrables(idSede).stream()
+			.filter(oAtencion -> !enVenta.contains(oAtencion.idAtencion()))
+			.toList();
+		return new PorCobrarDTO(atenciones, abiertas.stream().map(mapperVenta::aDTO).toList());
+	}
+
+	/** [It. 2] CUS18: la venta con el estado actual de sus cobros digitales en la pasarela (RN42, RN52). */
+	@Transactional(readOnly = true)
+	public VentaDTO obtenerVenta(Long idVenta) {
+		VentaDTO oVentaDTO = mapperVenta.aDTO(buscar(idVenta));
+		List<PagoVentaDTO> pagos = oVentaDTO.pagos().stream()
+			.map(oPago -> oPago.idTransaccion() == null ? oPago : oPago.conEstadoTransaccion(pagosApi.consultarTransaccion(oPago.idTransaccion()).estado()))
+			.toList();
+		return new VentaDTO(oVentaDTO.idVenta(), oVentaDTO.idSede(), oVentaDTO.idCaja(), oVentaDTO.idCliente(), oVentaDTO.estado(), oVentaDTO.detalles(),
+				oVentaDTO.subtotal(), oVentaDTO.igv(), oVentaDTO.descuento(), oVentaDTO.adelantoAplicado(), oVentaDTO.saldoFavorAplicado(), oVentaDTO.total(),
+				pagos, oVentaDTO.pagado(), oVentaDTO.pendiente(), oVentaDTO.cobrosPendientes(), oVentaDTO.comprobante());
+	}
+
 	@Transactional
 	public VentaDTO crearDesdeAtencion(Long idAtencion) {
 		Long idSede = usuarioActual.idSede();
@@ -106,7 +138,11 @@ public class ServicioVenta {
 		return mapperVenta.aDTO(repositorioVenta.saveAndFlush(oVenta));
 	}
 
-	/** Un cobro digital sin aprobar no registra pago (RN42): cuenta en cobrosPendientes y el controlador responde 202. */
+	/**
+	 * Un cobro digital sin aprobar no registra pago (RN42): cuenta en cobrosPendientes y el controlador responde 202. [It. 2 · RN52] PagosApi.cobrar
+	 * guarda la transacción aparte: si queda PENDIENTE, la venta sigue ABIERTA; si la pasarela la rechaza, la fila RECHAZADA queda aunque esta
+	 * transacción haga rollback por el 422.
+	 */
 	@Transactional
 	public VentaDTO registrarPagos(Long idVenta, PagosDTO oPagosDTO) {
 		Venta oVenta = buscar(idVenta);

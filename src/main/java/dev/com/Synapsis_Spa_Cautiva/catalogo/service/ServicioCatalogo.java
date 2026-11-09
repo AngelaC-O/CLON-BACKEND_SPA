@@ -74,6 +74,12 @@ public class ServicioCatalogo implements CatalogoApi {
 
 	@Override
 	@Transactional(readOnly = true)
+	public List<DatosVariante> obtenerVariantes(List<Long> idsVariante) {
+		return idsVariante.stream().distinct().map(this::obtenerVariante).toList();
+	}
+
+	@Override
+	@Transactional(readOnly = true)
 	public BigDecimal precioVigente(Long idVariante, Long idPaquete, Long idPromocion) {
 		if (idVariante != null) {
 			BigDecimal precio = repositorioServicio.findVariante(idVariante)

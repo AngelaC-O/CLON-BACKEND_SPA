@@ -20,7 +20,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 @RequiredArgsConstructor
 class FiltroCambioClave extends OncePerRequestFilter {
 
-	private static final Set<String> PERMITIDAS = Set.of("/api/v1/auth/cambio-clave", "/api/v1/auth/logout");
+	private static final Set<String> PERMITIDAS = Set.of("/api/v1/auth/cambio-clave", "/api/v1/auth/logout", "/api/v1/auth/sesion");
 
 	private final HandlerExceptionResolver resolutorDeErrores;
 

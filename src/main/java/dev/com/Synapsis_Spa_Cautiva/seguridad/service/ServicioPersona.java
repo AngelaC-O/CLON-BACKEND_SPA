@@ -102,6 +102,15 @@ class ServicioPersona implements PersonaApi {
 		return aDTO(buscar(idPersona));
 	}
 
+	@Override
+	@Transactional(readOnly = true)
+	public List<PersonaDTO> obtenerPersonas(List<Long> idsPersona) {
+		if (idsPersona.isEmpty()) {
+			return List.of();
+		}
+		return repositorioPersona.findAllById(idsPersona.stream().distinct().toList()).stream().map(this::aDTO).toList();
+	}
+
 	private Persona buscar(Long idPersona) {
 		return repositorioPersona.findById(idPersona)
 			.orElseThrow(() -> new ReglaNegocioException("RN01", "La persona " + idPersona + " no existe.", HttpStatus.NOT_FOUND));

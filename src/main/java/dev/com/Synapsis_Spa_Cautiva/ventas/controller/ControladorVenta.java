@@ -2,6 +2,7 @@ package dev.com.Synapsis_Spa_Cautiva.ventas.controller;
 
 import java.net.URI;
 
+import dev.com.Synapsis_Spa_Cautiva.comun.api.UsuarioActual;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.ResultadoConsulta;
 import dev.com.Synapsis_Spa_Cautiva.ventas.service.ServicioVenta;
 import jakarta.validation.Valid;
@@ -26,6 +27,22 @@ public class ControladorVenta {
 	private static final String ENCONTRADO = "ENCONTRADO";
 
 	private final ServicioVenta servicioVenta;
+
+	private final UsuarioActual usuarioActual;
+
+	/** [It. 2] CUS18: atenciones FINALIZADAS sin venta y ventas ABIERTAS de la sede de la sesión. */
+	@GetMapping("/ventas/por-cobrar")
+	@PreAuthorize("hasAuthority('VENTAS:VER')")
+	public ResponseEntity<PorCobrarDTO> listarPorCobrar() {
+		return ResponseEntity.ok(servicioVenta.listarPorCobrar(usuarioActual.idSede()));
+	}
+
+	/** [It. 2] CUS18: la venta con el estado actual de sus cobros digitales (RN52). */
+	@GetMapping("/ventas/{idVenta}")
+	@PreAuthorize("hasAuthority('VENTAS:VER')")
+	public ResponseEntity<VentaDTO> obtenerVenta(@PathVariable Long idVenta) {
+		return ResponseEntity.ok(servicioVenta.obtenerVenta(idVenta));
+	}
 
 	@PostMapping("/ventas")
 	@PreAuthorize("hasAuthority('VENTAS:CREAR')")

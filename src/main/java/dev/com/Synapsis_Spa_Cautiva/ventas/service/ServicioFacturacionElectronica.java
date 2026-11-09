@@ -14,6 +14,8 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.SesionOracle;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.UsuarioActual;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.PersonaApi;
+import dev.com.Synapsis_Spa_Cautiva.ventas.controller.ComprobanteDTO;
+import dev.com.Synapsis_Spa_Cautiva.ventas.controller.MapperVenta;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.Comprobante;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.EstadoSunat;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.VentaDetalle;
@@ -60,6 +62,8 @@ public class ServicioFacturacionElectronica {
 
 	private final TransactionTemplate transacciones;
 
+	private final MapperVenta mapperVenta;
+
 	private final String urlPublica;
 
 	private final long vigenciaHoras;
@@ -67,7 +71,7 @@ public class ServicioFacturacionElectronica {
 	ServicioFacturacionElectronica(RepositorioComprobante repositorioComprobante, FacturacionElectronicaPort facturacionElectronicaPort,
 			AlmacenArchivosPort almacenArchivosPort, GeneradorPdfComprobante generadorPdfComprobante, FirmaEnlaceComprobante firmaEnlaceComprobante,
 			PersonaApi personaApi, AtencionApi atencionApi, CatalogoApi catalogoApi, ParametroApi parametroApi, SesionOracle sesionOracle,
-			UsuarioActual usuarioActual, TransactionTemplate transacciones, @Value("${cautiva.comprobantes.url-publica}") String urlPublica,
+			UsuarioActual usuarioActual, TransactionTemplate transacciones, MapperVenta mapperVenta, @Value("${cautiva.comprobantes.url-publica}") String urlPublica,
 			@Value("${cautiva.comprobantes.enlace-vigencia-horas}") long vigenciaHoras) {
 		this.repositorioComprobante = repositorioComprobante;
 		this.facturacionElectronicaPort = facturacionElectronicaPort;
@@ -81,6 +85,7 @@ public class ServicioFacturacionElectronica {
 		this.sesionOracle = sesionOracle;
 		this.usuarioActual = usuarioActual;
 		this.transacciones = transacciones;
+		this.mapperVenta = mapperVenta;
 		this.urlPublica = urlPublica;
 		this.vigenciaHoras = vigenciaHoras;
 	}
@@ -117,6 +122,12 @@ public class ServicioFacturacionElectronica {
 			}
 		}
 		return reenviados;
+	}
+
+	/** [It. 2] CUS20: el comprobante con su estado SUNAT actual, también después del reenvío de ReenvioCpeJob (RN46, Duda 12 del front-end). */
+	@Transactional(readOnly = true)
+	public ComprobanteDTO obtenerComprobante(Long idComprobante) {
+		return mapperVenta.aDTO(buscar(idComprobante));
 	}
 
 	@Transactional(readOnly = true)

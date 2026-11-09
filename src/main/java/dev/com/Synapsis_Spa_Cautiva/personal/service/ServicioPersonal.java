@@ -42,12 +42,29 @@ class ServicioPersonal implements PersonalApi {
 			.toList();
 	}
 
+	@Override
+	@Transactional(readOnly = true)
+	public List<EspecialistaHorario> listarEspecialistas(Long idSede) {
+		return repositorioPersonal.findByIdSedeAndEstadoAndCargoIn(idSede, EstadoPersonal.ACTIVO, CARGOS_QUE_ATIENDEN).stream()
+			.map(oPersonal -> new EspecialistaHorario(oPersonal.getIdPersonal(), null, null, oPersonal.getCargo().name()))
+			.toList();
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<EspecialistaHorario> listarPersonal() {
+		return repositorioPersonal.findAll().stream()
+			.filter(oPersonal -> oPersonal.getEstado() == EstadoPersonal.ACTIVO)
+			.map(oPersonal -> new EspecialistaHorario(oPersonal.getIdPersonal(), null, null, oPersonal.getCargo().name()))
+			.toList();
+	}
+
 	/** dia_semana: 1 = lunes, igual que DayOfWeek. */
 	private Stream<EspecialistaHorario> horarioDelDia(Personal oPersonal, LocalDate fecha) {
 		return oPersonal.getHorarios().stream()
 			.filter(horario -> horario.getDiaSemana() == fecha.getDayOfWeek().getValue())
 			.map(horario -> new EspecialistaHorario(oPersonal.getIdPersonal(), LocalTime.parse(horario.getHoraEntrada()),
-					LocalTime.parse(horario.getHoraSalida())));
+					LocalTime.parse(horario.getHoraSalida()), oPersonal.getCargo().name()));
 	}
 
 }
