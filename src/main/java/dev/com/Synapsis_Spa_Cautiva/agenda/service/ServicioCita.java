@@ -17,7 +17,9 @@ import dev.com.Synapsis_Spa_Cautiva.agenda.controller.FiltrosAgendaDTO;
 import dev.com.Synapsis_Spa_Cautiva.agenda.controller.FranjaAgendaDTO;
 import dev.com.Synapsis_Spa_Cautiva.agenda.controller.ListaEsperaDTO;
 import dev.com.Synapsis_Spa_Cautiva.agenda.controller.MapperCita;
+import dev.com.Synapsis_Spa_Cautiva.agenda.controller.ReprogramacionDTO;
 import dev.com.Synapsis_Spa_Cautiva.agenda.domain.Cita;
+import dev.com.Synapsis_Spa_Cautiva.agenda.domain.Cliente;
 import dev.com.Synapsis_Spa_Cautiva.agenda.domain.ListaEspera;
 import dev.com.Synapsis_Spa_Cautiva.agenda.repository.RepositorioCita;
 import dev.com.Synapsis_Spa_Cautiva.agenda.repository.RepositorioCliente;
@@ -43,6 +45,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ServicioCita {
+
+	private static final int MAX_MOTIVO_SALDO = 150;
 
 	private final GestorDisponibilidadAgenda gestorDisponibilidadAgenda;
 
@@ -73,7 +77,11 @@ public class ServicioCita {
 		return gestorDisponibilidadAgenda.calcularHorasLibres(idVariante, idSede, fecha);
 	}
 
-	/** [It. 2] RN49: la fecha y hora no pasaron (solo Java). Oracle repite las reglas: cruce (-20010, -20011), área de la especialista (-20012), horario de la sede (-20014). */
+	/**
+	 * [It. 2] RN49: la fecha y hora no pasaron (solo Java). Oracle repite las reglas: cruce (-20010, -20011), área de la especialista (-20012),
+	 * horario de la sede (-20014). Si la cita sale de una espera (idEspera), en la misma transacción la espera pasa a ASIGNADA con su id_cita
+	 * (RF09, CK_LISTA_ESPERA_ASIGNADA); si la espera ya no está PENDIENTE responde 409 y la cita no se guarda.
+	 */
 	@Transactional
 	public CitaDTO agendar(CitaDTO oCitaDTO) {
 		if (!repositorioCliente.existsById(oCitaDTO.idCliente())) {
@@ -83,7 +91,68 @@ public class ServicioCita {
 		gestorDisponibilidadAgenda.validarSinCruce(oCitaDTO.idPersonal(), oCitaDTO.idRecurso(), oCitaDTO.fechaHoraInicio(), oCitaDTO.duracionMin());
 		Cita oCita = new Cita(oCitaDTO.idCliente(), usuarioActual.idSede(), oCitaDTO.idPersonal(), oCitaDTO.idRecurso(), oCitaDTO.idVariante(),
 				oCitaDTO.fechaHoraInicio(), oCitaDTO.duracionMin(), usuarioActual.idUsuario());
-		return mapperCita.aDTO(repositorioCita.save(oCita));
+		repositorioCita.save(oCita);
+		if (oCitaDTO.idEspera() == null) {
+			return mapperCita.aDTO(oCita);
+		}
+		ListaEspera oListaEspera = buscarEspera(oCitaDTO.idEspera());
+		oListaEspera.asignarCita(oCita.getIdCita());
+		repositorioListaEspera.save(oListaEspera);
+		return mapperCita.aDTO(oCita, oListaEspera.getIdEspera());
+	}
+
+	/**
+	 * [It. 2 · CUS09, RF12] La fecha futura (RN49) y el cruce (RN02, sin contar la propia cita) se validan antes; Cita.reprogramar deja la origen
+	 * REPROGRAMADA y crea otra con id_cita_origen y el adelanto (RN05). La origen se guarda primero, para que Oracle no la cuente en el cruce.
+	 */
+	@Transactional
+	public CitaDTO reprogramar(Long idCita, ReprogramacionDTO oReprogramacionDTO) {
+		Cita oCita = buscarCita(idCita);
+		validarFechaFutura(oReprogramacionDTO.fechaHoraInicio());
+		gestorDisponibilidadAgenda.validarSinCruce(oReprogramacionDTO.idPersonal(), oReprogramacionDTO.idRecurso(), oReprogramacionDTO.fechaHoraInicio(),
+				oCita.getDuracionMin(), idCita);
+		Cita oCitaNueva = oCita.reprogramar(oReprogramacionDTO.fechaHoraInicio(), oReprogramacionDTO.idPersonal(), oReprogramacionDTO.idRecurso());
+		repositorioCita.saveAndFlush(oCita);
+		return mapperCita.aDTO(repositorioCita.save(oCitaNueva));
+	}
+
+	/**
+	 * [It. 2 · CUS10, RF12] Cita.cancelar con motivo, también cuando la clienta no se presenta (motivo «No se presentó»: no hay estado
+	 * NO_ASISTIO). Si tenía adelanto, pasa a saldo a favor con el id de la cita (RN05): TRG_SALDO_FAVOR_REGLAS solo acepta un ABONO con cita.
+	 */
+	@Transactional
+	public CitaDTO cancelar(Long idCita, String motivoCancelacion) {
+		Cita oCita = buscarCita(idCita);
+		oCita.cancelar(motivoCancelacion);
+		repositorioCita.saveAndFlush(oCita);
+		if (oCita.getAdelantoMonto().signum() > 0) {
+			Cliente oCliente = repositorioCliente.findById(oCita.getIdCliente())
+				.orElseThrow(() -> new ReglaNegocioException("RF12", "La clienta " + oCita.getIdCliente() + " no existe.", HttpStatus.NOT_FOUND));
+			oCliente.abonarSaldo(oCita.getAdelantoMonto(), idCita, motivoSaldo(idCita, oCita.getMotivoCancelacion()));
+			repositorioCliente.save(oCliente);
+		}
+		return mapperCita.aDTO(oCita);
+	}
+
+	/** [It. 2 · CUS06, RF09] Las esperas PENDIENTES del día con el nombre de la clienta (PersonaApi) y del servicio (CatalogoApi). */
+	@Transactional(readOnly = true)
+	public List<ListaEsperaDTO> listarEspera(Long idSede, LocalDate fecha) {
+		List<ListaEspera> esperas = repositorioListaEspera.findPendientes(idSede, fecha);
+		Map<Long, PersonaDTO> personas = personasPorId(esperas.stream().map(ListaEspera::getIdCliente).toList());
+		Map<Long, DatosVariante> variantes = catalogoApi.obtenerVariantes(esperas.stream().map(ListaEspera::getIdVariante).toList()).stream()
+			.collect(Collectors.toMap(DatosVariante::idVariante, Function.identity()));
+		return esperas.stream()
+			.map(oListaEspera -> mapperCita.aDTO(oListaEspera, nombreDe(personas.get(oListaEspera.getIdCliente())),
+					variantes.containsKey(oListaEspera.getIdVariante()) ? variantes.get(oListaEspera.getIdVariante()).nombre() : null))
+			.toList();
+	}
+
+	/** [It. 2 · CUS06, RF09] La espera queda DESCARTADA; si ya se asignó o descartó responde 409. */
+	@Transactional
+	public ListaEsperaDTO descartarEspera(Long idEspera) {
+		ListaEspera oListaEspera = buscarEspera(idEspera);
+		oListaEspera.descartar();
+		return mapperCita.aDTO(repositorioListaEspera.save(oListaEspera), (List<HoraLibre>) null);
 	}
 
 	@Transactional
@@ -170,6 +239,17 @@ public class ServicioCita {
 	private Cita buscarCita(Long idCita) {
 		return repositorioCita.findById(idCita)
 			.orElseThrow(() -> new ReglaNegocioException("RF10", "La cita " + idCita + " no existe.", HttpStatus.NOT_FOUND));
+	}
+
+	private ListaEspera buscarEspera(Long idEspera) {
+		return repositorioListaEspera.findById(idEspera)
+			.orElseThrow(() -> new ReglaNegocioException("RF09", "La espera " + idEspera + " no existe.", HttpStatus.NOT_FOUND));
+	}
+
+	/** SALDO_FAVOR_MOV.motivo admite 150 caracteres y CITA.motivo_cancelacion, 200. */
+	private static String motivoSaldo(Long idCita, String motivoCancelacion) {
+		String motivo = "Adelanto de la cita " + idCita + " cancelada: " + motivoCancelacion;
+		return motivo.length() <= MAX_MOTIVO_SALDO ? motivo : motivo.substring(0, MAX_MOTIVO_SALDO);
 	}
 
 }

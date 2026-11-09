@@ -16,6 +16,8 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 
 import lombok.Getter;
 
+import org.springframework.http.HttpStatus;
+
 @Entity
 @Table(name = "LISTA_ESPERA")
 @Getter
@@ -86,9 +88,10 @@ public class ListaEspera {
 		this.estado = EstadoListaEspera.DESCARTADA;
 	}
 
+	/** [It. 2] 409: la espera ya se asignó o se descartó (CUS05 con idEspera, CUS06). */
 	private void exigirPendiente() {
 		if (estado != EstadoListaEspera.PENDIENTE) {
-			throw new ReglaNegocioException("RF09", "La espera está " + estado + " y ya no cambia.");
+			throw new ReglaNegocioException("RF09", "La espera está " + estado + " y ya no cambia.", HttpStatus.CONFLICT);
 		}
 	}
 

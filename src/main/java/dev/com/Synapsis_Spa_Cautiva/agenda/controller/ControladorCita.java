@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -51,6 +52,35 @@ public class ControladorCita {
 	@PreAuthorize("hasAuthority('AGENDA:CREAR')")
 	public ResponseEntity<ListaEsperaDTO> registrarEspera(@Valid @RequestBody ListaEsperaDTO oListaEsperaDTO) {
 		return ResponseEntity.status(HttpStatus.CREATED).body(servicioCita.registrarEspera(oListaEsperaDTO));
+	}
+
+	/** [It. 2] CUS06: las esperas PENDIENTES del día de la sede de la sesión (RF09). */
+	@GetMapping("/lista-espera")
+	@PreAuthorize("hasAuthority('AGENDA:VER')")
+	public ResponseEntity<List<ListaEsperaDTO>> listarEspera(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
+		return ResponseEntity.ok(servicioCita.listarEspera(usuarioActual.idSede(), fecha));
+	}
+
+	/** [It. 2] CUS06: la espera queda DESCARTADA (RF09). */
+	@PatchMapping("/lista-espera/{idEspera}/descarte")
+	@PreAuthorize("hasAuthority('AGENDA:EDITAR')")
+	public ResponseEntity<ListaEsperaDTO> descartarEspera(@PathVariable Long idEspera) {
+		return ResponseEntity.ok(servicioCita.descartarEspera(idEspera));
+	}
+
+	/** [It. 2] CUS09: la cita origen queda REPROGRAMADA y responde la nueva (RF12, RN05). */
+	@PostMapping("/{idCita}/reprogramacion")
+	@PreAuthorize("hasAuthority('AGENDA:EDITAR')")
+	public ResponseEntity<CitaDTO> reprogramar(@PathVariable Long idCita, @Valid @RequestBody ReprogramacionDTO oReprogramacionDTO) {
+		CitaDTO nueva = servicioCita.reprogramar(idCita, oReprogramacionDTO);
+		return ResponseEntity.created(URI.create("/api/v1/citas/" + nueva.idCita())).body(nueva);
+	}
+
+	/** [It. 2] CUS10: cancela con motivo y pasa el adelanto a saldo a favor (RF12, RN05). */
+	@PatchMapping("/{idCita}/cancelacion")
+	@PreAuthorize("hasAuthority('AGENDA:EDITAR')")
+	public ResponseEntity<CitaDTO> cancelar(@PathVariable Long idCita, @Valid @RequestBody CancelacionDTO oCancelacionDTO) {
+		return ResponseEntity.ok(servicioCita.cancelar(idCita, oCancelacionDTO.motivoCancelacion()));
 	}
 
 	@PostMapping("/{idCita}/adelanto")
