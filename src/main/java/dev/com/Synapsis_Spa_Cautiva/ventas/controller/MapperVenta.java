@@ -9,12 +9,14 @@ import dev.com.Synapsis_Spa_Cautiva.ventas.domain.VentaDetalle;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.VentaPago;
 
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
 @Mapper(componentModel = "spring")
 public interface MapperVenta {
 
 	DetalleVentaDTO aDTO(VentaDetalle oDetalle);
 
+	@Mapping(target = "estadoTransaccion", ignore = true)
 	PagoVentaDTO aDTO(VentaPago oPago);
 
 	ComprobanteDTO aDTO(Comprobante oComprobante);

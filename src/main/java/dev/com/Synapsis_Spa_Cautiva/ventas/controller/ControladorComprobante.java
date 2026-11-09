@@ -22,6 +22,13 @@ public class ControladorComprobante {
 
 	private final ServicioFacturacionElectronica servicioFacturacionElectronica;
 
+	/** [It. 2] CUS20: el comprobante con su estado SUNAT actual (RN46). */
+	@GetMapping("/{idComprobante}")
+	@PreAuthorize("hasAuthority('VENTAS:VER')")
+	public ResponseEntity<ComprobanteDTO> obtenerComprobante(@PathVariable Long idComprobante) {
+		return ResponseEntity.ok(servicioFacturacionElectronica.obtenerComprobante(idComprobante));
+	}
+
 	@GetMapping("/{idComprobante}/representacion")
 	@PreAuthorize("hasAuthority('VENTAS:VER')")
 	public ResponseEntity<byte[]> obtenerRepresentacion(@PathVariable Long idComprobante) {

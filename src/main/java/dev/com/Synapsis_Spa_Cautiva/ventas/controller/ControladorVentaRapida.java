@@ -34,11 +34,16 @@ public class ControladorVentaRapida {
 		return ResponseEntity.ok(servicioVentaRapida.libresAhora(idVariante, usuarioActual.idSede()));
 	}
 
+	/** 201 con la venta CERRADA; [It. 2 · RN52] 202 con la venta ABIERTA si el cobro digital quedó PENDIENTE (se cierra con POST /ventas/{idVenta}/cierre). */
 	@PostMapping
 	@PreAuthorize("hasAuthority('VENTAS:CREAR')")
 	public ResponseEntity<VentaDTO> registrarYCobrar(@Valid @RequestBody VentaRapidaDTO oVentaRapidaDTO) {
 		VentaDTO creada = servicioVentaRapida.registrarYCobrar(oVentaRapidaDTO);
-		return ResponseEntity.created(URI.create("/api/v1/ventas/" + creada.idVenta())).body(creada);
+		URI ubicacion = URI.create("/api/v1/ventas/" + creada.idVenta());
+		if (!creada.cobrosPendientes().isEmpty()) {
+			return ResponseEntity.accepted().location(ubicacion).body(creada);
+		}
+		return ResponseEntity.created(ubicacion).body(creada);
 	}
 
 }

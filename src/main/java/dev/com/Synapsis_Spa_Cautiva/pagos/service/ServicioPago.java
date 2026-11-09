@@ -25,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -49,26 +50,34 @@ public class ServicioPago implements PagosApi {
 		return buscarMedio(idMedioPago).getUsaPasarela();
 	}
 
+	/**
+	 * [It. 2 · RN52] REQUIRES_NEW: la transacción de la pasarela se confirma aparte (TransaccionConSesionOracle llama a PKG_SESION.iniciar
+	 * también en esa conexión). Una RECHAZADA se guarda y luego responde 422 (noRollbackFor); la venta que llamó hace rollback, la fila queda.
+	 */
 	@Override
-	@Transactional
+	@Transactional(propagation = Propagation.REQUIRES_NEW, noRollbackFor = ReglaNegocioException.class)
 	public TransaccionDTO cobrar(Long idVenta, Long idMedioPago, BigDecimal monto, String canal) {
 		CanalTransaccionPasarela oCanal = canalDeCobro(canal);
 		LocalDateTime fechaExpiracion = vencimientoDelEnlace();
 		RespuestaPasarela oRespuesta = pasarelaPagosPort
 			.crearCobro(new SolicitudCobro(idVenta, null, idMedioPago, monto, oCanal.name(), fechaExpiracion));
 		EstadoTransaccion estado = EstadoTransaccion.valueOf(oRespuesta.estado());
-		if (estado == EstadoTransaccion.RECHAZADA) {
-			throw new ReglaNegocioException("RF103", "La pasarela rechazó el cobro de S/ " + monto + ": " + oRespuesta.mensaje());
-		}
 		TransaccionPasarela oTransaccion = new TransaccionPasarela(usuarioActual.idSede(), idMedioPago, TipoOperacion.COBRO, oCanal, monto, null,
 				usuarioActual.idUsuario());
 		if (estado == EstadoTransaccion.APROBADA) {
 			oTransaccion.aprobar(oRespuesta.codigoOperacion());
 		}
+		else if (estado == EstadoTransaccion.RECHAZADA) {
+			oTransaccion.registrarCodigoOperacion(oRespuesta.codigoOperacion());
+			oTransaccion.rechazar();
+		}
 		else {
 			oTransaccion.registrarEnlace(oRespuesta.enlacePago(), fechaExpiracion, oRespuesta.codigoOperacion());
 		}
 		repositorioTransaccionPasarela.saveAndFlush(oTransaccion);
+		if (estado == EstadoTransaccion.RECHAZADA) {
+			throw new ReglaNegocioException("RF103", "La pasarela rechazó el cobro de S/ " + monto + ": " + oRespuesta.mensaje());
+		}
 		return aDTO(oTransaccion);
 	}
 
@@ -80,6 +89,13 @@ public class ServicioPago implements PagosApi {
 		if (oTransaccion.getEstado() != EstadoTransaccion.APROBADA) {
 			throw new ReglaNegocioException("RN42", "La transacción " + idTransaccion + " está " + oTransaccion.getEstado() + ": aún no respalda un pago.");
 		}
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public TransaccionDTO consultarTransaccion(Long idTransaccion) {
+		return repositorioTransaccionPasarela.findById(idTransaccion).map(this::aDTO)
+			.orElseThrow(() -> new ReglaNegocioException("RN42", "La transacción " + idTransaccion + " no existe.", HttpStatus.NOT_FOUND));
 	}
 
 	@Override
