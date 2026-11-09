@@ -71,8 +71,11 @@ public class CajaArqueo {
 	}
 
 	boolean faltaObservacion() {
-		boolean hayDiferencia = diferencia != null && diferencia.signum() != 0;
-		return hayDiferencia && (observacion == null || observacion.isBlank());
+		return tieneDiferencia() && (observacion == null || observacion.isBlank());
+	}
+
+	boolean tieneDiferencia() {
+		return diferencia != null && diferencia.signum() != 0;
 	}
 
 	public Long getIdCaja() {
