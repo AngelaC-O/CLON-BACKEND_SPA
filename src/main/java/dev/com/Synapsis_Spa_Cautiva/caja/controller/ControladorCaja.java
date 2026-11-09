@@ -26,6 +26,13 @@ public class ControladorCaja {
 
 	private final UsuarioActual usuarioActual;
 
+	/** [It. 2] CUS44: 200 con la caja ABIERTA de la sede de la sesión o 204 si no tiene. */
+	@GetMapping("/abierta")
+	@PreAuthorize("hasAuthority('CAJA:VER')")
+	public ResponseEntity<CajaDTO> obtenerAbierta() {
+		return servicioCaja.obtenerAbierta(usuarioActual.idSede()).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.noContent().build());
+	}
+
 	@PostMapping
 	@PreAuthorize("hasAuthority('CAJA:CREAR')")
 	public ResponseEntity<CajaDTO> abrir(@Valid @RequestBody AperturaCajaDTO oAperturaCajaDTO) {

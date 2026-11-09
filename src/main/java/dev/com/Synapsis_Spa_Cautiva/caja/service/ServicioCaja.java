@@ -40,6 +40,12 @@ public class ServicioCaja implements CajaAbiertaProvider {
 
 	private final MapperCaja mapperCaja;
 
+	/** [It. 2] CUS44: la caja ABIERTA de la sede, para la cabecera y para retomar el cierre (Duda 10 del front-end). Vacío si no hay. */
+	@Transactional(readOnly = true)
+	public Optional<CajaDTO> obtenerAbierta(Long idSede) {
+		return repositorioCaja.findAbiertaBySede(idSede).map(mapperCaja::aDTO);
+	}
+
 	@Transactional
 	public CajaDTO abrir(Long idSede, BigDecimal montoInicial) {
 		if (repositorioCaja.existsAbiertaBySede(idSede)) {
