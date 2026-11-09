@@ -66,9 +66,16 @@ public class ControladorCita {
 			.body(servicioCita.generarEnlaceAdelanto(idCita, oAdelantoDTO.adelantoMonto(), oAdelantoDTO.idMedioPago()));
 	}
 
+	/** [It. 2] CUS08: especialistas y recursos de la sede para los filtros. */
+	@GetMapping("/filtros")
+	@PreAuthorize("hasAuthority('AGENDA:VER')")
+	public ResponseEntity<FiltrosAgendaDTO> listarFiltros() {
+		return ResponseEntity.ok(servicioCita.listarFiltros(usuarioActual.idSede()));
+	}
+
 	@GetMapping("/agenda")
 	@PreAuthorize("hasAuthority('AGENDA:VER')")
-	public ResponseEntity<List<BloqueAgendaDTO>> consultarAgenda(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+	public ResponseEntity<List<FranjaAgendaDTO>> consultarAgenda(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
 			@RequestParam(required = false) Long idPersonal, @RequestParam(required = false) Long idRecurso) {
 		return ResponseEntity.ok(servicioCita.consultarAgenda(usuarioActual.idSede(), fecha, idPersonal, idRecurso));
 	}

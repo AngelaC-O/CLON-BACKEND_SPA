@@ -1,6 +1,7 @@
 package dev.com.Synapsis_Spa_Cautiva.agenda.repository;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,6 +23,14 @@ public interface RepositorioAtencion extends JpaRepository<Atencion, Long> {
 			where a.idCita = :idCita and a.estado = dev.com.Synapsis_Spa_Cautiva.agenda.domain.EstadoAtencion.EN_CURSO
 			""")
 	Optional<Atencion> findEnCursoPorCita(@Param("idCita") Long idCita);
+
+	/** [It. 2] CUS18: las atenciones FINALIZADAS (aún sin cobrar) hechas en los recursos de una sede; ATENCION no guarda la sede. */
+	@Query("""
+			select a from Atencion a
+			where a.idRecurso in :idsRecurso and a.estado = dev.com.Synapsis_Spa_Cautiva.agenda.domain.EstadoAtencion.FINALIZADA
+			order by a.horaFin
+			""")
+	List<Atencion> findFinalizadasEnRecursos(@Param("idsRecurso") Collection<Long> idsRecurso);
 
 	/**
 	 * Parte ATENCION de findOcupacion (RN34): la sede solo se conoce por el recurso, y un SELECT sobre la vista
