@@ -22,6 +22,8 @@ import dev.com.Synapsis_Spa_Cautiva.agenda.repository.RepositorioClientePaquete;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.api.CatalogoApi;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.UsuarioActual;
+import dev.com.Synapsis_Spa_Cautiva.inventario.api.ConsumoPendienteDTO;
+import dev.com.Synapsis_Spa_Cautiva.inventario.api.InventarioApi;
 import dev.com.Synapsis_Spa_Cautiva.sedes.api.DatosRecurso;
 import dev.com.Synapsis_Spa_Cautiva.sedes.api.RecursoApi;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +49,8 @@ public class ServicioAtencion implements AtencionApi {
 	private final UsuarioActual usuarioActual;
 
 	private final RecursoApi recursoApi;
+
+	private final InventarioApi inventarioApi;
 
 	private final MapperAtencion mapperAtencion;
 
@@ -77,6 +81,11 @@ public class ServicioAtencion implements AtencionApi {
 		return mapperAtencion.aDTO(repositorioAtencion.save(oAtencion));
 	}
 
+	/**
+	 * [It. 2 · RN53, RN54] Al final, en la misma transacción, descuenta el consumo estimado de los insumos de la variante en la sede de la
+	 * sesión (CatalogoApi.insumosDeVariante e InventarioApi.registrarConsumoAtencion). Si el stock no alcanza, la atención se finaliza igual
+	 * y la respuesta trae los consumos pendientes creados.
+	 */
 	@Transactional
 	public AtencionDTO finalizar(Long idAtencion, DetalleAtencionDTO oDetalleAtencionDTO) {
 		Atencion oAtencion = buscarAtencion(idAtencion);
@@ -90,7 +99,9 @@ public class ServicioAtencion implements AtencionApi {
 			oCita.finalizar();
 			repositorioCita.save(oCita);
 		}
-		return mapperAtencion.aDTO(oAtencion);
+		List<ConsumoPendienteDTO> pendientes = inventarioApi.registrarConsumoAtencion(idAtencion, usuarioActual.idSede(),
+				catalogoApi.insumosDeVariante(oAtencion.getIdVariante()));
+		return mapperAtencion.aDTO(oAtencion).conConsumosPendientes(pendientes);
 	}
 
 	@Override
