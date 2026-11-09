@@ -318,9 +318,12 @@ class SeguridadCatalogoFlujoTest extends OracleTestcontainer {
 	}
 
 	@Test
-	void cus50SinProveedoresElPanelDeAvisosEstaVacio() throws Exception {
+	void cus50ElPanelDeAvisosSoloMuestraLoQueElRolPuedeVer() throws Exception {
 		mvc.perform(get("/api/v1/avisos")).andExpect(status().isUnauthorized());
-		enviar(recepcion(), get("/api/v1/avisos"), null).andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(0)));
+		// [It. 2 · B10] Inventario ya publica sus avisos: la recepcionista tiene PRODUCTOS:VER pero no KARDEX:VER
+		enviar(recepcion(), get("/api/v1/avisos"), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$[*].tipo", not(hasItem("CONSUMO_PENDIENTE"))))
+			.andExpect(jsonPath("$[*].permisoRequerido", not(hasItem("KARDEX:VER"))));
 	}
 
 	@Test
