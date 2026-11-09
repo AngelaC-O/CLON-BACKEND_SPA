@@ -31,9 +31,10 @@ class ContratoOpenApiTest extends OracleTestcontainer {
 
 	/**
 	 * Los 35 del draw.io de la Iteración 1, cambio de clave (DF-18), el comprobante público (DF-53), los 13 GET de los CUS modificados en la
-	 * Iteración 2 y los 10 de inventario (CUS66, CUS32 a CUS35).
+	 * Iteración 2, los 10 de inventario (CUS66, CUS32 a CUS35) y los 15 de clientas, citas, espera, atención y catálogo (CUS03, CUS04, CUS06,
+	 * CUS09, CUS10, CUS12, CUS58, CUS59 y CUS60).
 	 */
-	private static final int OPERACIONES = 60;
+	private static final int OPERACIONES = 75;
 
 	private static final Set<String> METODOS = Set.of("get", "post", "put", "patch", "delete");
 

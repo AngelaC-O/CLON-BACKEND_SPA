@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import dev.com.Synapsis_Spa_Cautiva.agenda.service.ServicioAtencion;
+import dev.com.Synapsis_Spa_Cautiva.inventario.api.ProductoStockDTO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -40,6 +41,21 @@ public class ControladorAtencion {
 	@PreAuthorize("hasAuthority('ATENCION:VER')")
 	public ResponseEntity<AtencionDTO> obtenerEnCurso(@RequestParam Long idCita) {
 		return ResponseEntity.ok(servicioAtencion.obtenerEnCurso(idCita));
+	}
+
+	/** [It. 2] CUS12: productos de venta de la sede para recomendar (RF16). */
+	@GetMapping("/productos")
+	@PreAuthorize("hasAuthority('ATENCION:VER')")
+	public ResponseEntity<List<ProductoStockDTO>> buscarProductos(@RequestParam(required = false) String nombre) {
+		return ResponseEntity.ok(servicioAtencion.buscarProductos(nombre));
+	}
+
+	/** [It. 2] CUS12: la recomendación queda ligada a la atención (RF16); RN50: solo su especialista o la Administradora. */
+	@PostMapping("/{idAtencion}/recomendaciones")
+	@PreAuthorize("hasAuthority('ATENCION:EDITAR')")
+	public ResponseEntity<RecomendacionDTO> recomendarProducto(@PathVariable Long idAtencion, @Valid @RequestBody RecomendacionDTO oRecomendacionDTO) {
+		RecomendacionDTO creada = servicioAtencion.recomendarProducto(idAtencion, oRecomendacionDTO.idProducto(), oRecomendacionDTO.observacion());
+		return ResponseEntity.created(URI.create("/api/v1/atenciones/" + idAtencion + "/recomendaciones/" + creada.idRecomendacion())).body(creada);
 	}
 
 	@PostMapping

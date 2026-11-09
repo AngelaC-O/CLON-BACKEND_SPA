@@ -200,12 +200,13 @@
 "POST /api/v1/citas":
   resumen: Agendar una cita
   cus: CUS05
-  solicitud: { idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30 }
+  solicitud: { idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, idEspera: 31 }
   respuestas:
     "201":
-      descripcion: Cita creada; Oracle calcula el fin con la limpieza del recurso
-      ejemplo: { idCita: 950, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-09T10:40:00", estado: PENDIENTE, idUsuario: 2, adelantoMonto: 0.00 }
-    "409": { descripcion: Cruce de horario de la especialista o del recurso, con limpieza, regla: RN02 }
+      descripcion: "Cita creada; Oracle calcula el fin con la limpieza del recurso. Con idEspera, la espera queda ASIGNADA con esta cita (RF09)"
+      ejemplo: { idCita: 950, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-09T10:40:00", estado: PENDIENTE, idUsuario: 2, adelantoMonto: 0.00, idEspera: 31 }
+    "404": { descripcion: La espera no existe, regla: RF09 }
+    "409": { descripcion: "Cruce de horario de la especialista o del recurso, con limpieza (RN02), o la espera ya no está PENDIENTE (RF09)", regla: RN02 }
     "422": { descripcion: "La fecha y hora ya pasaron (RN49), la especialista no tiene el área del servicio (-20012) o la clienta no existe", regla: RN49 }
 
 "POST /api/v1/citas/lista-espera":
@@ -596,3 +597,155 @@
     "404": { descripcion: El consumo pendiente no existe, regla: RN53 }
     "409": { descripcion: Ya está resuelto y no cambia, regla: RN53 }
     "422": { descripcion: Falta la observación (CK_CONSUMO_PEND_DESCARTADO), regla: RN53 }
+
+"GET /api/v1/clientes/{idCliente}":
+  resumen: Consultar la ficha de la clienta
+  cus: CUS03
+  respuestas:
+    "200":
+      descripcion: "Datos de PERSONA y CLIENTE, saldo a favor (RN05), atenciones con sus recomendaciones, citas pendientes, paquetes con sesiones (RN36) y productos comprados"
+      ejemplo: { cliente: { idCliente: 407, nombres: "Rosaura", apellidos: "Quispe", telefono: "987610001", origenDatos: MANUAL, aceptaComunicaciones: true, estado: ACTIVO }, saldoFavor: 20.00, atenciones: [ { idAtencion: 1532, idPersonal: 4, idVariante: 2, horaInicio: "2026-11-02T10:00:00", horaFin: "2026-11-02T10:30:00", estado: COBRADA, recomendaciones: [ { idRecomendacion: 8, idAtencion: 1532, idProducto: 40, observacion: "Para mantener el color", fecha: "2026-11-02T10:31:00" } ] } ], citasPendientes: [ { idCita: 951, idCliente: 407, fechaHoraInicio: "2026-11-16T10:00:00", duracionMin: 30, estado: PENDIENTE } ], paquetes: [ { idClientePaquete: 5, idPaquete: 3, sesionesTotales: 3, sesionesUsadas: 1, sesionesRestantes: 2, fechaCompra: "2026-11-02", fechaVencimiento: "2027-01-31", estado: ACTIVO } ], productosComprados: [ { idVenta: 610, fecha: "2026-11-02", idProducto: 40, producto: "Shampoo reparador", cantidad: 1, precioUnitario: 45.00, subtotal: 45.00 } ] }
+    "404": { descripcion: La clienta no existe, regla: RF02 }
+
+"PUT /api/v1/clientes/{idCliente}":
+  resumen: Actualizar los datos de la clienta
+  cus: CUS04
+  solicitud: { idTipoDocumento: 1, numeroDocumento: "71234567", nombres: "Rosaura", apellidos: "Quispe", telefono: "987610001", correo: "rosaura@correo.pe", fechaVerificacion: null, fechaCumpleanos: "1992-03-15", aceptaComunicaciones: true, observaciones: "Alérgica al tinte" }
+  respuestas:
+    "200":
+      descripcion: "PERSONA por PersonaApi y CLIENTE en agenda; un documento cambiado sin consulta nueva queda MANUAL (RN45)"
+      ejemplo: { idCliente: 407, idTipoDocumento: 1, numeroDocumento: "71234567", nombres: "Rosaura", apellidos: "Quispe", telefono: "987610001", correo: "rosaura@correo.pe", origenDatos: MANUAL, fechaCumpleanos: "1992-03-15", aceptaComunicaciones: true, fechaConsentimiento: "2026-11-09T10:00:00", observaciones: "Alérgica al tinte", estado: ACTIVO }
+    "400": { descripcion: Faltan los nombres, el teléfono o el consentimiento, regla: VALIDACION }
+    "404": { descripcion: La clienta no existe, regla: RF02 }
+    "409": { descripcion: El teléfono o el documento ya pertenecen a otra ficha, regla: RF05 }
+    "422": { descripcion: El número no cumple el formato del tipo de documento, regla: RN45 }
+
+"GET /api/v1/citas/lista-espera":
+  resumen: Listar las esperas pendientes del día
+  cus: CUS06
+  respuestas:
+    "200":
+      descripcion: Esperas PENDIENTES de la sede en el orden en que se anotaron, con la clienta, el servicio y el rango de horas
+      ejemplo: [ { idEspera: 31, idCliente: 407, idSede: 1, idVariante: 2, fechaDeseada: "2026-11-09", horaDesde: "15:00", horaHasta: "18:00", estado: PENDIENTE, idUsuario: 2, nombreCliente: "Rosaura Quispe", nombreServicio: "Corte de Cabello Caballero" } ]
+
+"PATCH /api/v1/citas/lista-espera/{idEspera}/descarte":
+  resumen: Descartar una espera
+  cus: CUS06
+  respuestas:
+    "200":
+      descripcion: La espera queda DESCARTADA
+      ejemplo: { idEspera: 31, idCliente: 407, idSede: 1, idVariante: 2, fechaDeseada: "2026-11-09", horaDesde: "15:00", horaHasta: "18:00", estado: DESCARTADA, idUsuario: 2 }
+    "404": { descripcion: La espera no existe, regla: RF09 }
+    "409": { descripcion: La espera ya se asignó o se descartó, regla: RF09 }
+
+"POST /api/v1/citas/{idCita}/reprogramacion":
+  resumen: Reprogramar una cita
+  cus: CUS09
+  solicitud: { fechaHoraInicio: "2026-11-16T15:00:00", idPersonal: 4, idRecurso: 2 }
+  respuestas:
+    "201":
+      descripcion: "La cita origen queda REPROGRAMADA; la nueva hereda el adelanto y guarda id_cita_origen (RN05)"
+      ejemplo: { idCita: 952, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 2, idVariante: 2, fechaHoraInicio: "2026-11-16T15:00:00", duracionMin: 30, fechaHoraFin: "2026-11-16T15:40:00", estado: PENDIENTE, idUsuario: 2, adelantoMonto: 20.00, idMedioPago: 1, idCaja: 12, idCitaOrigen: 951 }
+    "404": { descripcion: La cita no existe, regla: RF10 }
+    "409": { descripcion: Cruce de horario de la especialista o del recurso, regla: RN02 }
+    "422": { descripcion: "La fecha y hora ya pasaron (RN49) o la cita no está PENDIENTE", regla: RN49 }
+
+"PATCH /api/v1/citas/{idCita}/cancelacion":
+  resumen: Cancelar una cita
+  cus: CUS10
+  solicitud: { motivoCancelacion: "No se presentó" }
+  respuestas:
+    "200":
+      descripcion: "Cita CANCELADA; si tenía adelanto, pasa a saldo a favor de la clienta (RN05). La inasistencia es una cancelación con el motivo «No se presentó»"
+      ejemplo: { idCita: 951, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-16T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-16T10:40:00", estado: CANCELADA, idUsuario: 2, adelantoMonto: 20.00, motivoCancelacion: "No se presentó" }
+    "404": { descripcion: La cita no existe, regla: RF10 }
+    "422": { descripcion: "Falta el motivo o la cita no está PENDIENTE", regla: RF12 }
+
+"GET /api/v1/atenciones/productos":
+  resumen: Buscar productos para recomendar
+  cus: CUS12
+  respuestas:
+    "200":
+      descripcion: Productos de venta activos de la sede, con su precio y su stock (sin costo, RN24)
+      ejemplo: [ { idProducto: 40, codigo: "PRD-001", nombre: "Shampoo reparador", marca: "Loreal", idCategoria: 2, unidad: UND, precioVenta: 45.00, stockActual: 8 } ]
+
+"POST /api/v1/atenciones/{idAtencion}/recomendaciones":
+  resumen: Registrar una recomendación de producto
+  cus: CUS12
+  solicitud: { idProducto: 40, observacion: "Para mantener el color" }
+  respuestas:
+    "201":
+      descripcion: La recomendación queda ligada a la atención y aparece en la ficha de la clienta
+      ejemplo: { idRecomendacion: 8, idAtencion: 1532, idProducto: 40, observacion: "Para mantener el color", fecha: "2026-11-09T10:31:00" }
+    "403": { descripcion: Solo la especialista de la atención o la Administradora, regla: RN50 }
+    "404": { descripcion: La atención no existe, regla: RF13 }
+    "409": { descripcion: El producto ya se recomendó en esta atención, regla: RF16 }
+
+"GET /api/v1/servicios":
+  resumen: Listar los servicios con sus variantes y precios
+  cus: CUS58
+  respuestas:
+    "200":
+      descripcion: Servicios del área y estado pedidos (filtros opcionales), con variantes, precios e insumos
+      ejemplo: [ { idServicio: 21, idArea: 1, nombre: "Corte de novia", duracionRefMin: 60, tipoRecurso: SILLON, estado: ACTIVO, variantes: [ { idVariante: 30, nombreVariante: "Estándar", precio: 80.00, insumos: [ { idProducto: 4, cantidadEstimada: 15 } ] } ] } ]
+
+"PUT /api/v1/servicios/{idServicio}":
+  resumen: Actualizar un servicio
+  cus: CUS58
+  solicitud: { idArea: 1, nombre: "Corte de novia", duracionRefMin: 45, tipoRecurso: SILLON, estado: INACTIVO, variantes: [ { idVariante: 30, nombreVariante: "Estándar", precio: 80.00, insumos: [ { idProducto: 4, cantidadEstimada: 15 } ] } ] }
+  respuestas:
+    "200":
+      descripcion: "Datos e insumos actualizados; desactivar es estado INACTIVO (no se borra). El precio se cambia aparte"
+      ejemplo: { idServicio: 21, idArea: 1, nombre: "Corte de novia", duracionRefMin: 45, tipoRecurso: SILLON, estado: INACTIVO, variantes: [ { idVariante: 30, nombreVariante: "Estándar", precio: 80.00, insumos: [ { idProducto: 4, cantidadEstimada: 15 } ] } ] }
+    "400": { descripcion: Faltan datos del servicio o de sus variantes, regla: VALIDACION }
+    "404": { descripcion: El servicio no existe, regla: RF83 }
+    "422": { descripcion: "La duración va de 5 a 600 minutos, la variante no es del servicio o el consumo estimado no es mayor que 0 (RN54)", regla: RF83 }
+
+"PATCH /api/v1/servicios/{idServicio}/variantes/{idVariante}/precio":
+  resumen: Cambiar el precio de una variante
+  cus: CUS58
+  solicitud: { precioNuevo: 95.00 }
+  respuestas:
+    "200":
+      descripcion: "Precio cambiado; el anterior y el nuevo quedan en AUDITORIA (TRG_AUD_VARIANTE_SERVICIO, RN25)"
+      ejemplo: { idServicio: 21, idArea: 1, nombre: "Corte de novia", duracionRefMin: 60, tipoRecurso: SILLON, estado: ACTIVO, variantes: [ { idVariante: 30, nombreVariante: "Estándar", precio: 95.00 } ] }
+    "404": { descripcion: El servicio no existe, regla: RF83 }
+    "422": { descripcion: El precio es mayor o igual a 0, regla: RN40 }
+
+"GET /api/v1/paquetes":
+  resumen: Listar paquetes y membresías
+  cus: CUS59
+  respuestas:
+    "200":
+      descripcion: Paquetes o membresías con sus servicios (sin tipo, todos)
+      ejemplo: [ { idPaquete: 3, nombre: "Tres cortes", tipo: PAQUETE, numSesiones: 3, precio: 90.00, vigenciaDias: 90, estado: ACTIVO, idsServicio: [ 1 ] } ]
+
+"POST /api/v1/paquetes":
+  resumen: Registrar un paquete o membresía
+  cus: CUS59
+  solicitud: { nombre: "Tres cortes", tipo: PAQUETE, numSesiones: 3, precio: 90.00, vigenciaDias: 90, idsServicio: [ 1 ] }
+  respuestas:
+    "201":
+      descripcion: "Paquete con sus servicios en PAQUETE_SERVICIO; CUS11 descuenta de él las sesiones (RN36)"
+      ejemplo: { idPaquete: 3, nombre: "Tres cortes", tipo: PAQUETE, numSesiones: 3, precio: 90.00, vigenciaDias: 90, estado: ACTIVO, idsServicio: [ 1 ] }
+    "400": { descripcion: Faltan el nombre o el tipo, regla: VALIDACION }
+    "422": { descripcion: "Al menos una sesión, precio mayor o igual a 0 y vigencia de al menos un día", regla: RF84 }
+
+"GET /api/v1/promociones":
+  resumen: Listar promociones
+  cus: CUS60
+  respuestas:
+    "200":
+      descripcion: Con vigentes=true, solo las ACTIVAS cuya vigencia incluye hoy; si no, todas
+      ejemplo: [ { idPromocion: 7, nombre: "Noviembre feliz", tipoDescuento: PORCENTAJE, valor: 10.00, fechaInicio: "2026-11-01", fechaFin: "2026-11-30", estado: ACTIVA, idsServicio: [ 1, 2 ] } ]
+
+"POST /api/v1/promociones":
+  resumen: Registrar una promoción
+  cus: CUS60
+  solicitud: { nombre: "Noviembre feliz", tipoDescuento: PORCENTAJE, valor: 10.00, fechaInicio: "2026-11-01", fechaFin: "2026-11-30", idsServicio: [ 1, 2 ] }
+  respuestas:
+    "201":
+      descripcion: Promoción ACTIVA con sus servicios en PROMOCION_SERVICIO
+      ejemplo: { idPromocion: 7, nombre: "Noviembre feliz", tipoDescuento: PORCENTAJE, valor: 10.00, fechaInicio: "2026-11-01", fechaFin: "2026-11-30", estado: ACTIVA, idsServicio: [ 1, 2 ] }
+    "400": { descripcion: Faltan el nombre o el tipo de descuento, regla: VALIDACION }
+    "422": { descripcion: "El descuento es mayor que 0 (hasta 100 si es porcentaje) y la vigencia termina el mismo día o después", regla: RF84 }
