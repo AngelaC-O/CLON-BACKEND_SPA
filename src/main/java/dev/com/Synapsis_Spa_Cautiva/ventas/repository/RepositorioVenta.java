@@ -36,4 +36,19 @@ public interface RepositorioVenta extends JpaRepository<Venta, Long> {
 			""")
 	List<FilaComprobantePendiente> findComprobantesPendientes(@Param("idSede") Long idSede, @Param("fecha") LocalDate fecha);
 
+	/**
+	 * [It. 2] CUS03 (RF02): los productos de las ventas CERRADAS de la clienta. V_VENTA_LINEA solo trae ventas CERRADAS (sin anuladas) y el
+	 * nombre del producto; VENTA da la clienta y VENTA_DETALLE el id del producto.
+	 */
+	@Query(nativeQuery = true, value = """
+			SELECT l.id_venta AS "idVenta", l.fecha AS "fecha", d.id_producto AS "idProducto", l.producto AS "producto",
+				l.cantidad AS "cantidad", l.precio_unitario AS "precioUnitario", l.subtotal AS "subtotal"
+			FROM V_VENTA_LINEA l
+			JOIN VENTA v ON v.id_venta = l.id_venta
+			JOIN VENTA_DETALLE d ON d.id_detalle = l.id_detalle
+			WHERE v.id_cliente = :idCliente AND l.tipo_item = 'PRODUCTO'
+			ORDER BY v.fecha_hora DESC, l.id_detalle
+			""")
+	List<FilaProductoComprado> findProductosComprados(@Param("idCliente") Long idCliente);
+
 }
