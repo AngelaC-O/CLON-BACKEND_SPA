@@ -20,6 +20,7 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,6 +40,12 @@ public class ControladorAutenticacion {
 	private final ParametroApi parametroApi;
 
 	private final SecurityContextRepository repositorioDeContexto;
+
+	/** [It. 2] La sesión vigente al recargar, sin guardarla en el navegador (CUS50 modificado). Sin sesión, 401. */
+	@GetMapping("/sesion")
+	public ResponseEntity<SesionDTO> obtenerSesion() {
+		return ResponseEntity.ok(servicioAutenticacion.obtenerSesion(usuarioActual.idUsuario()));
+	}
 
 	@PostMapping("/login")
 	public ResponseEntity<SesionDTO> iniciarSesion(@Valid @RequestBody CredencialesDTO credenciales, HttpServletRequest request,

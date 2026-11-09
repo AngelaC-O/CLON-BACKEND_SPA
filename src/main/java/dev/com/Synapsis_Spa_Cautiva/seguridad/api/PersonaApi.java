@@ -20,4 +20,7 @@ public interface PersonaApi {
 
 	PersonaDTO obtenerPersona(Long idPersona);
 
+	/** [It. 2] Varias a la vez, para poner nombres en listas (CUS08, CUS52). Las que no existen no vienen. */
+	List<PersonaDTO> obtenerPersonas(List<Long> idsPersona);
+
 }
