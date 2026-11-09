@@ -20,10 +20,13 @@ class InstalacionBaseDatosTest extends OracleTestcontainer {
 	private JdbcTemplate jdbcTemplate;
 
 	@Test
-	void instalaLas55TablasSinObjetosInvalidos() throws SQLException {
+	void instalaLas57TablasDelModeloV51SinObjetosInvalidos() throws SQLException {
 		try (Connection dueno = DriverManager.getConnection(ORACLE.getJdbcUrl(), DUENO, CLAVE_DUENO);
 				Statement sentencia = dueno.createStatement()) {
-			assertThat(contar(sentencia, "SELECT COUNT(*) FROM user_tables")).isEqualTo(55);
+			assertThat(contar(sentencia, "SELECT COUNT(*) FROM user_tables")).isEqualTo(57);
+			assertThat(contar(sentencia,
+					"SELECT COUNT(*) FROM user_constraints WHERE constraint_type = 'R' AND constraint_name NOT LIKE 'BIN$%'"))
+				.isEqualTo(131);
 			assertThat(contar(sentencia, "SELECT COUNT(*) FROM user_objects WHERE status = 'INVALID'")).isZero();
 		}
 	}
