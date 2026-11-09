@@ -29,4 +29,15 @@ public interface RepositorioTransaccionPasarela extends JpaRepository<Transaccio
 			""")
 	List<FilaAprobadoDelDia> sumarAprobadosDelDia(@Param("idSede") Long idSede, @Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
 
+	/** Resumen del mes de la pasarela para conciliar (CUS47, RF105, RN31). Lee V_PASARELA_LIQUIDACION. */
+	@Query(nativeQuery = true, value = """
+			SELECT id_sede AS "idSede", medio_pago AS "medioPago", cobros AS "cobros", devoluciones AS "devoluciones",
+				comisiones AS "comisiones", neto_esperado AS "netoEsperado", neto_abonado AS "netoAbonado",
+				cobros_sin_abono AS "cobrosSinAbono", sin_comision_registrada AS "sinComisionRegistrada"
+			FROM V_PASARELA_LIQUIDACION
+			WHERE anio = :anio AND mes = :mes
+			ORDER BY id_sede, medio_pago
+			""")
+	List<FilaLiquidacionMes> findLiquidacionDelMes(@Param("anio") Integer anio, @Param("mes") Integer mes);
+
 }

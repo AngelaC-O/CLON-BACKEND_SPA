@@ -61,6 +61,12 @@ public class TipoDocumento {
 	protected TipoDocumento() {
 	}
 
+	/** RN45 (CUS65): se activa o desactiva el tipo y se marca si se consulta en APISPERU (solo DNI y RUC lo admiten). */
+	public void configurar(Boolean consultaApi, EstadoTipoDocumento estado) {
+		this.consultaApi = consultaApi;
+		this.estado = estado;
+	}
+
 	/** RN45: las mismas reglas de FN_VALIDAR_DOCUMENTO, para responder antes de llegar a Oracle. */
 	public boolean validarNumero(String numeroDocumento) {
 		if (estado != EstadoTipoDocumento.ACTIVO || numeroDocumento == null) {
