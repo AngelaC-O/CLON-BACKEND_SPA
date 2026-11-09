@@ -66,4 +66,25 @@ class ApiExceptionHandlerTest {
 		assertThat(respuesta.getBody().getProperties()).containsEntry("constraint", "CK_CAJA_ARQUEO_OBSERVACION");
 	}
 
+	@Test
+	void elSaldoNegativoDelKardexEs409() {
+		ResponseEntity<ProblemDetail> respuesta = traducir(2290, "ORA-02290: check constraint (CAUTIVA_TEST.CK_MOV_KARDEX_SALDO) violated");
+		assertThat(respuesta.getStatusCode().value()).isEqualTo(409);
+		assertThat(respuesta.getBody().getProperties()).containsEntry("constraint", "CK_MOV_KARDEX_SALDO");
+		assertThat(traducir(20030, "ORA-20030: Stock insuficiente de \"Cera\": hay 0 y se piden 2 (RN14, RN15).").getStatusCode().value())
+			.isEqualTo(409);
+	}
+
+	@Test
+	void otroRolMoviendoInventarioEs403PorRn17() {
+		ResponseEntity<ProblemDetail> respuesta = traducir(20031,
+				"ORA-20031: Solo la encargada de almacén o la Administradora registran movimientos de inventario (RN17).");
+		assertThat(respuesta.getStatusCode().value()).isEqualTo(403);
+		assertThat(respuesta.getBody().getProperties()).containsEntry("regla", "RN17");
+		assertThat(traducir(20104, "ORA-20104: Solo la encargada de almacén o la Administradora regularizan (RN17, RN53).").getStatusCode().value())
+			.isEqualTo(403);
+		assertThat(traducir(20103, "ORA-20103: El consumo pendiente N° 1 ya está DESCARTADO y no cambia (RN53).").getStatusCode().value())
+			.isEqualTo(409);
+	}
+
 }

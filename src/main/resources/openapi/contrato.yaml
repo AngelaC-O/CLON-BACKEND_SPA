@@ -295,8 +295,8 @@
   solicitud: { observaciones: "Sin novedad" }
   respuestas:
     "200":
-      descripcion: Atención y cita FINALIZADAS; con un paquete activo, la sesión se descuenta; solo la especialista asignada o la administradora (si no, 403 por RN50)
-      ejemplo: { idAtencion: 1532, idCita: 950, idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, horaInicio: "2026-11-09T10:02:00", horaFin: "2026-11-09T10:45:00", tiempoDeclaradoMin: 45, observaciones: "Sin novedad", estado: FINALIZADA }
+      descripcion: Atención y cita FINALIZADAS; con un paquete activo, la sesión se descuenta; solo la especialista asignada o la administradora (si no, 403 por RN50). Descuenta el consumo estimado de los insumos de la variante (RN53, RN54) y, si el stock no alcanza, trae los consumos pendientes creados
+      ejemplo: { idAtencion: 1532, idCita: 950, idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, horaInicio: "2026-11-09T10:02:00", horaFin: "2026-11-09T10:45:00", tiempoDeclaradoMin: 45, observaciones: "Sin novedad", estado: FINALIZADA, consumosPendientes: [ { idConsumo: 12, idAtencion: 1532, idProducto: 40, codigo: "INS-007", producto: "Keratina", unidad: ML, idSede: 1, cantidadEstimada: 30, cantidadDescontada: 10, cantidadPendiente: 20, estado: PENDIENTE, fechaRegistro: "2026-11-09T10:45:00" } ] }
     "404": { descripcion: La atención no existe, regla: RF13 }
     "422": { descripcion: Solo se finaliza una atención EN_CURSO, regla: RF13 }
 
@@ -495,3 +495,104 @@
     "400": { descripcion: El cuerpo no se puede leer, regla: RN42 }
     "401": { descripcion: La firma HMAC no es válida, regla: RN42 }
     "404": { descripcion: No hay una transacción con ese código de operación, regla: RN42 }
+
+"GET /api/v1/categorias-producto":
+  resumen: Listar las categorías de producto
+  cus: CUS32
+  respuestas:
+    "200":
+      descripcion: Categorías por nombre
+      ejemplo: [ { idCategoria: 1, nombre: "Cuidado Capilar" } ]
+
+"POST /api/v1/categorias-producto":
+  resumen: Registrar una categoría de producto
+  cus: CUS66
+  solicitud: { nombre: "Accesorios" }
+  respuestas:
+    "201":
+      descripcion: Categoría creada
+      ejemplo: { idCategoria: 5, nombre: "Accesorios" }
+    "409": { descripcion: Ya existe una categoría con ese nombre, regla: RF45 }
+    "422": { descripcion: Falta el nombre, regla: RF45 }
+
+"GET /api/v1/productos":
+  resumen: Listar productos e insumos con su stock de la sede
+  cus: CUS32
+  respuestas:
+    "200":
+      descripcion: "Productos de la sede de la sesión, filtrados por nombre y categoría; el margen solo viene para la Administradora (RN24)"
+      ejemplo: [ { idProducto: 1, codigo: "CAP-001", nombre: "Champú Post-Alisado 400ml", marca: "Marca", idCategoria: 1, unidad: UND, tipoUso: VENTA, costo: 43.33, precioVenta: 65.00, esPremium: false, estado: ACTIVO, stockActual: 8, stockMinimo: 5, ubicacion: "Vitrina 1" } ]
+
+"POST /api/v1/productos":
+  resumen: Registrar un producto o insumo
+  cus: CUS32
+  solicitud: { codigo: "INS-007", nombre: "Keratina", idCategoria: 4, unidad: ML, tipoUso: INSUMO, costo: 0.50, esPremium: false, stockMinimo: 100, ubicacion: "Estante A" }
+  respuestas:
+    "201":
+      descripcion: "Producto creado con stock 0 en la sede de la sesión; precio = costo × (1 + margen de PARAMETRO o el que indique la encargada) (RF87)"
+      ejemplo: { idProducto: 40, codigo: "INS-007", nombre: "Keratina", idCategoria: 4, unidad: ML, tipoUso: INSUMO, costo: 0.50, precioVenta: 0.75, esPremium: false, estado: ACTIVO, stockActual: 0, stockMinimo: 100, ubicacion: "Estante A" }
+    "409": { descripcion: Ya existe un producto con ese código, regla: UQ_PRODUCTO_CODIGO }
+    "422": { descripcion: "Un insumo va en su unidad mínima (ML, G o UND) o falta un dato", regla: RN54 }
+
+"POST /api/v1/productos/{idProducto}/salidas":
+  resumen: Registrar una salida de insumo
+  cus: CUS33
+  solicitud: { cantidad: 4, motivo: "Uso en cabina", idAtencion: 1532 }
+  respuestas:
+    "200":
+      descripcion: "Salida registrada; Oracle fija saldo, usuario y fecha. estaEnMinimo avisa que quedó en el stock mínimo (RF47)"
+      ejemplo: { idMovimiento: 310, idProducto: 40, idSede: 1, tipo: SALIDA, cantidad: 4, motivo: "Uso en cabina", idAtencion: 1532, saldo: 1, fechaHora: "2026-11-09T11:00:00", estaEnMinimo: true }
+    "404": { descripcion: El producto no existe, regla: RF44 }
+    "409": { descripcion: No hay stock suficiente en la sede, regla: RN15 }
+    "422": { descripcion: Falta el motivo o la cantidad no es mayor que 0, regla: RN18 }
+
+"POST /api/v1/productos/{idProducto}/ajustes":
+  resumen: Registrar un ajuste de inventario por conteo
+  cus: CUS34
+  solicitud: { cantidad: 5, motivo: "Conteo físico" }
+  respuestas:
+    "200":
+      descripcion: "AJUSTE por la diferencia con signo (contado − stock); estaEnMinimo avisa el stock mínimo (RF47)"
+      ejemplo: { idMovimiento: 311, idProducto: 40, idSede: 1, tipo: AJUSTE, cantidad: 5, motivo: "Conteo físico", saldo: 5, fechaHora: "2026-11-09T11:05:00", estaEnMinimo: false }
+    "404": { descripcion: El producto no existe, regla: RF44 }
+    "422": { descripcion: "Lo contado es igual al stock, o falta el motivo", regla: RF48 }
+
+"GET /api/v1/productos/{idProducto}/kardex":
+  resumen: Consultar el kardex de un producto
+  cus: CUS35
+  respuestas:
+    "200":
+      descripcion: "Movimientos de V_KARDEX en la sede (por defecto la de la sesión) entre las fechas (por defecto los últimos 30 días)"
+      ejemplo: [ { idMovimiento: 311, fechaHora: "2026-11-09T11:05:00", tipo: SALIDA, motivo: "Consumo estimado de la atención N° 1532", cantidad: -3, saldo: 7, usuario: "especialista1", idAtencion: 1532 } ]
+    "404": { descripcion: El producto no existe, regla: RF44 }
+    "422": { descripcion: La fecha de inicio es posterior a la de fin, regla: RF50 }
+
+"GET /api/v1/consumos-pendientes":
+  resumen: Listar los consumos pendientes de la sede
+  cus: CUS33
+  respuestas:
+    "200":
+      descripcion: "Lo que faltó descontar al finalizar atenciones (RN53), del más antiguo al más reciente"
+      ejemplo: [ { idConsumo: 12, idAtencion: 1532, idProducto: 40, codigo: "INS-007", producto: "Keratina", unidad: ML, idSede: 1, cantidadEstimada: 30, cantidadDescontada: 10, cantidadPendiente: 20, estado: PENDIENTE, fechaRegistro: "2026-11-09T10:45:00" } ]
+
+"POST /api/v1/consumos-pendientes/{idConsumo}/regularizacion":
+  resumen: Regularizar un consumo pendiente
+  cus: CUS33
+  respuestas:
+    "200":
+      descripcion: "SALIDA del mismo producto, sede y atención por lo pendiente; queda REGULARIZADO con su movimiento"
+      ejemplo: { idConsumo: 12, idAtencion: 1532, idProducto: 40, codigo: "INS-007", producto: "Keratina", unidad: ML, idSede: 1, cantidadEstimada: 30, cantidadDescontada: 10, cantidadPendiente: 20, estado: REGULARIZADO, fechaRegistro: "2026-11-09T10:45:00", idMovimiento: 330 }
+    "404": { descripcion: El consumo pendiente no existe, regla: RN53 }
+    "409": { descripcion: "Aún no hay stock (RN15) o ya está resuelto", regla: RN53 }
+
+"PATCH /api/v1/consumos-pendientes/{idConsumo}/descarte":
+  resumen: Descartar un consumo pendiente con su motivo
+  cus: CUS33
+  solicitud: { observacion: "Se usó menos de lo estimado" }
+  respuestas:
+    "200":
+      descripcion: Queda DESCARTADO con la observación
+      ejemplo: { idConsumo: 12, idAtencion: 1532, idProducto: 40, codigo: "INS-007", producto: "Keratina", unidad: ML, idSede: 1, cantidadEstimada: 30, cantidadDescontada: 10, cantidadPendiente: 20, estado: DESCARTADO, fechaRegistro: "2026-11-09T10:45:00", observacion: "Se usó menos de lo estimado" }
+    "404": { descripcion: El consumo pendiente no existe, regla: RN53 }
+    "409": { descripcion: Ya está resuelto y no cambia, regla: RN53 }
+    "422": { descripcion: Falta la observación (CK_CONSUMO_PEND_DESCARTADO), regla: RN53 }

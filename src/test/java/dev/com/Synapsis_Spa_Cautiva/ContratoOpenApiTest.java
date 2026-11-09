@@ -29,8 +29,11 @@ class ContratoOpenApiTest extends OracleTestcontainer {
 
 	private static final Path ARCHIVO = Path.of("docs", "openapi.yaml");
 
-	/** Los 35 del draw.io de la Iteración 1, cambio de clave (DF-18), el comprobante público (DF-53) y los 13 GET de los CUS modificados en la Iteración 2. */
-	private static final int OPERACIONES = 50;
+	/**
+	 * Los 35 del draw.io de la Iteración 1, cambio de clave (DF-18), el comprobante público (DF-53), los 13 GET de los CUS modificados en la
+	 * Iteración 2 y los 10 de inventario (CUS66, CUS32 a CUS35).
+	 */
+	private static final int OPERACIONES = 60;
 
 	private static final Set<String> METODOS = Set.of("get", "post", "put", "patch", "delete");
 

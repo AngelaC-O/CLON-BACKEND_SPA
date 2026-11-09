@@ -7,6 +7,7 @@ import java.util.List;
 
 import dev.com.Synapsis_Spa_Cautiva.catalogo.api.CatalogoApi;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.api.DatosVariante;
+import dev.com.Synapsis_Spa_Cautiva.catalogo.api.InsumoEstimadoDTO;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.controller.AreaDTO;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.controller.InsumoDTO;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.controller.MapperCatalogo;
@@ -76,6 +77,18 @@ public class ServicioCatalogo implements CatalogoApi {
 	@Transactional(readOnly = true)
 	public List<DatosVariante> obtenerVariantes(List<Long> idsVariante) {
 		return idsVariante.stream().distinct().map(this::obtenerVariante).toList();
+	}
+
+	/** RN54: cantidad_estimada va en la unidad mínima del insumo; si tuviera decimales se descuenta redondeada hacia arriba. */
+	@Override
+	@Transactional(readOnly = true)
+	public List<InsumoEstimadoDTO> insumosDeVariante(Long idVariante) {
+		VarianteServicio oVariante = repositorioServicio.findVariante(idVariante)
+			.orElseThrow(() -> new ReglaNegocioException("RN40", "La variante " + idVariante + " no existe.", HttpStatus.NOT_FOUND));
+		return oVariante.getInsumos().stream()
+			.map(insumo -> new InsumoEstimadoDTO(insumo.getIdProducto(),
+					insumo.getCantidadEstimada().setScale(0, RoundingMode.CEILING).intValueExact()))
+			.toList();
 	}
 
 	@Override
