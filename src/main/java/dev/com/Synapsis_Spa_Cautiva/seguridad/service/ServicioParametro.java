@@ -18,6 +18,12 @@ class ServicioParametro implements ParametroApi {
 	@Override
 	@Transactional(readOnly = true)
 	public BigDecimal valorNumero(String codigo) {
+		return obtenerValorNumero(codigo);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public BigDecimal obtenerValorNumero(String codigo) {
 		return repositorioParametro.findByCodigo(codigo)
 			.map(parametro -> parametro.getValorNumero())
 			.orElseThrow(() -> new IllegalStateException("Falta el parámetro numérico " + codigo));
