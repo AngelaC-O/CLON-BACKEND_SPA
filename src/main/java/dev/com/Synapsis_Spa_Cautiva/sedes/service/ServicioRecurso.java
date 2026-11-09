@@ -53,6 +53,13 @@ public class ServicioRecurso implements RecursoApi {
 		return repositorioRecurso.findByIdSedeAndEstado(idSede, EstadoRecurso.DISPONIBLE).stream().map(this::aDatos).toList();
 	}
 
+	/** [It. 2] CUS61 (con GET /recursos) y CUS08: un solo método, porque ServicioRecurso también implementa RecursoApi (DF-78). */
+	@Override
+	@Transactional(readOnly = true)
+	public List<DatosRecurso> listarRecursos(Long idSede) {
+		return repositorioRecurso.findBySede(idSede).stream().map(this::aDatos).toList();
+	}
+
 	@Override
 	@Transactional(readOnly = true)
 	public HorarioSede obtenerHorarioSede(Long idSede) {
@@ -63,7 +70,7 @@ public class ServicioRecurso implements RecursoApi {
 
 	private DatosRecurso aDatos(Recurso oRecurso) {
 		return new DatosRecurso(oRecurso.getIdRecurso(), oRecurso.getIdSede(), oRecurso.getNombre(), oRecurso.getTipo().name(),
-				oRecurso.getMinutosLimpieza());
+				oRecurso.getMinutosLimpieza(), oRecurso.getEstado().name());
 	}
 
 }
