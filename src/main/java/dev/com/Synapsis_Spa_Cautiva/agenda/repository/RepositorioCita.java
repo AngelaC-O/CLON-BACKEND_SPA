@@ -15,6 +15,31 @@ import org.springframework.data.repository.query.Param;
 
 public interface RepositorioCita extends JpaRepository<Cita, Long> {
 
+	/** Citas por atender de la ficha de la clienta (CUS03, RF02). */
+	@Query("""
+			select c from Cita c
+			where c.idCliente = :idCliente and c.estado = dev.com.Synapsis_Spa_Cautiva.agenda.domain.EstadoCita.PENDIENTE
+			order by c.fechaHoraInicio
+			""")
+	List<Cita> findPendientesPorCliente(@Param("idCliente") Long idCliente);
+
+	/** Mi agenda de la especialista (CUS11, RF13): las citas del día que no se cancelaron ni reprogramaron. */
+	default List<Cita> findDelDiaPorPersonal(Long idPersonal, LocalDate fecha) {
+		return findDelPersonalEntre(idPersonal, fecha.atStartOfDay(), fecha.plusDays(1).atStartOfDay());
+	}
+
+	@Query("""
+			select c from Cita c
+			where c.idPersonal = :idPersonal
+			and c.fechaHoraInicio >= :desde and c.fechaHoraInicio < :hasta
+			and c.estado in (dev.com.Synapsis_Spa_Cautiva.agenda.domain.EstadoCita.PENDIENTE,
+				dev.com.Synapsis_Spa_Cautiva.agenda.domain.EstadoCita.EN_ATENCION,
+				dev.com.Synapsis_Spa_Cautiva.agenda.domain.EstadoCita.FINALIZADA)
+			order by c.fechaHoraInicio
+			""")
+	List<Cita> findDelPersonalEntre(@Param("idPersonal") Long idPersonal, @Param("desde") LocalDateTime desde,
+			@Param("hasta") LocalDateTime hasta);
+
 	default List<Cita> findOcupacion(Long idSede, LocalDate fecha) {
 		return findOcupacionEntre(idSede, fecha.atStartOfDay(), fecha.plusDays(1).atStartOfDay());
 	}

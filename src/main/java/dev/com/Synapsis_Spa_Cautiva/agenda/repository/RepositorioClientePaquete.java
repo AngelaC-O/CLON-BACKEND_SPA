@@ -1,5 +1,6 @@
 package dev.com.Synapsis_Spa_Cautiva.agenda.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import dev.com.Synapsis_Spa_Cautiva.agenda.domain.ClientePaquete;
@@ -10,7 +11,16 @@ import org.springframework.data.repository.query.Param;
 
 public interface RepositorioClientePaquete extends JpaRepository<ClientePaquete, Long> {
 
-	/** PAQUETE_SERVICIO no se mapea: es una de las 11 tablas fuera de la iteración y solo se lee aquí (RN36). */
+	/** Paquetes y membresías ACTIVOS con sesiones por usar, según V_SESIONES_PAQUETE (CUS03, RN36). */
+	@Query(nativeQuery = true, value = """
+			SELECT cp.* FROM CLIENTE_PAQUETE cp
+			JOIN V_SESIONES_PAQUETE s ON s.id_cliente_paquete = cp.id_cliente_paquete
+			WHERE cp.id_cliente = :idCliente AND cp.estado = 'ACTIVO' AND s.sesiones_restantes > 0
+			ORDER BY cp.fecha_compra
+			""")
+	List<ClientePaquete> findActivosPorCliente(@Param("idCliente") Long idCliente);
+
+	/** El paquete cubre el servicio si lo incluye PAQUETE_SERVICIO, que escribe CUS59 (RN36, D-04). */
 	@Query(nativeQuery = true, value = """
 			SELECT cp.* FROM CLIENTE_PAQUETE cp
 			JOIN PAQUETE_SERVICIO ps ON ps.id_paquete = cp.id_paquete

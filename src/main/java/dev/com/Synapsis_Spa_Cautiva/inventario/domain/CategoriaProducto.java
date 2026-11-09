@@ -25,4 +25,9 @@ public class CategoriaProducto {
 	protected CategoriaProducto() {
 	}
 
+	/** RF45: el nombre es único (UQ_CATEGORIA_PRODUCTO_NOMBRE). */
+	public CategoriaProducto(String nombre) {
+		this.nombre = nombre;
+	}
+
 }

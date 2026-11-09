@@ -97,6 +97,20 @@ public class VentaDetalle {
 		this.idPersonal = idPersonal;
 	}
 
+	/** Línea de producto (RF38): el precio lo pone TRG_VENTA_DETALLE_REGLAS con el de PRODUCTO. */
+	static VentaDetalle producto(Venta venta, Long idProducto, Integer cantidad, BigDecimal precioUnitario, Long idPersonal) {
+		VentaDetalle detalle = new VentaDetalle();
+		detalle.venta = venta;
+		detalle.tipoItem = TipoItemVentaDetalle.PRODUCTO;
+		detalle.idProducto = idProducto;
+		detalle.cantidad = cantidad;
+		detalle.precioUnitario = precioUnitario;
+		detalle.descuento = BigDecimal.ZERO;
+		detalle.subtotal = precioUnitario.multiply(BigDecimal.valueOf(cantidad));
+		detalle.idPersonal = idPersonal;
+		return detalle;
+	}
+
 	void aplicarPromocion(Long idPromocion) {
 		this.idPromocion = idPromocion;
 	}

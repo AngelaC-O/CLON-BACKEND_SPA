@@ -20,6 +20,12 @@ Nuevas (08/11/2026, al preparar el v5.1):
 - **D-17. `99_eliminar_v5.sql`.** Solo borra las 55 tablas de v5; SOLICITUD_ANULACION y CONSUMO_PENDIENTE quedan. `database/README.md` indica el `DROP TABLE` a mano. ¿Se actualiza 99 la próxima vez que se toque `database/`?
 - **D-18. Base local.** La base de Docker (`localhost:1522`, dueño `SYNAPSIS_SPA_CAUTIVA`) sigue en v5: en esta tarea 17 solo se corrió en un contenedor limpio de pruebas. Para usarla con el back-end de la Iteración 2 hay que correr ahí `17_datos_iteracion2.sql` como dueño.
 
+Nuevas (09/11/2026, entidades y repositorios):
+
+- **D-19. Reglas de la conciliación.** El diagrama de CUS47 solo nombra `generarItems(ventas, comprobantes, transacciones)`; los criterios no están en ningún documento. Se programaron así (ver DF-70): un ítem por venta del mes, que COINCIDE si SUNAT ACEPTÓ su comprobante y sus cobros digitales tienen fecha de abono (el efectivo se respalda en caja); un ítem SIN_JUSTIFICAR por cada comprobante sin venta vigente del mes, salvo el de una venta ANULADA cuya nota de crédito SUNAT aceptó; y uno por cada transacción que no respalda una venta del mes (cobro sin venta ni cita, adelanto sin abono, devolución). ¿Se confirman con la dueña y la contadora?
+- **D-20. Tipos de reporte de CUS48.** `RepositorioReporte` solo tiene `ventasAgrupadas` en el diagrama. Se implementaron las agrupaciones de RF68 (DIA, MES, LINEA, SERVICIO, ESPECIALISTA, TIPO_ATENCION, MEDIO_PAGO). Los otros reportes de la nota de CUS48 (productos y margen RF69, margen por servicio RF70, demanda RF71, ocupación RF72, ingresos por especialista RF73) leen otras vistas (V_MARGEN_PRODUCTO, V_COSTO_SERVICIO, V_DEMANDA_SERVICIOS, V_OCUPACION_RECURSO) y no tienen método en el diagrama. ¿Se agrega un método por tipo de reporte cuando se haga ServicioReporte?
+- **D-21. `NOTA_CREDITO.id_usuario_solicita`.** La nota de CUS23 dice que sale de la solicitud, pero `TRG_NOTA_CREDITO_REGLAS` (script 09) lo reemplaza por el usuario de PKG_SESION, que al aprobar es la Administradora (DF-66). ¿Se acepta así o se cambia el trigger en una próxima migración? La solicitud conserva siempre quién la pidió.
+
 ## Diferencias encontradas
 
 - **DF-58. RN03 ajustada frente a `PKG_AGENDA`.** RN03 (08/11) dice que la especialista queda libre al terminar el servicio y que solo el recurso queda bloqueado por la limpieza. Pero `TRG_CITA_REGLAS` guarda en `CITA.fecha_hora_fin` el fin con la limpieza, y `PKG_AGENDA.validar_cruce` usa ese fin para la especialista y para el recurso; `GestorDisponibilidadAgenda` hace lo mismo en Java. La hoja «Cambios v5.1» no cambia ni `PKG_AGENDA` ni `TRG_CITA_*`, así que no se tocaron (D-14). Las pruebas Java ajustadas siguen ese comportamiento (por ejemplo, la agenda de la especialista ocupada de 10:00 a 10:40).
@@ -28,6 +34,23 @@ Nuevas (08/11/2026, al preparar el v5.1):
 - **DF-61. Aprobar una solicitud con su nota de crédito.** Como una solicitud resuelta no cambia (`-20102`), la nota de crédito se emite primero y su `id_nota_credito` va en el mismo UPDATE que pasa la solicitud a APROBADA. Si SUNAT había rechazado el comprobante, se aprueba con `id_nota_credito` nulo (lo permite `CK_SOL_ANUL_NOTA_CREDITO`).
 - **DF-62. Orden de las validaciones al reabrir la caja.** `TRG_CAJA_REGLAS` revisa primero el motivo (`-20060`) y después que sea la Administradora (`-20003`). Así una reapertura sin motivo sigue siendo el `-20060` de siempre (el caso «Reabrir la caja cerrada» de 20 no cambia) y la de una recepcionista con motivo es 403.
 - **DF-63. Otra caja ABIERTA al reabrir.** Que no haya otra caja ABIERTA en la sede lo garantiza el índice `UQ_CAJA_ABIERTA_SEDE` (`ORA-00001`), no el trigger: una regla por fila sobre CAJA no puede consultar CAJA (tabla mutante). Java lo valida antes y traduce el `ORA-00001` a 409.
+
+Entidades y repositorios de la Iteración 2 (09/11/2026). Cada punto es un método o un tipo que no está igual en los diagramas de clases del diseño de `Iteracion_2_Cautiva_Spa.drawio`:
+
+- **DF-64. `NotaCredito(oVenta, ...)`.** El diagrama de CUS23 pasa `idVenta`, pero COMPROBANTE → VENTA es una relación JPA dentro del agregado de la venta, que necesita la entidad; el servicio ya la tiene (`RepositorioVenta.findById`). La nota entra a `Venta.comprobantes` por `Venta.agregarNotaCredito` (paquete), que exige venta CERRADA, una sola nota y la clase correcta (NC_BOLETA anula BOLETA).
+- **DF-65. `Venta.anular(idUsuarioAutoriza)`.** Se conserva el parámetro del diagrama, pero no se guarda: `VENTA.id_usuario_autoriza` es obsoleta (v5.1) y la entidad la mapea solo de lectura (`insertable = false, updatable = false`). El método exige venta CERRADA y su nota de crédito, o el comprobante RECHAZADO por SUNAT, como `PKG_VENTA.validar_anulacion`.
+- **DF-66. `NotaCredito.idUsuarioSolicita`.** `TRG_NOTA_CREDITO_REGLAS` lo reemplaza por el usuario de PKG_SESION; la entidad lo marca `@Generated` para leer lo que guardó Oracle (D-21).
+- **DF-67. `Rol.verificarPermisosMinimos(idsPermisosSeguridad)`.** El diagrama de CUS53 no le da parámetros, pero ROL_PERMISO solo guarda el id del permiso y Rol no conoce módulo ni acción: el servicio le pasa los id de SEGURIDAD:VER, SEGURIDAD:CREAR y SEGURIDAD:EDITAR (`RepositorioPermiso.findOrCreate`).
+- **DF-68. `Producto.calcularPrecioVenta(margen: BigDecimal)`.** El diagrama de CUS32 dice `margen: String`, pero la secuencia lo obtiene con `ParametroApi.obtenerValorNumero` (MARGEN_PRODUCTO_PCT o MARGEN_PREMIUM_PCT, en porcentaje): precio = costo × (1 + margen / 100), a 2 decimales.
+- **DF-69. Kardex de Producto.** `registrarSalida` no devuelve nada y `registrarAjuste` devuelve `boolean` (false si la diferencia es 0 y no se registra, como dice la nota de CUS34). Se agregó `Producto.ultimoMovimiento(idSede)`, que no está en el diagrama: CUS33 necesita el `idMovimiento` de la salida para regularizar el consumo pendiente, y `save()` de un producto existente hace `merge`, que guarda una copia del movimiento. `MovimientoKardex` avisa con `@PostPersist` (`alGuardar` → `Producto.alGuardarMovimiento`, de paquete) la copia guardada, con el id y el saldo que puso Oracle. `estaEnMinimo` usa ese saldo y no carga todo el kardex.
+- **DF-70. Conciliación.** El diagrama de CUS47 dice `generarItems(ventas: List<VentaResumenDTO>, comprobantes: String, transacciones: String)` y `justificarItem(idItem, estado: EstadoConciliacion, justificacion)`. Se usaron los tipos de la secuencia: `List<ComprobanteSunatDTO>` (`comprobantesDelMes`), `List<TransaccionLiquidadaDTO>` (`liquidacion`) y `EstadoConciliacionItem` (JUSTIFICADA o EXCLUIDA), porque `EstadoConciliacion` es ABIERTA o CERRADA. `ConciliacionItem.justificar(texto)` y `excluir(texto)`, pedidos en la tarea, no están en el diagrama: son de paquete y los llama `Conciliacion.justificarItem`, que es el método del diagrama.
+- **DF-71. DTO de la conciliación.** `VentaResumenDTO`, `ComprobanteSunatDTO` (en `ventas.api`) y `TransaccionLiquidadaDTO` (en `pagos.api`) solo aparecen como tipos en el diagrama; sus campos salen de V_VENTA_VALIDA, V_COMPROBANTES_MES y TRANSACCION_PASARELA (con `idVenta` de VENTA_PAGO). Se publican en las interfaces de los módulos que los producen y `caja` depende de ellas. Los métodos `ventasDelMes`, `comprobantesDelMes` y `liquidacion` de VentasConsultaApi y PagosApi son de la tarea de servicios.
+- **DF-72. Nombres de la tarea frente al diagrama.** Donde el pedido y el diagrama difieren se usó el diagrama: `RepositorioConsumoPendiente.findPendientes(idSede)` (no `findPendientesPorSede`), `RepositorioListaEspera.findPendientes(idSede, fecha)` (no `findPendientesDelDia`), `SolicitudAnulacion.aprobar(idUsuarioResuelve, idNotaCredito)` y `rechazar(idUsuarioResuelve, motivoRechazo)`, `ConsumoPendiente.regularizar(idUsuarioResuelve, idMovimiento)` y `descartar(idUsuarioResuelve, observacion)`, y `Caja.reabrir(idUsuarioReapertura, motivoReapertura)`.
+- **DF-73. Lo que devuelven los repositorios.** Como en la Iteración 1, lo que el diagrama devuelve como una entidad (`findEnCursoPorCita`, `findDelDia`) es `Optional`. Las consultas que leen una vista devuelven una proyección y no la entidad: `RepositorioProducto.findMovimientos` → `FilaKardex` (V_KARDEX, con el usuario y la cantidad con signo) y `RepositorioAuditoria.findByFiltros` → `FilaAuditoria` (V_AUDITORIA, que no tiene id_usuario: se filtra por su nombre de usuario). Los métodos `default` de los repositorios llaman a una consulta auxiliar con el rango de fechas (`findDelPersonalEntre`, `findAperturasEntre`, `findMovimientosEntre`, `findByFiltrosEntre`).
+- **DF-74. Vistas sin método en el diagrama.** La tarea pide leer V_STOCK_ALERTA, V_COMPROBANTES_MES y V_PASARELA_LIQUIDACION, que el diagrama nombra en notas (CUS50 y CUS47) pero no en un repositorio: `RepositorioProducto.findEnStockMinimo(idSede)` (aviso de stock mínimo de CUS50), `RepositorioComprobante.findDelMes(anio, mes)` y `RepositorioTransaccionPasarela.findLiquidacionDelMes(anio, mes)` (CUS47). V_SALDO_FAVOR_CLIENTE y V_SESIONES_PAQUETE se leen en `RepositorioCliente.saldoFavorDisponible` y `RepositorioClientePaquete.findActivosPorCliente`; V_CPE_PENDIENTES ya se leía desde la Iteración 1.
+- **DF-75. `RepositorioReporte` es una clase.** El diagrama lo dibuja «interface», pero `reportes` no tiene entidades (nota de CUS48), así que no puede ser un JpaRepository: es un `@Repository` con `NamedParameterJdbcTemplate` y una consulta fija por agrupación (nunca arma SQL con texto del usuario). `FilaReporteDTO` va en `reportes.repository`, como las proyecciones `Fila*` de los demás módulos.
+- **DF-76. Constructores sin caja en el diagrama.** `ConsumoPendiente(idAtencion, idProducto, idSede, cantidadEstimada, cantidadDescontada)` (lo crea `InventarioApi.registrarConsumoAtencion` en CUS11), `CategoriaProducto(nombre)` (CUS66), `RecomendacionProducto`, `PaqueteServicio`, `PromocionServicio` y `ConciliacionItem` (de paquete, los crea su raíz) y el `SaldoFavorMov` del abono (de paquete, lo crea `Cliente.abonarSaldo`) no tienen el constructor dibujado.
+- **DF-77. Métodos auxiliares de dominio.** No están en el diagrama y son de paquete o privados: `VarianteServicio.cambiarPrecio` y `definirInsumo` que actualiza si el insumo ya está (CUS58 vuelve a definir insumos), `ServicioInsumo.cambiarCantidad`, `InventarioSede.definirMinimo`, `CajaArqueo.tieneDiferencia`, `MovimientoKardex.salida` y `ajuste` y `VentaDetalle.producto`. Públicos: `Atencion.getRecomendaciones`, `Paquete.getServicios`, `Promocion.getServicios` y `Conciliacion.getItems`, como los demás agregados.
 
 ## Decisiones tomadas
 
@@ -68,6 +91,17 @@ Migración v5 → v5.1 (`database/17_datos_iteracion2.sql`, 08/11/2026):
 - **16 no cambia.** `16_verificar_cuenta_aplicacion.sql` no cuenta tablas.
 - **Pruebas Java ajustadas al v5.1** (solo datos de prueba, sin lógica nueva): `AgendaFlujoTest` (fin con 10 minutos de limpieza: 10:40 y 10:55; cruces a las 10:20 y 10:35; sin cruce a las 10:40), `MapeoEntidadesTest` (recurso de 10 minutos: 10:40 y 10:50) y `SeguridadCatalogoFlujoTest` (recurso de 10 minutos y rechazo con 11; la recepcionista ahora ve `GET /areas` por `CATALOGO:VER` y sigue sin poder `POST /areas`).
 
+Entidades, métodos de negocio y repositorios de la Iteración 2 (09/11/2026):
+
+- **51 entidades.** Las 44 de la Iteración 1 más RecomendacionProducto (agenda), PaqueteServicio y PromocionServicio (catalogo, con `@EmbeddedId` y `@MapsId`), Conciliacion y ConciliacionItem (caja), SolicitudAnulacion (ventas) y ConsumoPendiente (inventario). Quedan fuera las 6 tablas fuera de alcance. Las «solo estructura» que ahora se escriben tienen constructor y métodos: Producto, CategoriaProducto, InventarioSede, MovimientoKardex, Paquete, Promocion y NotaCredito. Compra, CompraDetalle, Proveedor y RequerimientoCompra siguen solo con columnas (sus CUS son de otra iteración).
+- **Columnas que reescribe Oracle (`@Generated`).** Se agregaron, revisando los triggers de 09 y 17: Cita.idUsuario y fechaRegistro, Venta.idUsuario y fechaHora, TransaccionPasarela.idUsuario y fechaHora, CajaEgreso.idUsuario y fecha, SaldoFavorMov.fecha, Parametro.idUsuario (al insertar y al actualizar), Caja.idUsuarioApertura (al insertar) y los datos de cierre, revisión y reapertura (al actualizar), MovimientoKardex.idUsuario, fechaHora y saldo, NotaCredito.idUsuarioSolicita, SolicitudAnulacion.idUsuarioSolicita y fechaSolicitud (al insertar) e idUsuarioResuelve y fechaResolucion (al actualizar), ConsumoPendiente.fechaRegistro (al insertar) e idUsuarioResuelve y fechaResolucion (al actualizar). InventarioSede.stockActual no se escribe nunca (`insertable = false, updatable = false`): lo pone en 0 TRG_INVENTARIO_SEDE_REGLAS y lo mueve el kardex. SerieComprobante.ultimoNumero se inserta en 0 y no se actualiza, para no pisar el correlativo de PKG_VENTA.
+- **`@DynamicUpdate`.** Se agregó en Cliente (TRG_CLIENTE_HERENCIA es `UPDATE OF id_cliente`), NotaCredito (TRG_NOTA_CREDITO_HERENCIA es `UPDATE OF id_nota_credito`), SerieComprobante, SolicitudAnulacion y ConsumoPendiente, además de las de la Iteración 1.
+- **Reglas en el dominio.** Cada método repite antes de Oracle el CHECK o la regla que le toca, con su RN (ADR-05): Cita.cancelar exige motivo (CK_CITA_CANCELACION), Promocion su valor y su vigencia, Paquete sus sesiones, SerieComprobante su letra, MedioPago el efectivo sin pasarela, Producto el stock de la salida (409, RN15) y SolicitudAnulacion el código 01, 02 o 06. RN50 (`verificarEspecialista` de Cita y Atencion) responde 403. `Caja.reabrir` exige la caja del día (D-16) y `Caja.aprobarRevision`, un cierre con diferencia aún no revisado.
+- **Recurso.** El constructor rechaza una limpieza fuera de 0 a 10 minutos con RN03. El 10 es el tope del CHECK del esquema (`CK_RECURSO_MINUTOS_LIMPIEZA`), no un valor del negocio: el tope del negocio sigue siendo LIMPIEZA_MAX_MIN de PARAMETRO, que revisa ServicioRecurso.
+- **Prueba de mapeo.** `MapeoEntidadesTest` espera 51 entidades y corre contra Oracle cada consulta nueva de los repositorios. `MapeoIteracion2Test` guarda los agregados nuevos con sus métodos de negocio y comprueba lo que completa Oracle: paquete y promoción con sus servicios; ajuste y salida de kardex con su saldo; recomendación; consumo pendiente descartado; venta de producto cerrada; solicitud de anulación rechazada; caja cerrada, aprobada y reabierta; conciliación cerrada; cita reprogramada y cancelada con su abono de saldo; lista de espera asignada; y las reglas de seguridad y configuración.
+- **Plan de commits.** Las entidades de `caja` usan los DTO que publican `ventas` y `pagos`, así que esos módulos van antes. Los repositorios van en el mismo commit que las entidades de su módulo, porque cada repositorio usa las entidades nuevas de ese módulo.
+- **Verificación (09/11/2026).** `./mvnw -q verify` con el JDK 26: 128 pruebas, 0 fallos, 0 errores, 0 omitidas, con `ModularidadTest` en verde (el módulo nuevo `reportes` no depende de nadie más que de `comun`). Una corrida anterior falló entera al instalar `database/` en el contenedor: `ORA-03114: not connected to ORACLE` en el paso a) de 17, el mismo corte intermitente de la Iteración 1 (`NOTAS_IT1.md`, «Pendiente de vigilar»), otra vez con el contenedor `oracle-local` encendido; la corrida siguiente pasó sin ningún cambio. Ninguna prueba falla por el JDK 26.
+
 Resultado en un contenedor limpio (`gvenzl/oracle-free:23.26.2`, `TZ=America/Lima`, 08/11/2026), en el orden 00 → 14 → 13 → 15 → 17 → 16:
 
 | Script | Resultado |
@@ -87,3 +121,66 @@ Lo esperado eran 14, 144 y 11 OK; la diferencia en 20 son los dos casos de DF-59
 `./mvnw -q verify` con el JDK 26 (08/11/2026): la primera corrida, ya con 17 instalado por `OracleTestcontainer`, dio 7 pruebas en rojo, todas por los datos del v5.1 y no por el JDK: limpieza de 15 minutos rechazada por `CK_RECURSO_MINUTOS_LIMPIEZA` (`ORA-02290`) o por `LIMPIEZA_MAX_MIN` (422), fines calculados con 30 minutos de limpieza y `GET /areas` que ahora devuelve 200 a la recepcionista. Con los datos de prueba ajustados (ver arriba), la segunda corrida terminó bien: 122 pruebas, 0 fallos, 0 errores, 0 omitidas (incluye `MigracionV51Test` y `ModularidadTest`). Ninguna falla por el JDK 26.
 
 Este repositorio es solo el back-end: `npm run build` y `npm test` del front-end no se corrieron aquí.
+
+## Entidades y repositorios frente al draw.io
+
+Cruce del 09/11/2026 de los diagramas de clases del diseño de las 39 páginas CUS de `docs/Iteracion_2_Cautiva_Spa.drawio` (más la página «General · Clases del diseño (capas)») con el código: los 154 métodos de entidades y repositorios que dibujan existen. «Nuevos» son los que no estaban en la Iteración 1; las diferencias de firma están en DF-64 a DF-77.
+
+| Módulo | Clase | Métodos nuevos en la Iteración 2 (CUS) | Ya estaban |
+| --- | --- | --- | --- |
+| agenda | RepositorioAtencion | `findByCliente` (03), `findEnCursoPorCita` (11) | `findById`, `save` |
+| agenda | RepositorioCita | `findPendientesPorCliente` (03), `findDelDiaPorPersonal` (11) | `findById`, `save`, `findOcupacion` |
+| agenda | RepositorioCliente | `saldoFavorDisponible` (03) | `findById`, `save` |
+| agenda | RepositorioClientePaquete | `findActivosPorCliente` (03) | `findActivoPorCliente` |
+| agenda | RepositorioListaEspera | `findPendientes` (06) | `findById`, `save` |
+| agenda | Atencion | `recomendarProducto` (12), `verificarEspecialista` (11) | `Atencion`, `registrarDetalle`, `finalizar`, `usarSesion` |
+| agenda | Cita | `reprogramar` (09), `cancelar` (10), `verificarEspecialista` (11) | `Cita`, `iniciarAtencion`, `finalizar` |
+| agenda | Cliente | `actualizarDatos` (04), `abonarSaldo` (10) | `registrarConsentimiento` |
+| agenda | ClientePaquete | — | `verificarSesionDisponible` |
+| agenda | ListaEspera | `asignarCita` (05), `descartar` (06) | `ListaEspera` |
+| caja | RepositorioCaja | `findCerradasConDiferencia` (46), `findDelDia` (46) | `findById`, `save`, `findAbiertaBySede`, `existsAbiertaBySede` |
+| caja | RepositorioConciliacion (nueva) | `save` (47), `findById` (47) | — |
+| caja | Caja | `aprobarRevision` (46), `reabrir` (46) | `Caja` |
+| caja | Conciliacion (nueva) | `Conciliacion` (47), `generarItems` (47), `justificarItem` (47), `cerrar` (47) | — |
+| catalogo | RepositorioPaquete (nueva) | `findByTipo` (59), `save` (59) | — |
+| catalogo | RepositorioPromocion (nueva) | `findVigentes` (60), `save` (60) | — |
+| catalogo | RepositorioServicio | `findByAreaAndEstado` (58) | `findById`, `save` |
+| catalogo | Paquete | `Paquete` (59), `incluirServicio` (59) | — |
+| catalogo | Promocion | `Promocion` (60), `aplicarAServicio` (60) | — |
+| catalogo | Servicio | `actualizarDatos` (58), `cambiarPrecio` (58) | `definirInsumo` |
+| inventario | RepositorioCategoriaProducto (nueva) | `findAll` (32), `existsByNombre` (66), `save` (66) | — |
+| inventario | RepositorioConsumoPendiente (nueva) | `findPendientes` (33), `findById` (33), `save` (33) | — |
+| inventario | RepositorioProducto (nueva) | `findByFiltros` (32), `save` (32), `findById` (33, 34), `findMovimientos` (35) | — |
+| inventario | CategoriaProducto | `CategoriaProducto` (66) | — |
+| inventario | ConsumoPendiente (nueva) | `regularizar` (33), `descartar` (33) | — |
+| inventario | Producto | `Producto` (32), `calcularPrecioVenta` (32), `definirStockMinimo` (32), `registrarSalida` (33), `estaEnMinimo` (33, 34), `registrarAjuste` (34) | — |
+| pagos | RepositorioMedioPago (nueva) | `findAll` (62), `findById` (62), `save` (62) | — |
+| pagos | RepositorioTransaccionPasarela | — | `findById`, `save` |
+| pagos | MedioPago | `configurar` (62) | — |
+| pagos | TransaccionPasarela | — | `TransaccionPasarela`, `aprobar` |
+| reportes | RepositorioReporte (nueva) | `ventasAgrupadas` (48, 49) | — |
+| sedes | RepositorioRecurso | `findBySede` (61) | `save` |
+| sedes | Recurso | — | `Recurso` |
+| seguridad | RepositorioAuditoria | `findByFiltros` (55) | `save` |
+| seguridad | RepositorioParametro | — | `findAll`, `findByCodigo`, `save` |
+| seguridad | RepositorioPermiso | — | `findAll`, `findOrCreate` |
+| seguridad | RepositorioRol | — | `findById`, `save` |
+| seguridad | RepositorioTipoDocumento | — | `findAll`, `findById`, `save` |
+| seguridad | RepositorioUsuario | `findIdsPersonalConUsuario` (52), `existeOtraAdministradoraActiva` (53) | `findById`, `save`, `findByNombreUsuario`, `findPermisosPorRol`, `findRolesActivos`, `existsByNombreUsuario`, `findAll` |
+| seguridad | Auditoria | — | `Auditoria` |
+| seguridad | Parametro | `cambiarValor` (65) | — |
+| seguridad | Rol | `verificarPermisosMinimos` (53) | `actualizar`, `concederPermiso` |
+| seguridad | TipoDocumento | `configurar` (65) | — |
+| seguridad | Usuario | `restablecerClave` (54) | `autenticar`, `registrarAcceso`, `Usuario`, `asignarRol` |
+| ventas | RepositorioComprobante | — | `findById` |
+| ventas | RepositorioNotaCredito (nueva) | `save` (23) | — |
+| ventas | RepositorioSerieComprobante (nueva) | `findBySede` (63), `save` (63) | — |
+| ventas | RepositorioSolicitudAnulacion (nueva) | `save` (22), `findPendientes` (23), `findById` (23) | — |
+| ventas | RepositorioVenta | `findAbiertasPorSede` (18) | `findById`, `save` |
+| ventas | NotaCredito | `NotaCredito` (23) | `registrarRespuestaSunat` |
+| ventas | SerieComprobante | `SerieComprobante` (63) | — |
+| ventas | SolicitudAnulacion (nueva) | `SolicitudAnulacion` (22), `aprobar` (23), `rechazar` (23) | — |
+| ventas | Venta | `anular` (23), `agregarProducto` (26) | `Venta`, `registrarPago`, `generarComprobante`, `cerrar`, `agregarServicio`, `aplicarPromocion`, `aplicarAdelanto`, `aplicarSaldoFavor` |
+
+Entidades del diagrama sin métodos dibujados (solo atributos): RecomendacionProducto, PaqueteServicio y PromocionServicio (los crean Atencion.recomendarProducto, Paquete.incluirServicio y Promocion.aplicarAServicio), ConciliacionItem (lo crea Conciliacion.generarItems), InventarioSede y MovimientoKardex (los crea Producto), CajaArqueo, VentaDetalle, VentaPago, Comprobante, SaldoFavorMov, ServicioInsumo, VarianteServicio, RolPermiso, PersonalArea, Permiso, Persona, Personal y Sede. El constructor de la DEVOLUCION de TransaccionPasarela (CUS24) es una sobrecarga nueva de 8 parámetros: la tabla lo cuenta como existente porque ya había un constructor con ese nombre. Métodos y consultas que no están en el diagrama: DF-69, DF-73, DF-74 y DF-77.
+

@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -23,6 +24,9 @@ import lombok.AccessLevel;
 import lombok.Getter;
 
 import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
+import org.springframework.http.HttpStatus;
 
 @Entity
 @Table(name = "VENTA")
@@ -44,12 +48,16 @@ public class Venta {
 	@Column(name = "id_cliente")
 	private Long idCliente;
 
+	/** TRG_VENTA_REGLAS pone el usuario de PKG_SESION y la fecha de Oracle al insertar. */
+	@Generated(event = EventType.INSERT, writable = true)
 	@Column(name = "id_usuario", nullable = false)
 	private Long idUsuario;
 
-	@Column(name = "id_usuario_autoriza")
+	/** Obsoleta desde v5.1 (CK_VENTA_AUTORIZA_OBSOLETA, -20100): solo se lee y no se usa; la venta tardía reabre la caja (RN30). */
+	@Column(name = "id_usuario_autoriza", insertable = false, updatable = false)
 	private Long idUsuarioAutoriza;
 
+	@Generated(event = EventType.INSERT, writable = true)
 	@Column(name = "fecha_hora", updatable = false, nullable = false)
 	private LocalDateTime fechaHora;
 
@@ -111,6 +119,22 @@ public class Venta {
 		recalcularTotales();
 	}
 
+	/**
+	 * RF36, RF38: línea de producto; TRG_VENTA_DETALLE_REGLAS pone el precio del catálogo y rechaza un insumo o la falta de
+	 * stock (RN13, RN15). idPersonal es la especialista que lo recomendó; los productos no comisionan (RN38).
+	 */
+	public void agregarProducto(Long idProducto, Integer cantidad, BigDecimal precioUnitario, Long idPersonal) {
+		exigirAbierta();
+		if (cantidad == null || cantidad <= 0) {
+			throw new ReglaNegocioException("RF36", "La cantidad de un producto es mayor que 0.");
+		}
+		if (precioUnitario == null || precioUnitario.signum() < 0) {
+			throw new ReglaNegocioException("RN14", "El precio del producto es mayor o igual a 0.");
+		}
+		detalles.add(VentaDetalle.producto(this, idProducto, cantidad, precioUnitario, idPersonal));
+		recalcularTotales();
+	}
+
 	/** El descuento de cada línea lo calcula TRG_VENTA_DETALLE_REGLAS según la promoción (RN25). */
 	public void aplicarPromocion(Long idPromocion) {
 		exigirAbierta();
@@ -166,6 +190,50 @@ public class Venta {
 			throw new ReglaNegocioException("RN11", "Los pagos suman S/ " + pagado + " y el total es S/ " + total + ".");
 		}
 		this.estado = EstadoVenta.CERRADA;
+	}
+
+	/**
+	 * RF32, RF34, RN12, RN33: la venta CERRADA pasa a ANULADA con su nota de crédito, o sin ella si SUNAT había rechazado el
+	 * comprobante (lo repite PKG_VENTA.validar_anulacion, -20058). Los efectos los hace Oracle (TRG_VENTA_EFECTOS →
+	 * PKG_VENTA.al_anular): devuelve la atención, anula el paquete, abona el saldo y reingresa los productos.
+	 * idUsuarioAutoriza es la Administradora que aprobó la solicitud; no se guarda en VENTA (columna obsoleta, v5.1).
+	 */
+	public void anular(Long idUsuarioAutoriza) {
+		if (estado != EstadoVenta.CERRADA) {
+			throw new ReglaNegocioException("RN12", "Solo se anula una venta CERRADA; esta está " + estado + ".");
+		}
+		if (idUsuarioAutoriza == null) {
+			throw new ReglaNegocioException("RN32", "La anulación la autoriza la Administradora.");
+		}
+		boolean conNota = comprobantes.stream().anyMatch(NotaCredito.class::isInstance);
+		boolean rechazadoPorSunat = comprobanteDeVenta().map(comprobante -> comprobante.getEstadoSunat() == EstadoSunat.RECHAZADO)
+			.orElse(false);
+		if (!conNota && !rechazadoPorSunat) {
+			throw new ReglaNegocioException("RN12", "Emita la nota de crédito antes de anular la venta.");
+		}
+		this.estado = EstadoVenta.ANULADA;
+	}
+
+	/** RN12: una sola nota por venta, de la misma clase que su comprobante (NC_BOLETA anula BOLETA, UQ_COMPROBANTE_VENTA_CLASE). */
+	void agregarNotaCredito(NotaCredito oNotaCredito) {
+		if (estado != EstadoVenta.CERRADA) {
+			throw new ReglaNegocioException("RN12", "Solo se emite la nota de crédito de una venta CERRADA; esta está " + estado + ".");
+		}
+		Comprobante comprobante = comprobanteDeVenta()
+			.orElseThrow(() -> new ReglaNegocioException("RN12", "La venta no tiene boleta ni factura que anular."));
+		if (!oNotaCredito.getTipo().name().equals("NC_" + comprobante.getTipo().name())) {
+			throw new ReglaNegocioException("RN12", "La " + comprobante.getTipo() + " se anula con una NC_" + comprobante.getTipo() + ".");
+		}
+		if (comprobantes.stream().anyMatch(NotaCredito.class::isInstance)) {
+			throw new ReglaNegocioException("RN12", "La venta ya tiene su nota de crédito.", HttpStatus.CONFLICT);
+		}
+		comprobantes.add(oNotaCredito);
+	}
+
+	private Optional<Comprobante> comprobanteDeVenta() {
+		return comprobantes.stream()
+			.filter(comprobante -> comprobante.getTipo() == TipoComprobante.BOLETA || comprobante.getTipo() == TipoComprobante.FACTURA)
+			.findFirst();
 	}
 
 	private boolean tieneComprobante() {

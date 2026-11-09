@@ -18,6 +18,8 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import lombok.Getter;
 
 import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
 
 @Entity
 @Table(name = "TRANSACCION_PASARELA")
@@ -78,9 +80,12 @@ public class TransaccionPasarela {
 	@Column(name = "mensaje_respuesta", length = 200)
 	private String mensajeRespuesta;
 
+	/** TRG_TRANS_PAS_REGLAS pone el usuario de PKG_SESION y la fecha de Oracle al insertar. */
+	@Generated(event = EventType.INSERT, writable = true)
 	@Column(name = "id_usuario", nullable = false)
 	private Long idUsuario;
 
+	@Generated(event = EventType.INSERT, writable = true)
 	@Column(name = "fecha_hora", updatable = false, nullable = false)
 	private LocalDateTime fechaHora;
 
@@ -98,6 +103,34 @@ public class TransaccionPasarela {
 		this.canal = canal;
 		this.monto = monto;
 		this.idCita = idCita;
+		this.idUsuario = idUsuario;
+		this.estado = EstadoTransaccion.PENDIENTE;
+		this.fechaHora = LocalDateTime.now();
+	}
+
+	/**
+	 * RF106, RN44: devolución de un cobro APROBADO por el mismo medio (CUS24). Con tarjeta va por la API de la pasarela;
+	 * Yape y Plin los devuelve la Administradora desde la app y se registran con canal QR y su número de operación
+	 * (aprobar). TRG_TRANS_PAS_REGLAS exige la Administradora y que las devoluciones no superen el cobro (-20077).
+	 */
+	public TransaccionPasarela(Long idSede, Long idMedioPago, TipoOperacion tipoOperacion, CanalTransaccionPasarela canal, BigDecimal monto,
+			Long idTransaccionOrigen, Long idNotaCredito, Long idUsuario) {
+		if (tipoOperacion != TipoOperacion.DEVOLUCION || idTransaccionOrigen == null) {
+			throw new ReglaNegocioException("RN44", "Una devolución se registra contra el cobro que devuelve.");
+		}
+		if (canal == CanalTransaccionPasarela.LINK) {
+			throw new ReglaNegocioException("RN44", "El enlace de pago solo sirve para cobrar (CK_TRANS_PAS_LINK).");
+		}
+		if (monto == null || monto.signum() <= 0) {
+			throw new ReglaNegocioException("RN44", "El monto de la devolución es mayor que 0.");
+		}
+		this.idSede = idSede;
+		this.idMedioPago = idMedioPago;
+		this.tipoOperacion = tipoOperacion;
+		this.canal = canal;
+		this.monto = monto;
+		this.idTransaccionOrigen = idTransaccionOrigen;
+		this.idNotaCredito = idNotaCredito;
 		this.idUsuario = idUsuario;
 		this.estado = EstadoTransaccion.PENDIENTE;
 		this.fechaHora = LocalDateTime.now();

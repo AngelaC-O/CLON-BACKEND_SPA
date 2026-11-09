@@ -2,6 +2,7 @@ package dev.com.Synapsis_Spa_Cautiva.agenda.repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import dev.com.Synapsis_Spa_Cautiva.agenda.domain.Atencion;
 
@@ -10,6 +11,17 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface RepositorioAtencion extends JpaRepository<Atencion, Long> {
+
+	/** Historial de servicios de la ficha de la clienta (CUS03, RF02), del más reciente al más antiguo. */
+	@Query("select a from Atencion a where a.idCliente = :idCliente order by a.horaInicio desc")
+	List<Atencion> findByCliente(@Param("idCliente") Long idCliente);
+
+	/** Retoma la atención EN_CURSO de una cita desde otro equipo (CUS11, RF13). */
+	@Query("""
+			select a from Atencion a
+			where a.idCita = :idCita and a.estado = dev.com.Synapsis_Spa_Cautiva.agenda.domain.EstadoAtencion.EN_CURSO
+			""")
+	Optional<Atencion> findEnCursoPorCita(@Param("idCita") Long idCita);
 
 	/**
 	 * Parte ATENCION de findOcupacion (RN34): la sede solo se conoce por el recurso, y un SELECT sobre la vista

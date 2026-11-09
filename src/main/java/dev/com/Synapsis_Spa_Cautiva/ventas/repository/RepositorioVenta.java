@@ -11,6 +11,14 @@ import org.springframework.data.repository.query.Param;
 
 public interface RepositorioVenta extends JpaRepository<Venta, Long> {
 
+	/** Ventas ABIERTAS de la sede, para retomar un cobro pendiente (CUS18, RN52). */
+	@Query("""
+			select v from Venta v
+			where v.idSede = :idSede and v.estado = dev.com.Synapsis_Spa_Cautiva.ventas.domain.EstadoVenta.ABIERTA
+			order by v.fechaHora
+			""")
+	List<Venta> findAbiertasPorSede(@Param("idSede") Long idSede);
+
 	@Query(nativeQuery = true, value = """
 			SELECT id_medio_pago AS "idMedioPago", medio_pago AS "medioPago", esperado AS "esperado"
 			FROM V_CAJA_ESPERADO

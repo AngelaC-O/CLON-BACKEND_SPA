@@ -18,6 +18,9 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
+
 @Entity
 @Table(name = "SALDO_FAVOR_MOV")
 @Getter
@@ -46,6 +49,8 @@ public class SaldoFavorMov {
 	@Column(name = "monto", nullable = false, precision = 10, scale = 2)
 	private BigDecimal monto;
 
+	/** TRG_SALDO_FAVOR_REGLAS la fija con SYSTIMESTAMP. */
+	@Generated(event = EventType.INSERT, writable = true)
 	@Column(name = "fecha", nullable = false)
 	private LocalDateTime fecha;
 
@@ -62,6 +67,16 @@ public class SaldoFavorMov {
 		this.tipo = TipoSaldoFavorMov.USO;
 		this.monto = monto;
 		this.fecha = LocalDateTime.now();
+	}
+
+	/** Abono del adelanto de una cita cancelada (RN05). El abono por venta anulada lo hace Oracle (PKG_VENTA.al_anular). */
+	SaldoFavorMov(Cliente cliente, BigDecimal monto, Long idCita, String motivo) {
+		this.cliente = cliente;
+		this.idCita = idCita;
+		this.tipo = TipoSaldoFavorMov.ABONO;
+		this.monto = monto;
+		this.fecha = LocalDateTime.now();
+		this.motivo = motivo;
 	}
 
 	public Long getIdCliente() {
