@@ -749,3 +749,92 @@
       ejemplo: { idPromocion: 7, nombre: "Noviembre feliz", tipoDescuento: PORCENTAJE, valor: 10.00, fechaInicio: "2026-11-01", fechaFin: "2026-11-30", estado: ACTIVA, idsServicio: [ 1, 2 ] }
     "400": { descripcion: Faltan el nombre o el tipo de descuento, regla: VALIDACION }
     "422": { descripcion: "El descuento es mayor que 0 (hasta 100 si es porcentaje) y la vigencia termina el mismo día o después", regla: RF84 }
+
+"GET /api/v1/ventas/productos":
+  resumen: Buscar productos para vender
+  cus: CUS25
+  respuestas:
+    "200":
+      descripcion: Productos de venta activos con su precio y su stock en la sede de la sesión (los insumos no aparecen)
+      ejemplo: [ { idProducto: 40, codigo: "PRD-001", nombre: "Shampoo reparador", marca: "Loreal", idCategoria: 2, unidad: UND, precioVenta: 45.00, stockActual: 8 } ]
+
+"POST /api/v1/ventas/productos":
+  resumen: Vender productos
+  cus: CUS26
+  solicitud: { idCliente: 407, lineas: [ { idProducto: 40, cantidad: 2, idPersonal: 4 } ], idMedioPago: 1, monto: 90.00, tipo: BOLETA }
+  respuestas:
+    "201":
+      descripcion: "Venta CERRADA con su boleta o factura; Oracle registra la salida de kardex al cerrar (TRG_VENTA_EFECTOS)"
+      ejemplo: { idVenta: 620, idSede: 1, idCaja: 12, idCliente: 407, estado: CERRADA, detalles: [ { idDetalle: 900, tipoItem: PRODUCTO, cantidad: 2, precioUnitario: 45.00, descuento: 0.00, subtotal: 90.00, idPersonal: 4, idProducto: 40 } ], subtotal: 90.00, igv: 0.00, descuento: 0.00, adelantoAplicado: 0.00, saldoFavorAplicado: 0.00, total: 90.00, pagos: [ { idMedioPago: 1, monto: 90.00 } ], pagado: 90.00, pendiente: 0.00, cobrosPendientes: [ ], comprobante: { idComprobante: 700, tipo: BOLETA, serie: B001, numero: "00000125", estadoSunat: PENDIENTE } }
+    "202":
+      descripcion: "El cobro digital quedó PENDIENTE: la venta queda ABIERTA y se cierra con POST /ventas/{idVenta}/cierre cuando la pasarela lo aprueba (RN52)"
+      ejemplo: { idVenta: 621, idSede: 1, idCaja: 12, estado: ABIERTA, total: 45.00, pagos: [ ], pagado: 0.00, pendiente: 45.00, cobrosPendientes: [ { idTransaccion: 77, enlacePago: "https://pasarela.example/qr/77" } ] }
+    "400": { descripcion: Faltan las líneas, el medio de pago, el monto o el tipo de comprobante, regla: VALIDACION }
+    "409": { descripcion: No hay stock suficiente en la sede, regla: RN15 }
+    "422": { descripcion: "Sin caja abierta (RN30), el monto no es el total (RN11), un insumo no se vende (RN13) o la pasarela rechazó el cobro (RF103)", regla: RN11 }
+
+"POST /api/v1/ventas/{idVenta}/solicitudes-anulacion":
+  resumen: Solicitar la anulación de una venta
+  cus: CUS22
+  solicitud: { motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: SALDO_FAVOR }
+  respuestas:
+    "201":
+      descripcion: Solicitud PENDIENTE en la bandeja de la Administradora; la venta no cambia
+      ejemplo: { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: SALDO_FAVOR, estado: PENDIENTE, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125" }
+    "404": { descripcion: La venta no existe, regla: RF32 }
+    "409": { descripcion: La venta ya tiene una solicitud de anulación PENDIENTE, regla: UQ_SOL_ANUL_PENDIENTE }
+    "422": { descripcion: "La venta no está CERRADA (RN12), falta el motivo o el código no es 01, 02 o 06 (RN32), o un cliente de paso eligió saldo a favor (RN44)", regla: RN12 }
+
+"GET /api/v1/solicitudes-anulacion":
+  resumen: Bandeja de solicitudes de anulación
+  cus: CUS23
+  respuestas:
+    "200":
+      descripcion: "Solicitudes de la sede con su venta, total, motivo, quién la pidió y cuándo; sin estado, las PENDIENTES"
+      ejemplo: [ { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: SALDO_FAVOR, estado: PENDIENTE, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125" } ]
+
+"POST /api/v1/solicitudes-anulacion/{idSolicitud}/aprobacion":
+  resumen: Aprobar una solicitud de anulación
+  cus: CUS23
+  respuestas:
+    "200":
+      descripcion: "En una transacción: nota de crédito enviada a SUNAT (PENDIENTE si no responde), venta ANULADA (Oracle devuelve la atención, anula el paquete, abona el saldo y reingresa los productos) y solicitud APROBADA"
+      ejemplo: { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: SALDO_FAVOR, estado: APROBADA, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idUsuarioResuelve: 1, fechaResolucion: "2026-11-09T11:30:00", idNotaCredito: 701, idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125" }
+    "404": { descripcion: La solicitud no existe, regla: RN32 }
+    "409": { descripcion: "La solicitud ya está resuelta (RN32) o SUNAT aún no acepta el comprobante (RN46)", regla: RN32 }
+
+"POST /api/v1/solicitudes-anulacion/{idSolicitud}/rechazo":
+  resumen: Rechazar una solicitud de anulación
+  cus: CUS23
+  solicitud: { motivoRechazo: "La venta es correcta" }
+  respuestas:
+    "200":
+      descripcion: Solicitud RECHAZADA con su motivo; la venta sigue CERRADA
+      ejemplo: { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: MEDIO_ORIGINAL, estado: RECHAZADA, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idUsuarioResuelve: 1, fechaResolucion: "2026-11-09T11:30:00", motivoRechazo: "La venta es correcta", idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125" }
+    "404": { descripcion: La solicitud no existe, regla: RN32 }
+    "409": { descripcion: La solicitud ya está resuelta, regla: RN32 }
+    "422": { descripcion: Falta el motivo del rechazo, regla: RN32 }
+
+"POST /api/v1/ventas/{idVenta}/devolucion":
+  resumen: Devolver los pagos con tarjeta por la pasarela
+  cus: CUS24
+  solicitud: { formaDevolucion: MEDIO_ORIGINAL }
+  respuestas:
+    "200":
+      descripcion: "Una DEVOLUCION por cada pago con tarjeta de la venta ANULADA con nota MEDIO_ORIGINAL; no escribe saldo a favor"
+      ejemplo: { idVenta: 620, formaDevolucion: MEDIO_ORIGINAL, idNotaCredito: 701, devoluciones: [ { idTransaccion: 80, estado: APROBADA, codigoOperacion: "REEMB-80", canal: POS } ] }
+    "404": { descripcion: La venta no existe, regla: RF32 }
+    "409": { descripcion: El cobro ya tiene su devolución, regla: RN44 }
+    "422": { descripcion: "La venta no está ANULADA con nota MEDIO_ORIGINAL, no tiene pagos con tarjeta o la pasarela rechazó la devolución", regla: RN44 }
+
+"POST /api/v1/ventas/{idVenta}/devolucion-manual":
+  resumen: Registrar la devolución manual de Yape o Plin
+  cus: CUS24
+  solicitud: { idTransaccion: 81, codigoOperacion: "YAPE-123456" }
+  respuestas:
+    "201":
+      descripcion: "DEVOLUCION APROBADA, con canal QR y el número de operación de la app de la Administradora"
+      ejemplo: { idVenta: 620, formaDevolucion: MEDIO_ORIGINAL, idTransaccion: 81, codigoOperacion: "YAPE-123456", idNotaCredito: 701, devoluciones: [ { idTransaccion: 82, estado: APROBADA, codigoOperacion: "YAPE-123456", canal: QR } ] }
+    "404": { descripcion: La venta o la transacción no existen, regla: RN44 }
+    "409": { descripcion: El cobro ya tiene su devolución, regla: RN44 }
+    "422": { descripcion: "La venta no está ANULADA con nota MEDIO_ORIGINAL, el cobro no es de la venta o no se pagó por QR, o falta el número de operación", regla: RN44 }

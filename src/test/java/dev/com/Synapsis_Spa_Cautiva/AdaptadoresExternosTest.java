@@ -39,6 +39,7 @@ import dev.com.Synapsis_Spa_Cautiva.pagos.service.AdaptadorIzipay;
 import dev.com.Synapsis_Spa_Cautiva.pagos.service.NotificacionPasarela;
 import dev.com.Synapsis_Spa_Cautiva.pagos.service.RespuestaPasarela;
 import dev.com.Synapsis_Spa_Cautiva.pagos.service.SolicitudCobro;
+import dev.com.Synapsis_Spa_Cautiva.pagos.service.SolicitudDevolucion;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.service.AdaptadorApisPeruConsulta;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.service.DatosPersona;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.EstadoSunat;
@@ -213,10 +214,67 @@ class AdaptadoresExternosTest {
 		assertThat(facturacion.emitir(boleta()).estadoSunat()).isEqualTo(EstadoSunat.PENDIENTE);
 	}
 
+	// ------------------------------------------------------------------ [It. 2 · CUS23] nota de crédito
+
+	private DocumentoElectronico notaCredito() {
+		return new DocumentoElectronico("NC_BOLETA", "BC01", "00000004", LocalDate.of(2026, 11, 9), null, null, null, new BigDecimal("35.00"), BigDecimal.ZERO,
+				List.of(new DocumentoElectronico.Linea("Corte", 1, new BigDecimal("35.00"))),
+				new DocumentoElectronico.NotaAfectada("BOLETA", "B001", "00000123", "06", "Devolución total"));
+	}
+
+	@Test
+	void laNotaDeCreditoVaANoteSendConElComprobanteQueAnulaYSuMotivo() throws Exception {
+		SERVIDOR.stubFor(post(urlPathEqualTo("/note/send")).willReturn(okJson(respuestaSunat("0", "[]"))));
+
+		RespuestaCpe respuesta = facturacion.emitir(notaCredito());
+
+		assertThat(respuesta.estadoSunat()).isEqualTo(EstadoSunat.ACEPTADO);
+		assertThat(respuesta.hashCpe()).isEqualTo("HASH1");
+		SERVIDOR.verify(postRequestedFor(urlPathEqualTo("/note/send")).withHeader("Authorization", equalTo("Bearer token-facturacion"))
+			.withRequestBody(matchingJsonPath("$.tipoDoc", equalTo("07")))
+			.withRequestBody(matchingJsonPath("$.serie", equalTo("BC01")))
+			.withRequestBody(matchingJsonPath("$.correlativo", equalTo("00000004")))
+			.withRequestBody(matchingJsonPath("$.tipDocAfectado", equalTo("03")))
+			.withRequestBody(matchingJsonPath("$.numDocfectado", equalTo("B001-00000123")))
+			.withRequestBody(matchingJsonPath("$.codMotivo", equalTo("06")))
+			.withRequestBody(matchingJsonPath("$.desMotivo", equalTo("Devolución total")))
+			.withRequestBody(matchingJsonPath("$.client.tipoDoc", equalTo("0")))
+			.withRequestBody(matchingJsonPath("$.mtoImpVenta", equalToJson("35.00"))));
+		SERVIDOR.verify(0, postRequestedFor(urlPathEqualTo("/invoice/send")));
+	}
+
+	@Test
+	void laNotaDeCreditoQuedaPendienteSiElProveedorNoResponde() {
+		SERVIDOR.stubFor(post(urlPathEqualTo("/note/send")).willReturn(serverError()));
+		assertThat(facturacion.emitir(notaCredito()).estadoSunat()).isEqualTo(EstadoSunat.PENDIENTE);
+
+		SERVIDOR.stubFor(post(urlPathEqualTo("/note/send")).willReturn(okJson("{}").withFixedDelay(DEMORA_MS)));
+		assertThat(facturacion.emitir(notaCredito()).estadoSunat()).isEqualTo(EstadoSunat.PENDIENTE);
+	}
+
 	// ------------------------------------------------------------------ Izipay
 
 	private SolicitudCobro solicitud() {
 		return new SolicitudCobro(null, 7L, 4L, new BigDecimal("50.00"), "LINK", LocalDateTime.of(2026, 11, 4, 10, 0));
+	}
+
+	@Test
+	void elReembolsoDeTarjetaSeApruebaConElUuidDeIzipayYSinRespuestaQuedaPendiente() {
+		String ruta = "/api-payment/V4/Transaction/CancelOrRefund";
+		SERVIDOR.stubFor(post(urlPathEqualTo(ruta)).willReturn(okJson("{\"status\":\"SUCCESS\",\"answer\":{\"uuid\":\"REEMB-1\"}}")));
+
+		RespuestaPasarela aprobada = izipay.devolver(new SolicitudDevolucion("CS-ORDEN-1", 4L, new BigDecimal("50.00")));
+
+		assertThat(aprobada.estado()).isEqualTo("APROBADA");
+		assertThat(aprobada.codigoOperacion()).isEqualTo("REEMB-1");
+		SERVIDOR.verify(postRequestedFor(urlPathEqualTo(ruta)).withRequestBody(matchingJsonPath("$.uuid", equalTo("CS-ORDEN-1")))
+			.withRequestBody(matchingJsonPath("$.amount", equalToJson("5000"))));
+
+		SERVIDOR.stubFor(post(urlPathEqualTo(ruta)).willReturn(okJson("{\"status\":\"ERROR\",\"answer\":{\"errorMessage\":\"Ya reembolsada\"}}")));
+		assertThat(izipay.devolver(new SolicitudDevolucion("CS-ORDEN-1", 4L, new BigDecimal("50.00"))).estado()).isEqualTo("RECHAZADA");
+
+		SERVIDOR.stubFor(post(urlPathEqualTo(ruta)).willReturn(serverError()));
+		assertThat(izipay.devolver(new SolicitudDevolucion("CS-ORDEN-1", 4L, new BigDecimal("50.00"))).estado()).isEqualTo("PENDIENTE");
 	}
 
 	@Test
