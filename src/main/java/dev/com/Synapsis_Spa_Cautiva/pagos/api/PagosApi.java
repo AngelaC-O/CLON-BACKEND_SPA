@@ -24,6 +24,19 @@ public interface PagosApi {
 	/** El adelanto no se registra aquí: lo hace agenda cuando llega AdelantoAprobado (RN04). */
 	EnlacePagoDTO generarEnlace(Long idCita, BigDecimal adelantoMonto, Long idMedioPago, Long idSede);
 
+	/**
+	 * [It. 2 · CUS24, RF106, RN44] Devuelve por la pasarela el cobro APROBADO idTransaccion: otra TRANSACCION_PASARELA DEVOLUCION por el mismo
+	 * monto, con id_transaccion_origen e id_nota_credito. Solo para lo que no se cobró por QR (422). Se guarda en su propia transacción de base,
+	 * como el cobro: lo que la pasarela devolvió queda aunque la venta haga rollback; una RECHAZADA se guarda y responde 422.
+	 */
+	TransaccionDTO devolver(Long idTransaccion, Long idNotaCredito);
+
+	/**
+	 * [It. 2 · CUS24, RF106, RN44] Yape o Plin pagados por QR: la Administradora ya devolvió desde la app y aquí queda la DEVOLUCION APROBADA, con
+	 * canal QR y el número de operación de la app.
+	 */
+	TransaccionDTO registrarDevolucionManual(Long idTransaccion, Long idNotaCredito, String codigoOperacion);
+
 	/** Cobros APROBADOS del día por idMedioPago (RF64, RN42). */
 	Map<Long, BigDecimal> aprobadosDelDia(Long idSede, LocalDateTime fecha);
 

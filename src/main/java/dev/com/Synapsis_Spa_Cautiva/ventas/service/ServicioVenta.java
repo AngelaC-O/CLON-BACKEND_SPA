@@ -3,6 +3,7 @@ package dev.com.Synapsis_Spa_Cautiva.ventas.service;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -16,6 +17,8 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.CajaAbiertaProvider;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ParametroApi;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.UsuarioActual;
+import dev.com.Synapsis_Spa_Cautiva.inventario.api.InventarioApi;
+import dev.com.Synapsis_Spa_Cautiva.inventario.api.ProductoStockDTO;
 import dev.com.Synapsis_Spa_Cautiva.pagos.api.PagosApi;
 import dev.com.Synapsis_Spa_Cautiva.pagos.api.TransaccionDTO;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.PersonaApi;
@@ -29,6 +32,7 @@ import dev.com.Synapsis_Spa_Cautiva.ventas.controller.PagosDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.PorCobrarDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.ProformaDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.VentaDTO;
+import dev.com.Synapsis_Spa_Cautiva.ventas.controller.VentaProductosDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.Comprobante;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.DocumentoComprador;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.TipoComprobante;
@@ -77,6 +81,72 @@ public class ServicioVenta {
 	private final ParametroApi parametroApi;
 
 	private final MapperVenta mapperVenta;
+
+	private final InventarioApi inventarioApi;
+
+	/** [It. 2 · CUS25, RF35] Productos de VENTA activos con su precio y su stock en la sede de la sesión; los insumos no aparecen. */
+	@Transactional(readOnly = true)
+	public List<ProductoStockDTO> buscarProductos(String nombre, String marca, Long idCategoria) {
+		return inventarioApi.buscar(nombre, marca, idCategoria, usuarioActual.idSede());
+	}
+
+	/**
+	 * [It. 2 · CUS26, RF36 a RF39] En el orden del diagrama: stock por línea (409, RN15), caja ABIERTA de la sede (RN30), la venta con sus
+	 * líneas (VENTA_DETALLE.id_personal = quien recomendó, sin comisión: RN38), el cobro (RN42), el comprobante (CUS19) y el cierre. La salida
+	 * de kardex la registra Oracle al cerrar (TRG_VENTA_EFECTOS): aquí no se repite. [RN52] Si el cobro digital queda PENDIENTE, la venta queda
+	 * ABIERTA con cobrosPendientes (el controlador responde 202) y se cierra con POST /ventas/{idVenta}/cierre cuando el webhook lo aprueba.
+	 */
+	@Transactional
+	public VentaDTO venderProductos(VentaProductosDTO oVentaProductosDTO) {
+		Long idSede = usuarioActual.idSede();
+		for (VentaProductosDTO.Linea oLinea : oVentaProductosDTO.lineas()) {
+			inventarioApi.verificarStock(oLinea.idProducto(), idSede, oLinea.cantidad());
+		}
+		Long idCaja = cajaAbiertaProvider.obtenerCajaAbierta(idSede);
+		Venta oVenta = new Venta(idSede, idCaja, oVentaProductosDTO.idCliente(), usuarioActual.idUsuario());
+		Map<Long, BigDecimal> precios = preciosDeVenta(idSede);
+		for (VentaProductosDTO.Linea oLinea : oVentaProductosDTO.lineas()) {
+			if (!precios.containsKey(oLinea.idProducto())) {
+				throw new ReglaNegocioException("RN13", "El producto " + oLinea.idProducto() + " es de uso interno o está inactivo: no se vende.");
+			}
+			oVenta.agregarProducto(oLinea.idProducto(), oLinea.cantidad(), precios.get(oLinea.idProducto()), oLinea.idPersonal());
+		}
+		// RN11 antes de cobrar: un monto distinto del total no debe llegar a la pasarela
+		if (oVentaProductosDTO.monto().compareTo(oVenta.getTotal()) != 0) {
+			throw new ReglaNegocioException("RN11", "El pago es de S/ " + oVentaProductosDTO.monto() + " y el total es S/ " + oVenta.getTotal() + ".");
+		}
+		repositorioVenta.saveAndFlush(oVenta);
+		if (pagosApi.usaPasarela(oVentaProductosDTO.idMedioPago())) {
+			TransaccionDTO oTransaccionDTO = pagosApi.cobrar(oVenta.getIdVenta(), oVentaProductosDTO.idMedioPago(), oVentaProductosDTO.monto(),
+					oVentaProductosDTO.canal());
+			if (!oTransaccionDTO.aprobada()) {
+				return mapperVenta.aDTO(oVenta, List.of(new CobroPendienteDTO(oTransaccionDTO.idTransaccion(), oTransaccionDTO.enlacePago())));
+			}
+			oVenta.registrarPago(oVentaProductosDTO.idMedioPago(), oVentaProductosDTO.monto(), oTransaccionDTO.idTransaccion());
+		}
+		else {
+			oVenta.registrarPago(oVentaProductosDTO.idMedioPago(), oVentaProductosDTO.monto(), null);
+		}
+		CierreVentaDTO oCierreVentaDTO = new CierreVentaDTO(oVentaProductosDTO.tipo(), oVentaProductosDTO.idTipoDocComprador(),
+				oVentaProductosDTO.nroDocComprador(), oVentaProductosDTO.nombreComprador());
+		validarComprador(oVenta, oCierreVentaDTO);
+		oVenta.generarComprobante(oCierreVentaDTO.tipo(), documentoComprador(oCierreVentaDTO));
+		oVenta.cerrar();
+		repositorioVenta.saveAndFlush(oVenta);
+		Comprobante oComprobante = oVenta.getComprobantes().getFirst();
+		servicioFacturacionElectronica.emitirComprobante(oComprobante.getIdComprobante());
+		return mapperVenta.aDTO(oVenta);
+	}
+
+	/**
+	 * El diagrama de CUS26 no dice de dónde sale el precio de agregarProducto: es el de PRODUCTO.precio_venta (InventarioApi.buscar, que solo
+	 * trae productos de VENTA activos). TRG_VENTA_DETALLE_REGLAS lo vuelve a poner; tomarlo aquí mantiene el total de la venta (CK_VENTA_TOTAL).
+	 */
+	private Map<Long, BigDecimal> preciosDeVenta(Long idSede) {
+		return inventarioApi.buscar(null, null, null, idSede).stream()
+			.filter(oProducto -> oProducto.precioVenta() != null)
+			.collect(Collectors.toMap(ProductoStockDTO::idProducto, ProductoStockDTO::precioVenta));
+	}
 
 	/** [It. 2] CUS18: las atenciones FINALIZADAS sin venta y las ventas ABIERTAS de la sede, para cobrarlas o retomarlas (RN52). */
 	@Transactional(readOnly = true)

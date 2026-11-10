@@ -19,6 +19,7 @@ import lombok.Getter;
 import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
+import org.springframework.http.HttpStatus;
 
 /**
  * Raíz de su propio agregado (RN32): la recepcionista pide anular una venta CERRADA (CUS22) y la Administradora la aprueba,
@@ -128,9 +129,10 @@ public class SolicitudAnulacion {
 		this.fechaResolucion = LocalDateTime.now();
 	}
 
-	private void exigirPendiente() {
+	/** [It. 2] 409, como -20102 en Oracle: una solicitud resuelta no cambia (RN32). */
+	public void exigirPendiente() {
 		if (estado != EstadoSolicitudAnulacion.PENDIENTE) {
-			throw new ReglaNegocioException("RN32", "La solicitud ya está " + estado + " y no cambia.");
+			throw new ReglaNegocioException("RN32", "La solicitud ya está " + estado + " y no cambia.", HttpStatus.CONFLICT);
 		}
 	}
 

@@ -1,13 +1,20 @@
 package dev.com.Synapsis_Spa_Cautiva.ventas.service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
+import dev.com.Synapsis_Spa_Cautiva.comun.api.AvisoDTO;
+import dev.com.Synapsis_Spa_Cautiva.comun.api.AvisoProvider;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.HistorialComprasProvider;
+import dev.com.Synapsis_Spa_Cautiva.comun.api.ParametroApi;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ProductoCompradoDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.api.ComprobantePendiente;
 import dev.com.Synapsis_Spa_Cautiva.ventas.api.TotalMedioPago;
 import dev.com.Synapsis_Spa_Cautiva.ventas.api.VentasConsultaApi;
+import dev.com.Synapsis_Spa_Cautiva.ventas.repository.RepositorioComprobante;
+import dev.com.Synapsis_Spa_Cautiva.ventas.repository.RepositorioSolicitudAnulacion;
 import dev.com.Synapsis_Spa_Cautiva.ventas.repository.RepositorioVenta;
 import lombok.RequiredArgsConstructor;
 
@@ -20,9 +27,18 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
-class ServicioVentasConsulta implements VentasConsultaApi, HistorialComprasProvider {
+class ServicioVentasConsulta implements VentasConsultaApi, HistorialComprasProvider, AvisoProvider {
+
+	/** Días antes de la fecha límite de envío a SUNAT desde los que se avisa, como ReenvioCpeJob (U2 §6). */
+	private static final long DIAS_DE_ALERTA = 1;
 
 	private final RepositorioVenta repositorioVenta;
+
+	private final RepositorioSolicitudAnulacion repositorioSolicitudAnulacion;
+
+	private final RepositorioComprobante repositorioComprobante;
+
+	private final ParametroApi parametroApi;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -39,6 +55,30 @@ class ServicioVentasConsulta implements VentasConsultaApi, HistorialComprasProvi
 			.map(fila -> new ComprobantePendiente(fila.getIdDocumento(), fila.getTipo(), fila.getSerie(), fila.getNumero(), fila.getEstadoSunat(),
 					fila.getFechaLimite().toLocalDate()))
 			.toList();
+	}
+
+	/**
+	 * [It. 2 · CUS50] Avisos de ventas, solo si hay algo: las solicitudes de anulación PENDIENTES de la sede (bandeja de CUS23, VENTAS:EDITAR) y
+	 * los comprobantes y notas PENDIENTES de envío a SUNAT a un día o menos de su fecha límite (V_CPE_PENDIENTES, CPE_PLAZO_ENVIO_DIAS, RN46),
+	 * el mismo criterio con el que ReenvioCpeJob alerta en el log.
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public List<AvisoDTO> avisos(Long idSede) {
+		List<AvisoDTO> avisos = new ArrayList<>();
+		int solicitudes = repositorioSolicitudAnulacion.findPendientes(idSede).size();
+		if (solicitudes > 0) {
+			avisos.add(new AvisoDTO("ANULACION_PENDIENTE",
+					solicitudes + (solicitudes == 1 ? " solicitud de anulación pendiente" : " solicitudes de anulación pendientes"), solicitudes, "VENTAS:EDITAR",
+					"/ventas/anulaciones"));
+		}
+		long porVencer = repositorioComprobante.contarPendientesPorVencer(idSede, LocalDate.now().plusDays(DIAS_DE_ALERTA));
+		if (porVencer > 0) {
+			int plazo = parametroApi.valorNumero("CPE_PLAZO_ENVIO_DIAS").intValue();
+			avisos.add(new AvisoDTO("CPE_POR_VENCER", porVencer + (porVencer == 1 ? " comprobante pendiente" : " comprobantes pendientes")
+					+ " de envío a SUNAT cerca del plazo de " + plazo + " días", (int) porVencer, "VENTAS:VER", "/ventas/comprobantes"));
+		}
+		return avisos;
 	}
 
 	/** [It. 2] CUS03 (RF02): los productos que compró la clienta, de las ventas CERRADAS (V_VENTA_LINEA no trae las anuladas). */

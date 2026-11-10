@@ -44,6 +44,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 	/** [It. 2] RN53: un consumo pendiente resuelto no cambia; la regularización exige su SALIDA. */
 	private static final int CONSUMO_RESUELTO = 20103;
 	private static final int CONSUMO_SIN_SALIDA = 20105;
+	/** [It. 2] RN32: una solicitud de anulación resuelta no cambia; RN46: la nota de crédito espera a que SUNAT acepte el comprobante; un paquete
+	 * con sesiones usadas no se anula. El dato es válido, pero el estado actual no lo admite. */
+	private static final int SOLICITUD_RESUELTA = 20102;
+	private static final int COMPROBANTE_SIN_ACEPTAR = 20076;
+	private static final int PAQUETE_CONSUMIDO = 20059;
 	private static final int UNICA = 1;
 	private static final int CHECK = 2290;
 	private static final int PADRE_NO_EXISTE = 2291;
@@ -65,7 +70,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 			Map.entry("CK_CAJA_ARQUEO_OBSERVACION", "Toda diferencia del arqueo lleva una observación (RN30)."),
 			Map.entry("UQ_CATEGORIA_PRODUCTO_NOMBRE", "Ya existe una categoría con ese nombre."),
 			Map.entry("CK_MOV_KARDEX_SALDO", "No hay stock suficiente: el saldo no puede quedar negativo (RN15)."),
-			Map.entry("CK_CONSUMO_PEND_DESCARTADO", "Indique el motivo del descarte (RN53)."));
+			Map.entry("CK_CONSUMO_PEND_DESCARTADO", "Indique el motivo del descarte (RN53)."),
+			Map.entry("UQ_SOL_ANUL_PENDIENTE", "La venta ya tiene una solicitud de anulación PENDIENTE (RN32)."));
 
 	/** [It. 2] CHECK que responden 409 y no 422: el dato es válido, pero el estado actual no lo admite. */
 	private static final Set<String> CHECK_CONFLICTO = Set.of("CK_MOV_KARDEX_SALDO");
@@ -118,7 +124,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 		}
 		HttpStatus estado = switch (codigo) {
 			case SOLO_ADMINISTRADORA, SOLO_ALMACEN, SOLO_ALMACEN_CONSUMO -> HttpStatus.FORBIDDEN;
-			case CRUCE_CITA, CRUCE_ATENCION, STOCK_INSUFICIENTE, STOCK_INSUFICIENTE_VENTA, CONSUMO_RESUELTO, CONSUMO_SIN_SALIDA -> HttpStatus.CONFLICT;
+			case CRUCE_CITA, CRUCE_ATENCION, STOCK_INSUFICIENTE, STOCK_INSUFICIENTE_VENTA, CONSUMO_RESUELTO, CONSUMO_SIN_SALIDA, SOLICITUD_RESUELTA,
+					COMPROBANTE_SIN_ACEPTAR, PAQUETE_CONSUMIDO -> HttpStatus.CONFLICT;
 			default -> HttpStatus.UNPROCESSABLE_CONTENT;
 		};
 		String detalle = extraer(MENSAJE_APLICACION, mensaje);

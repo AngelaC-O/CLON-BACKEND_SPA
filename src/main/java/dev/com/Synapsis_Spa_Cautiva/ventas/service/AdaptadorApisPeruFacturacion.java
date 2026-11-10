@@ -36,6 +36,10 @@ public class AdaptadorApisPeruFacturacion implements FacturacionElectronicaPort 
 
 	private static final String RUTA_ENVIO = "/invoice/send";
 
+	private static final String RUTA_NOTA = "/note/send";
+
+	private static final String CODIGO_NOTA_CREDITO = "07";
+
 	private static final String BOLETA = "BOLETA";
 
 	private static final String CODIGO_BOLETA = "03";
@@ -87,13 +91,15 @@ public class AdaptadorApisPeruFacturacion implements FacturacionElectronicaPort 
 		this.empresa = new Empresa(ruc, razonSocial, new Direccion(ubigeo, departamento, provincia, distrito, direccion));
 	}
 
+	/** [It. 2 · CUS23] Una nota de crédito va a /note/send con el comprobante que anula; boletas y facturas, a /invoice/send. */
 	@Override
 	public RespuestaCpe emitir(DocumentoElectronico oDocumentoElectronico) {
+		boolean esNota = oDocumentoElectronico.notaCredito() != null;
 		try {
 			RespuestaEnvio respuesta = restClient.post()
-				.uri(RUTA_ENVIO)
+				.uri(esNota ? RUTA_NOTA : RUTA_ENVIO)
 				.contentType(MediaType.APPLICATION_JSON)
-				.body(aFactura(oDocumentoElectronico))
+				.body(esNota ? aNota(oDocumentoElectronico) : aFactura(oDocumentoElectronico))
 				.retrieve()
 				.body(RespuestaEnvio.class);
 			return traducir(respuesta);
@@ -161,6 +167,21 @@ public class AdaptadorApisPeruFacturacion implements FacturacionElectronicaPort 
 				List.of(new Leyenda("1000", "SON " + oDocumento.importe().setScale(2, RoundingMode.HALF_UP) + " SOLES")));
 	}
 
+	/** [It. 2 · CUS23] Nota de crédito (tipo 07) con los mismos montos y líneas que el comprobante que anula, su tipo, serie-número y motivo. */
+	private Nota aNota(DocumentoElectronico oDocumento) {
+		BigDecimal porcentaje = oDocumento.igvPorcentaje();
+		boolean exonerada = porcentaje.signum() == 0;
+		List<Detalle> detalles = oDocumento.lineas().stream().map(linea -> aDetalle(linea, porcentaje, exonerada)).toList();
+		BigDecimal valorVenta = detalles.stream().map(Detalle::mtoValorVenta).reduce(BigDecimal.ZERO, BigDecimal::add);
+		BigDecimal igv = detalles.stream().map(Detalle::igv).reduce(BigDecimal.ZERO, BigDecimal::add);
+		DocumentoElectronico.NotaAfectada afectada = oDocumento.notaCredito();
+		return new Nota("2.1", CODIGO_NOTA_CREDITO, oDocumento.serie(), oDocumento.numero(), oDocumento.fechaEmision() + "T00:00:00-05:00",
+				BOLETA.equals(afectada.tipoAfectado()) ? CODIGO_BOLETA : CODIGO_FACTURA, afectada.serieAfectada() + "-" + afectada.numeroAfectado(),
+				afectada.codigoMotivo(), afectada.motivo(), "PEN", aCliente(oDocumento), empresa, exonerada ? null : valorVenta, exonerada ? valorVenta : null,
+				igv, igv, oDocumento.importe(), detalles,
+				List.of(new Leyenda("1000", "SON " + oDocumento.importe().setScale(2, RoundingMode.HALF_UP) + " SOLES")));
+	}
+
 	private static Cliente aCliente(DocumentoElectronico oDocumento) {
 		if (oDocumento.nroDocComprador() == null) {
 			return new Cliente(DOC_SIN_IDENTIFICAR, NUM_SIN_IDENTIFICAR, oDocumento.nombreComprador() == null ? NOMBRE_SIN_IDENTIFICAR : oDocumento.nombreComprador());
@@ -189,6 +210,12 @@ public class AdaptadorApisPeruFacturacion implements FacturacionElectronicaPort 
 	private record Factura(String ublVersion, String tipoOperacion, String tipoDoc, String serie, String correlativo, String fechaEmision, FormaPago formaPago,
 			String tipoMoneda, Cliente client, Empresa company, BigDecimal mtoOperGravadas, BigDecimal mtoOperExoneradas, BigDecimal mtoIGV, BigDecimal totalImpuestos,
 			BigDecimal valorVenta, BigDecimal subTotal, BigDecimal mtoImpVenta, List<Detalle> details, List<Leyenda> legends) {
+	}
+
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	private record Nota(String ublVersion, String tipoDoc, String serie, String correlativo, String fechaEmision, String tipDocAfectado, String numDocfectado,
+			String codMotivo, String desMotivo, String tipoMoneda, Cliente client, Empresa company, BigDecimal mtoOperGravadas, BigDecimal mtoOperExoneradas,
+			BigDecimal mtoIGV, BigDecimal totalImpuestos, BigDecimal mtoImpVenta, List<Detalle> details, List<Leyenda> legends) {
 	}
 
 	private record FormaPago(String moneda, String tipo) {

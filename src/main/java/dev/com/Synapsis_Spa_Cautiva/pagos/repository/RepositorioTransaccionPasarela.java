@@ -1,5 +1,6 @@
 package dev.com.Synapsis_Spa_Cautiva.pagos.repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +29,16 @@ public interface RepositorioTransaccionPasarela extends JpaRepository<Transaccio
 			group by t.idMedioPago
 			""")
 	List<FilaAprobadoDelDia> sumarAprobadosDelDia(@Param("idSede") Long idSede, @Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
+
+	/** [It. 2 · CUS24, RN44] Lo ya devuelto (o en curso) de un cobro, como lo cuenta TRG_TRANS_PAS_REGLAS (-20077). */
+	@Query("""
+			select coalesce(sum(t.monto), 0) from TransaccionPasarela t
+			where t.idTransaccionOrigen = :idTransaccionOrigen
+			and t.tipoOperacion = dev.com.Synapsis_Spa_Cautiva.pagos.domain.TipoOperacion.DEVOLUCION
+			and t.estado in (dev.com.Synapsis_Spa_Cautiva.pagos.domain.EstadoTransaccion.PENDIENTE,
+				dev.com.Synapsis_Spa_Cautiva.pagos.domain.EstadoTransaccion.APROBADA)
+			""")
+	BigDecimal sumarDevuelto(@Param("idTransaccionOrigen") Long idTransaccionOrigen);
 
 	/** Resumen del mes de la pasarela para conciliar (CUS47, RF105, RN31). Lee V_PASARELA_LIQUIDACION. */
 	@Query(nativeQuery = true, value = """
