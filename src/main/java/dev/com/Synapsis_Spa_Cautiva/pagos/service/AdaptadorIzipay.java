@@ -48,6 +48,8 @@ public class AdaptadorIzipay implements PasarelaPagosPort {
 
 	private static final String RUTA_ORDEN = "/api-payment/V4/Charge/CreatePaymentOrder";
 
+	private static final String RUTA_REEMBOLSO = "/api-payment/V4/Transaction/CancelOrRefund";
+
 	private static final String MONEDA = "PEN";
 
 	private static final String APROBADA = "APROBADA";
@@ -121,6 +123,32 @@ public class AdaptadorIzipay implements PasarelaPagosPort {
 		}
 	}
 
+	/**
+	 * [It. 2 · CUS24, RN44] Reembolso total con Transaction/CancelOrRefund: cancela si aún no se liquidó y reembolsa si ya. La API de reembolsos
+	 * de Izipay solo funciona en producción (no hay sandbox), así que en dev y en las pruebas se usa el adaptador falso. Si no responde, queda
+	 * PENDIENTE: no se sabe si se devolvió.
+	 */
+	@Override
+	public RespuestaPasarela devolver(SolicitudDevolucion oSolicitudDevolucion) {
+		try {
+			RespuestaReembolso respuesta = restClient.post()
+				.uri(RUTA_REEMBOLSO)
+				.contentType(MediaType.APPLICATION_JSON)
+				.body(new PeticionReembolso(oSolicitudDevolucion.codigoOperacionOrigen(), centavos(oSolicitudDevolucion.monto()), MONEDA))
+				.retrieve()
+				.body(RespuestaReembolso.class);
+			if (respuesta != null && RESPUESTA_CORRECTA.equals(respuesta.status()) && respuesta.answer() != null) {
+				return new RespuestaPasarela(APROBADA, respuesta.answer().uuid(), null, null);
+			}
+			String mensaje = respuesta == null || respuesta.answer() == null ? "Respuesta vacía de la pasarela" : respuesta.answer().errorMessage();
+			return new RespuestaPasarela(RECHAZADA, null, null, mensaje);
+		}
+		catch (RestClientException ex) {
+			log.warn("Izipay no respondió el reembolso de {}: {}", oSolicitudDevolucion.codigoOperacionOrigen(), ex.getClass().getSimpleName());
+			return new RespuestaPasarela(PENDIENTE, null, null, "La pasarela no respondió");
+		}
+	}
+
 	/** La IPN llega como formulario con kr-answer y kr-hash: HMAC-SHA-256 en hexadecimal de kr-answer. La cabecera no se usa. */
 	@Override
 	public NotificacionPasarela traducirNotificacion(String cuerpo, String firmaHmac) {
@@ -185,6 +213,15 @@ public class AdaptadorIzipay implements PasarelaPagosPort {
 	}
 
 	private record Canal(String channelType) {
+	}
+
+	private record PeticionReembolso(String uuid, long amount, String currency) {
+	}
+
+	private record RespuestaReembolso(String status, DatosReembolso answer) {
+	}
+
+	private record DatosReembolso(String uuid, String errorMessage) {
 	}
 
 	private record RespuestaOrden(String status, DatosOrden answer) {

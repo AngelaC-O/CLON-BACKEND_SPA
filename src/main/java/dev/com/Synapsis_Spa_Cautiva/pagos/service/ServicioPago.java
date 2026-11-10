@@ -144,6 +144,56 @@ public class ServicioPago implements PagosApi {
 		}
 	}
 
+	/**
+	 * [It. 2 · CUS24, RF106, RN44] En el orden del diagrama: el cobro origen, la DEVOLUCION por el mismo medio, canal y monto, la pasarela y
+	 * aprobar. REQUIRES_NEW como el cobro: lo que la pasarela devolvió queda aunque la venta haga rollback; una RECHAZADA se guarda y responde 422.
+	 * TRG_TRANS_PAS_REGLAS exige la Administradora (-20003) y que no se devuelva más que el cobro (-20077).
+	 */
+	@Override
+	@Transactional(propagation = Propagation.REQUIRES_NEW, noRollbackFor = ReglaNegocioException.class)
+	public TransaccionDTO devolver(Long idTransaccion, Long idNotaCredito) {
+		TransaccionPasarela oTransaccion = buscarTransaccion(idTransaccion);
+		if (oTransaccion.getCanal() == CanalTransaccionPasarela.QR) {
+			throw new ReglaNegocioException("RN44", "Yape y Plin pagados por QR se devuelven desde la app: registre la devolución manual.");
+		}
+		exigirSinDevolver(oTransaccion);
+		TransaccionPasarela oDevolucion = new TransaccionPasarela(oTransaccion.getIdSede(), oTransaccion.getIdMedioPago(), TipoOperacion.DEVOLUCION,
+				oTransaccion.getCanal(), oTransaccion.getMonto(), idTransaccion, idNotaCredito, usuarioActual.idUsuario());
+		RespuestaPasarela oRespuesta = pasarelaPagosPort
+			.devolver(new SolicitudDevolucion(oTransaccion.getCodigoOperacion(), oTransaccion.getIdMedioPago(), oTransaccion.getMonto()));
+		EstadoTransaccion estado = EstadoTransaccion.valueOf(oRespuesta.estado());
+		if (estado == EstadoTransaccion.APROBADA) {
+			oDevolucion.aprobar(oRespuesta.codigoOperacion());
+		}
+		else if (estado == EstadoTransaccion.RECHAZADA) {
+			oDevolucion.rechazar();
+		}
+		repositorioTransaccionPasarela.saveAndFlush(oDevolucion);
+		if (estado == EstadoTransaccion.RECHAZADA) {
+			throw new ReglaNegocioException("RN44", "La pasarela rechazó la devolución de S/ " + oTransaccion.getMonto() + ": " + oRespuesta.mensaje());
+		}
+		return aDTO(oDevolucion);
+	}
+
+	/** [It. 2 · CUS24, RF106, RN44] La DEVOLUCION de un cobro por QR que la Administradora ya hizo desde la app: canal QR, APROBADA, con su número. */
+	@Override
+	@Transactional
+	public TransaccionDTO registrarDevolucionManual(Long idTransaccion, Long idNotaCredito, String codigoOperacion) {
+		if (codigoOperacion == null || codigoOperacion.isBlank()) {
+			throw new ReglaNegocioException("RN44", "Indique el número de operación de la devolución en la app.");
+		}
+		TransaccionPasarela oTransaccion = buscarTransaccion(idTransaccion);
+		if (oTransaccion.getCanal() != CanalTransaccionPasarela.QR) {
+			throw new ReglaNegocioException("RN44", "Solo Yape y Plin pagados por QR se devuelven a mano; la tarjeta se devuelve por la pasarela.");
+		}
+		exigirSinDevolver(oTransaccion);
+		TransaccionPasarela oDevolucion = new TransaccionPasarela(oTransaccion.getIdSede(), oTransaccion.getIdMedioPago(), TipoOperacion.DEVOLUCION,
+				CanalTransaccionPasarela.QR, oTransaccion.getMonto(), idTransaccion, idNotaCredito, usuarioActual.idUsuario());
+		oDevolucion.aprobar(codigoOperacion.trim());
+		repositorioTransaccionPasarela.saveAndFlush(oDevolucion);
+		return aDTO(oDevolucion);
+	}
+
 	@Override
 	@Transactional(readOnly = true)
 	public Map<Long, BigDecimal> aprobadosDelDia(Long idSede, LocalDateTime fecha) {
@@ -170,7 +220,28 @@ public class ServicioPago implements PagosApi {
 
 	private TransaccionDTO aDTO(TransaccionPasarela oTransaccion) {
 		return new TransaccionDTO(oTransaccion.getIdTransaccion(), oTransaccion.getEstado().name(), oTransaccion.getCodigoOperacion(),
-				oTransaccion.getEnlacePago());
+				oTransaccion.getEnlacePago(), oTransaccion.getCanal().name());
+	}
+
+	/**
+	 * RN44 antes de llamar a la pasarela: solo un cobro APROBADO y que aún no se devolvió. Oracle lo repite al insertar (-20077), pero entonces la
+	 * pasarela ya habría devuelto el dinero otra vez.
+	 */
+	private void exigirSinDevolver(TransaccionPasarela oTransaccion) {
+		if (oTransaccion.getTipoOperacion() != TipoOperacion.COBRO || oTransaccion.getEstado() != EstadoTransaccion.APROBADA) {
+			throw new ReglaNegocioException("RN44", "Solo se devuelve un cobro APROBADO; la transacción " + oTransaccion.getIdTransaccion() + " está "
+					+ oTransaccion.getEstado() + ".");
+		}
+		BigDecimal devuelto = repositorioTransaccionPasarela.sumarDevuelto(oTransaccion.getIdTransaccion());
+		if (devuelto.add(oTransaccion.getMonto()).compareTo(oTransaccion.getMonto()) > 0) {
+			throw new ReglaNegocioException("RN44", "El cobro " + oTransaccion.getIdTransaccion() + " ya tiene una devolución de S/ " + devuelto + ".",
+					HttpStatus.CONFLICT);
+		}
+	}
+
+	private TransaccionPasarela buscarTransaccion(Long idTransaccion) {
+		return repositorioTransaccionPasarela.findById(idTransaccion)
+			.orElseThrow(() -> new ReglaNegocioException("RN44", "La transacción " + idTransaccion + " no existe.", HttpStatus.NOT_FOUND));
 	}
 
 }
