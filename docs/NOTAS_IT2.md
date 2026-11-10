@@ -170,6 +170,14 @@ B14 reportes (09/11/2026). Cada punto es algo que no está igual en las páginas
 - **DF-137. Permisos de base de datos.** `13_permisos.sql` da SELECT de todas las vistas `V_` a ROL_CAUTIVA_APLICACION (bucle sobre `user_views`), que tiene CAUTIVA_APP: las siete vistas de reporte se leen sin cambiar `database/`.
 - **DF-138. Contrato.** `openapi/contrato.yaml` describe las 2 operaciones nuevas; `ContratoOpenApiTest` cuenta 103. `docs/openapi.yaml` sigue sin exportarse (D-24).
 
+B15 cierre del back-end (10/11/2026). La tarea pidió escribir `docs/openapi.yaml` y `docs/trazabilidad_it2.md`: es la autorización explícita que faltaba para tocar `docs/` (D-24).
+
+- **DF-139. `x-permiso` (Duda 1 del front-end).** Un `OperationCustomizer` de `ContratoOpenApi` lee el `@PreAuthorize` de cada método del controlador: `hasAuthority('MODULO:ACCION')` da el código, e `isAuthenticated()` da `SESION`. Las rutas públicas del contrato (login, webhook de Izipay y comprobante público) llevan `PUBLICO`. Así el código es la única fuente del permiso y no se repite en `contrato.yaml`. Son 103 operaciones: 3 PUBLICO, 5 SESION y 95 con MODULO:ACCION.
+- **DF-140. El 403 (diferencia 20 del front-end).** Cada operación que exige sesión documenta el 403 con `examples`: `sinPermiso` (`ACCESO_DENEGADO`, falta el `x-permiso`) y `claveTemporal` (regla RF82, `FiltroCambioClave`), más el 403 propio de la operación cuando `contrato.yaml` lo trae (por ejemplo RN24 en productos y margen). `claveTemporal` no aparece en `POST /auth/cambio-clave`, `POST /auth/logout` ni `GET /auth/sesion`, porque el filtro las deja pasar.
+- **DF-141. Descargas, multipart y 202.** La exportación de CUS49 documenta el 200 con los dos tipos (`application/pdf` y el de Excel), cada uno con un esquema `string`/`binary`. Antes solo decía PDF (DF-136). `POST /conciliaciones/liquidacion` declara `multipart/form-data` con la parte `archivoLiquidacion` (DF-124). El 202 de `POST /ventas/{idVenta}/pagos` cita RN52: la venta sigue ABIERTA hasta que la pasarela apruebe. El título del contrato pasa a «Iteración 2», versión 2.0.
+- **DF-142. Prueba del contrato.** `ContratoOpenApiTest` suma `cadaOperacionDiceSuPermisoYEl403IncluyeLaClaveTemporal`, y la revisión de ejemplos salta los binarios y lee el primero de `examples`.
+- **DF-143. Trazabilidad.** `docs/trazabilidad_it2.md` cruza las 39 páginas CUS de `Iteracion_2` con el código. Las 39 páginas tienen 88 endpoints distintos, y los 88 existen en el código. Solo faltan 2 métodos del diseño: `NotaCredito.registrarRespuestaSunat`, que se hereda de `Comprobante`, y `AvisoProvider.avisosPara`, que es `avisos` (D-23). El código tiene 15 endpoints que esas páginas no dibujan: los de los CUS de la Iteración 1 sin página modificada, más DF-18 y DF-53 de NOTAS_IT1.
+
 ## Decisiones tomadas
 
 Dudas de la Iteración 1 que se cierran (08/11/2026):
@@ -181,6 +189,7 @@ Dudas de la Iteración 1 que se cierran (08/11/2026):
 - **D-10** (citas en el pasado y atenciones de otra especialista) se cierra con RN49 y RN50.
 - **D-12** (canal del enlace de CUS20) se cierra con `mailto` (CUS20 modificado It. 2, 08/11).
 - **D-13 y DF-51** (cobro digital rechazado o pendiente) se cierran con RN52.
+- **D-24** (`docs/openapi.yaml` sin exportar) se cierra en B15 (10/11/2026): la tarea pidió exportarlo, y se exportó con `./mvnw test -Dtest=ContratoOpenApiTest -Dcautiva.openapi.exportar=true` (DF-139 a DF-142).
 - **Duda 2 del front-end** se cierra con los GET de los CUS modificados.
 
 CUS modificados de la Iteración 1 (09/11/2026, B9):
@@ -310,6 +319,36 @@ Este repositorio es solo el back-end: `npm run build` y `npm test` del front-end
 ### Verificación de reportes (B14)
 
 `./mvnw -q verify` con el JDK 26 en la rama `tineo-feature/b14-reportes` (09/11/2026): 191 pruebas (185 de antes y las 6 de `ReportesFlujoTest`), 190 en verde. Solo queda en rojo `ContratoOpenApiTest.docsOpenapiEsLaSalidaDelCodigo`, porque `docs/openapi.yaml` no se exporta (D-24); la otra prueba del contrato pasa con 103 operaciones. `ModularidadTest` (con `reportes`, que solo depende de `comun`) y `MapeoEntidadesTest` (que sigue llamando a `ventasAgrupadas`) están en verde. Ninguna prueba falla por el JDK 26.
+
+### Verificación del cierre de la Iteración 2 (B15)
+
+Rama `tineo-chore/b15-contrato-it2`, JDK 26 con `--release 21` (10/11/2026).
+
+**Base de datos en un contenedor limpio.** `gvenzl/oracle-free:23.26.2`, instalado como dice `database/README.md`: 00 (APP_USER), 14 (system), 13, 15 y 17 (APP_USER) y `ALTER USER CAUTIVA_APP`. La instalación no dio errores: 57 tablas, 129 triggers, 27 vistas, 5 paquetes, 2 funciones y 0 objetos inválidos. Los scripts de prueba terminan en ROLLBACK:
+
+| Script | Cuenta | OK | FALLO | Por qué |
+| --- | --- | --- | --- | --- |
+| `97_prueba_rapida_v5.sql` | APP_USER | 14 | 0 | |
+| `20_pruebas_reglas_v5.sql` | APP_USER | 142 | 2 | Los dos casos ya conocidos de DF-59: «El fin incluye la limpieza: 10:00 + 30 + 30 = 11:00 (RN03)», que da 10:40, y «Mismo sillón a las 10:45 con otra especialista (aún en limpieza)». El script 20 es del v5 y espera 30 minutos de limpieza; con el v5.1, LIMPIEZA_MAX_MIN es 10. No es un error del back-end ni de la migración. |
+| `21_pruebas_v51.sql` | APP_USER | 58 | 0 | |
+| `16_verificar_cuenta_aplicacion.sql` | CAUTIVA_APP | 11 | 0 | |
+
+**`./mvnw verify`.**
+
+- **Primera corrida.** No llegó a las pruebas: el contenedor cortó la conexión mientras instalaba `17_datos_iteracion2.sql` (`ORA-03114`, el corte intermitente de B8, B10 y B13). Fallaron todas las clases con Testcontainers (158 errores de 192 pruebas).
+- **Segunda corrida.** Pasaron 189 de 192 pruebas. Quedan 3 errores, los tres de `SeguridadCatalogoFlujoTest`:
+  - `cus50UnaCuentaInactivaRecibe423YUnUsuarioDesconocido401`
+  - `cus50LaClaveErradaSoloSumaIntentosYOracleBloquea`
+  - `cus52ListaElPersonalSinUsuarioConSusNombres`
+
+  Los tres fallan por `ORA-12516` al abrir la conexión directa como dueña del esquema (`comoDueno`): el listener de Oracle Free se quedó sin procesos libres para atenderla. No es una aserción en rojo. Corrida sola (`./mvnw test -Dtest=SeguridadCatalogoFlujoTest`), la clase pasa 23 de 23.
+- **En verde:**
+  - Las tres pruebas de `ContratoOpenApiTest`, ya con `docs/openapi.yaml` exportado (103 operaciones).
+  - `ModularidadTest`.
+  - `InstalacionBaseDatosTest`.
+- Ninguna prueba falla por el JDK 26.
+
+Este repositorio es solo el back-end: `npm run build` y `npm test` del front-end no se corrieron aquí.
 
 ## Entidades y repositorios frente al draw.io
 
