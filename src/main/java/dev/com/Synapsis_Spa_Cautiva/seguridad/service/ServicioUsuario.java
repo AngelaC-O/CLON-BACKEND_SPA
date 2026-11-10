@@ -113,6 +113,20 @@ public class ServicioUsuario {
 		return mapperUsuario.aDTO(repositorioUsuario.save(oUsuario));
 	}
 
+	/**
+	 * [It. 2 · CUS54, RF82] La clave temporal se guarda solo como BCrypt; la cuenta queda con debe_cambiar_clave = 'S', sin intentos fallidos y
+	 * desbloqueada (BLOQUEADO pasa a ACTIVO; una cuenta INACTIVA sigue así, porque la desactiva el retiro del personal). En su siguiente ingreso
+	 * (CUS50) cambia la clave. La clave nunca vuelve en la respuesta.
+	 */
+	@Transactional
+	public UsuarioDTO restablecerClave(Long idUsuario, String clave) {
+		Usuario oUsuario = repositorioUsuario.findById(idUsuario)
+			.orElseThrow(() -> new ReglaNegocioException("RF82", "El usuario " + idUsuario + " no existe.", HttpStatus.NOT_FOUND));
+		String claveHash = codificadorClave.codificar(clave);
+		oUsuario.restablecerClave(claveHash);
+		return mapperUsuario.aDTO(repositorioUsuario.saveAndFlush(oUsuario));
+	}
+
 	/** Los permisos del pedido reemplazan a los del rol, porque es un PUT. [It. 2] RN48: ADMINISTRADORA conserva SEGURIDAD:VER, CREAR y EDITAR (422). */
 	@Transactional
 	public RolDTO configurarPermisos(Long idRol, RolDTO oRolDTO) {

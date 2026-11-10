@@ -22,6 +22,12 @@ import org.hibernate.generator.EventType;
 @Getter
 public class Parametro {
 
+	private static final String AGENDA_PASO_MIN = "AGENDA_PASO_MIN";
+
+	private static final String LIMPIEZA_MAX_MIN = "LIMPIEZA_MAX_MIN";
+
+	private static final BigDecimal LIMPIEZA_TOPE = BigDecimal.TEN;
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	@Column(name = "id_parametro")
@@ -59,10 +65,28 @@ public class Parametro {
 		if (valorNumero == null && sinTexto) {
 			throw new ReglaNegocioException("RF87", "El parámetro " + codigo + " lleva un valor numérico o de texto.");
 		}
+		validarRango(valorNumero);
 		this.valorNumero = valorNumero;
 		this.valorTexto = sinTexto ? null : valorTexto.trim();
 		this.fechaVigencia = fechaVigencia == null ? LocalDate.now() : fechaVigencia;
 		this.idUsuario = idUsuario;
+	}
+
+	/**
+	 * [It. 2 · CUS65] Los dos parámetros de la agenda con un rango del negocio: AGENDA_PASO_MIN es un entero mayor que 0 (RN51) y LIMPIEZA_MAX_MIN
+	 * un entero de 0 a 10, el tope de CK_RECURSO_MINUTOS_LIMPIEZA (RN03). No está en el diagrama (DF-129).
+	 */
+	private void validarRango(BigDecimal valorNumero) {
+		if (AGENDA_PASO_MIN.equals(codigo) && (!esEntero(valorNumero) || valorNumero.signum() <= 0)) {
+			throw new ReglaNegocioException("RN51", "AGENDA_PASO_MIN es un número entero de minutos mayor que 0.");
+		}
+		if (LIMPIEZA_MAX_MIN.equals(codigo) && (!esEntero(valorNumero) || valorNumero.signum() < 0 || valorNumero.compareTo(LIMPIEZA_TOPE) > 0)) {
+			throw new ReglaNegocioException("RN03", "LIMPIEZA_MAX_MIN es un número entero de minutos entre 0 y 10.");
+		}
+	}
+
+	private static boolean esEntero(BigDecimal valor) {
+		return valor != null && valor.stripTrailingZeros().scale() <= 0;
 	}
 
 }

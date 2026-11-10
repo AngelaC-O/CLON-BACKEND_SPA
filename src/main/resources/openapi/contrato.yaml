@@ -838,3 +838,180 @@
     "404": { descripcion: La venta o la transacción no existen, regla: RN44 }
     "409": { descripcion: El cobro ya tiene su devolución, regla: RN44 }
     "422": { descripcion: "La venta no está ANULADA con nota MEDIO_ORIGINAL, el cobro no es de la venta o no se pagó por QR, o falta el número de operación", regla: RN44 }
+
+"GET /api/v1/cajas/con-diferencia":
+  resumen: Listar los cierres con diferencia por aprobar
+  cus: CUS46
+  respuestas:
+    "200":
+      descripcion: Cajas CERRADAS de la sede con diferencia en algún medio y su observación, aún sin aprobar (RN30)
+      ejemplo: [ { idCaja: 12, idSede: 1, idUsuarioApertura: 2, fechaApertura: "2026-11-09T08:55:00", montoInicial: 100.00, idUsuarioCierre: 2, fechaCierre: "2026-11-09T20:05:00", estado: CERRADA, arqueos: [ { idMedioPago: 1, montoEsperado: 450.00, montoContado: 440.00, diferencia: -10.00, observacion: "Faltó vuelto" } ] } ]
+
+"PATCH /api/v1/cajas/{idCaja}/revision":
+  resumen: Aprobar un cierre con diferencia
+  cus: CUS46
+  respuestas:
+    "200":
+      descripcion: La caja sigue CERRADA y queda revisada (RF67)
+      ejemplo: { idCaja: 12, idSede: 1, estado: CERRADA, idUsuarioRevisa: 1, fechaRevision: "2026-11-10T09:00:00" }
+    "404": { descripcion: La caja no existe, regla: RN30 }
+    "422": { descripcion: "La caja no está CERRADA, ya se aprobó o no tiene diferencias", regla: RF67 }
+
+"GET /api/v1/cajas/del-dia":
+  resumen: Listar las cajas de hoy de la sede
+  cus: CUS46
+  respuestas:
+    "200":
+      descripcion: Cajas abiertas hoy en la sede, de la última a la primera, para reabrir la CERRADA (RF66)
+      ejemplo: [ { idCaja: 12, idSede: 1, fechaApertura: "2026-11-09T08:55:00", montoInicial: 100.00, fechaCierre: "2026-11-09T20:05:00", estado: CERRADA } ]
+
+"PATCH /api/v1/cajas/{idCaja}/reapertura":
+  resumen: Reabrir la caja del día
+  cus: CUS46
+  solicitud: { motivoReapertura: "Venta registrada después del cierre" }
+  respuestas:
+    "200":
+      descripcion: "La caja vuelve a ABIERTA; Oracle guarda quién y cuándo y limpia el cierre y la revisión. Luego se vuelve a arquear y cerrar (CUS45)"
+      ejemplo: { idCaja: 12, idSede: 1, estado: ABIERTA, idUsuarioReapertura: 1, fechaReapertura: "2026-11-09T20:30:00", motivoReapertura: "Venta registrada después del cierre" }
+    "404": { descripcion: La caja no existe, regla: RN30 }
+    "409": { descripcion: La sede ya tiene otra caja ABIERTA (UQ_CAJA_ABIERTA_SEDE), regla: RN30 }
+    "422": { descripcion: "Falta el motivo, la caja no está CERRADA o no es la del día", regla: RN30 }
+
+"POST /api/v1/conciliaciones/liquidacion":
+  resumen: Importar el reporte de liquidación de Izipay
+  cus: CUS47
+  solicitud: { archivoLiquidacion: "liquidacion-noviembre.csv" }
+  respuestas:
+    "200":
+      descripcion: "Comisión y fecha de abono guardadas en cada cobro APROBADO por su código de operación; los códigos que no casaron se informan"
+      ejemplo: { filasLeidas: 3, filasRegistradas: 2, codigosSinTransaccion: [ "CS-0000-DESCONOCIDO" ] }
+    "422": { descripcion: "El archivo está vacío, le falta una columna configurada o una comisión o fecha no se entiende", regla: RF105 }
+
+"POST /api/v1/conciliaciones":
+  resumen: Conciliar las ventas del mes
+  cus: CUS47
+  solicitud: { anio: 2026, mes: 11 }
+  respuestas:
+    "201":
+      descripcion: "Conciliación ABIERTA con una diferencia por venta, comprobante o transacción (RN31); las ventas anuladas no cuentan (RN33)"
+      ejemplo: { idConciliacion: 3, anio: 2026, mes: 11, idUsuario: 1, estado: ABIERTA, sinJustificar: 1, items: [ { idItem: 40, idVenta: 620, referenciaSunat: "B001-00000125", aceptadoSunat: true, pagoRespaldado: true, estado: COINCIDE }, { idItem: 41, idTransaccion: 82, aceptadoSunat: false, pagoRespaldado: false, estado: SIN_JUSTIFICAR } ] }
+    "409": { descripcion: Ya existe la conciliación de ese mes, regla: RF75 }
+    "422": { descripcion: Indique un mes válido desde 2026, regla: RF75 }
+
+"PATCH /api/v1/conciliaciones/{idConciliacion}/items/{idItem}":
+  resumen: Justificar o excluir una diferencia
+  cus: CUS47
+  solicitud: { estado: JUSTIFICADA, justificacion: "Devolución de Yape hecha desde la app (CUS24)" }
+  respuestas:
+    "200":
+      descripcion: La diferencia queda JUSTIFICADA o EXCLUIDA
+      ejemplo: { idConciliacion: 3, anio: 2026, mes: 11, estado: ABIERTA, sinJustificar: 0, items: [ { idItem: 41, idTransaccion: 82, aceptadoSunat: false, pagoRespaldado: false, estado: JUSTIFICADA, justificacion: "Devolución de Yape hecha desde la app (CUS24)" } ] }
+    "404": { descripcion: La conciliación no existe, regla: RF75 }
+    "422": { descripcion: "Falta la justificación, el ítem coincide o no es de la conciliación, o la conciliación ya está CERRADA", regla: RF75 }
+
+"PATCH /api/v1/conciliaciones/{idConciliacion}/cierre":
+  resumen: Cerrar la conciliación del mes
+  cus: CUS47
+  respuestas:
+    "200":
+      descripcion: CERRADA con su fecha; ya no cambia (CK_CONCILIACION_CIERRE)
+      ejemplo: { idConciliacion: 3, anio: 2026, mes: 11, idUsuario: 1, estado: CERRADA, fechaCierre: "2026-12-02T10:00:00", sinJustificar: 0, items: [ ] }
+    "404": { descripcion: La conciliación no existe, regla: RF75 }
+    "422": { descripcion: "Quedan diferencias SIN_JUSTIFICAR o ya está CERRADA", regla: RF75 }
+
+"PATCH /api/v1/usuarios/{idUsuario}/clave":
+  resumen: Restablecer la contraseña
+  cus: CUS54
+  solicitud: { clave: "Temporal2026" }
+  respuestas:
+    "200":
+      descripcion: "Clave temporal guardada como BCrypt, debe cambiarla en su siguiente ingreso, sin intentos fallidos y desbloqueada; la clave no vuelve"
+      ejemplo: { idUsuario: 3, idPersonal: 4, idRol: 3, nombreUsuario: especialista1, estado: ACTIVO, debeCambiarClave: true }
+    "400": { descripcion: La clave tiene de 8 a 72 caracteres, regla: VALIDACION }
+    "404": { descripcion: El usuario no existe, regla: RF82 }
+
+"GET /api/v1/auditoria":
+  resumen: Consultar la auditoría
+  cus: CUS55
+  respuestas:
+    "200":
+      descripcion: "V_AUDITORIA con filtros opcionales de usuario, módulo, entidad y fechas (sin fechas, los últimos 30 días)"
+      ejemplo: [ { idAuditoria: 900, fechaHora: "2026-11-09T11:30:00", usuario: admin, rol: ADMINISTRADORA, modulo: Ventas, accion: EDITAR, entidad: VENTA, idEntidad: 620, detalle: "estado: CERRADA -> ANULADA" } ]
+    "422": { descripcion: La fecha de inicio es posterior a la de fin, regla: RF80 }
+
+"GET /api/v1/medios-pago":
+  resumen: Listar los medios de pago
+  cus: CUS62
+  respuestas:
+    "200":
+      descripcion: Efectivo, Yape, Plin y tarjeta con su estado y si usan la pasarela
+      ejemplo: [ { idMedioPago: 1, nombre: EFECTIVO, estado: ACTIVO, usaPasarela: false }, { idMedioPago: 2, nombre: YAPE, estado: ACTIVO, usaPasarela: true } ]
+
+"PATCH /api/v1/medios-pago/{idMedioPago}":
+  resumen: Configurar un medio de pago
+  cus: CUS62
+  solicitud: { estado: ACTIVO, usaPasarela: true }
+  respuestas:
+    "200":
+      descripcion: Medio de pago actualizado
+      ejemplo: { idMedioPago: 2, nombre: YAPE, estado: ACTIVO, usaPasarela: true }
+    "404": { descripcion: El medio de pago no existe, regla: RF88 }
+    "422": { descripcion: El efectivo no se cobra por la pasarela (CK_MEDIO_PAGO_EFECTIVO), regla: RN42 }
+
+"GET /api/v1/series-comprobante":
+  resumen: Listar las series de comprobante de la sede
+  cus: CUS63
+  respuestas:
+    "200":
+      descripcion: Series de la sede (sin idSede, la de la sesión) con su último número, que lleva Oracle (RN47)
+      ejemplo: [ { idSerie: 1, idSede: 1, tipo: BOLETA, serie: B001, ultimoNumero: 125, estado: ACTIVA } ]
+
+"POST /api/v1/series-comprobante":
+  resumen: Registrar una serie de comprobante
+  cus: CUS63
+  solicitud: { idSede: 2, tipo: BOLETA, serie: B002 }
+  respuestas:
+    "201":
+      descripcion: Serie ACTIVA con el correlativo en 0
+      ejemplo: { idSerie: 9, idSede: 2, tipo: BOLETA, serie: B002, ultimoNumero: 0, estado: ACTIVA }
+    "400": { descripcion: Falta el tipo de comprobante, regla: VALIDACION }
+    "409": { descripcion: "La sede ya tiene una serie ACTIVA de ese tipo o la serie ya existe", regla: UQ_SERIE_COMPR_ACTIVA }
+    "422": { descripcion: La serie tiene 4 caracteres y empieza con B o F según el tipo, regla: RF107 }
+
+"GET /api/v1/parametros":
+  resumen: Listar los parámetros del negocio
+  cus: CUS65
+  respuestas:
+    "200":
+      descripcion: Parámetros con su valor, su vigencia y quién los cambió
+      ejemplo: [ { idParametro: 9, codigo: AGENDA_PASO_MIN, descripcion: "Minutos entre horas libres de la agenda (RN51)", valorNumero: 15, fechaVigencia: "2026-11-08", idUsuario: 1 } ]
+
+"PATCH /api/v1/parametros/{codigo}":
+  resumen: Cambiar el valor de un parámetro
+  cus: CUS65
+  solicitud: { valorNumero: 10, fechaVigencia: "2026-11-10" }
+  respuestas:
+    "200":
+      descripcion: Valor cambiado; TRG_AUD_PARAMETRO lo audita (RN29)
+      ejemplo: { idParametro: 8, codigo: LIMPIEZA_MAX_MIN, descripcion: "Minutos máximos de limpieza del recurso (RN03)", valorNumero: 10, fechaVigencia: "2026-11-10", idUsuario: 1 }
+    "404": { descripcion: El parámetro no existe (los códigos no se crean), regla: RF87 }
+    "422": { descripcion: "Falta el valor (CK_PARAMETRO_VALOR), AGENDA_PASO_MIN no es un entero mayor que 0 (RN51) o LIMPIEZA_MAX_MIN no es un entero de 0 a 10 (RN03)", regla: RN03 }
+
+"GET /api/v1/tipos-documento":
+  resumen: Listar los tipos de documento
+  cus: CUS65
+  respuestas:
+    "200":
+      descripcion: "Catálogo 06 de SUNAT con su longitud y formato; reemplaza los id fijos del front-end"
+      ejemplo: [ { idTipoDocumento: 1, codigoSunat: "1", nombre: "Documento Nacional de Identidad", abreviatura: DNI, longitudMin: 8, longitudMax: 8, soloNumeros: true, consultaApi: true, estado: ACTIVO } ]
+
+"PATCH /api/v1/tipos-documento/{idTipoDocumento}":
+  resumen: Configurar un tipo de documento
+  cus: CUS65
+  solicitud: { consultaApi: false, estado: INACTIVO }
+  respuestas:
+    "200":
+      descripcion: Tipo de documento activado o desactivado y marcado para consultar en APISPERU
+      ejemplo: { idTipoDocumento: 4, codigoSunat: "7", nombre: "Pasaporte", abreviatura: PAS, longitudMin: 6, longitudMax: 12, soloNumeros: false, consultaApi: false, estado: INACTIVO }
+    "404": { descripcion: El tipo de documento no existe, regla: RN45 }
+    "422": { descripcion: Solo el DNI y el RUC se consultan en APISPERU, regla: RN45 }

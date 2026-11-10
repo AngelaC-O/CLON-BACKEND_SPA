@@ -2,6 +2,7 @@ package dev.com.Synapsis_Spa_Cautiva.pagos.api;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 public interface PagosApi {
@@ -36,6 +37,15 @@ public interface PagosApi {
 	 * canal QR y el número de operación de la app.
 	 */
 	TransaccionDTO registrarDevolucionManual(Long idTransaccion, Long idNotaCredito, String codigoOperacion);
+
+	/**
+	 * [It. 2 · CUS47, RF105] Completa la comisión y la fecha de abono de cada cobro APROBADO por su codigo_operacion, con el reporte de liquidación
+	 * que la Administradora descargó de Izipay (no hay API de liquidación, DF-49). Las filas que no casan solo se informan.
+	 */
+	ResumenImportacionDTO registrarLiquidacion(List<FilaLiquidacionDTO> filasLiquidacion);
+
+	/** [It. 2 · CUS47, RF105] Las transacciones APROBADAS del mes con su comisión y su abono, para conciliar (RN31). */
+	List<TransaccionLiquidadaDTO> liquidacion(Integer anio, Integer mes);
 
 	/** Cobros APROBADOS del día por idMedioPago (RF64, RN42). */
 	Map<Long, BigDecimal> aprobadosDelDia(Long idSede, LocalDateTime fecha);

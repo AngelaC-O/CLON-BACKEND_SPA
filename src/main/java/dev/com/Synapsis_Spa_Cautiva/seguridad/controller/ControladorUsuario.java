@@ -65,6 +65,13 @@ public class ControladorUsuario {
 		return ResponseEntity.ok(servicioUsuario.asignarRol(idUsuario, oAsignarRolDTO.idRol()));
 	}
 
+	/** [It. 2] CUS54: la clave temporal; en su siguiente ingreso la persona la cambia (RF82). */
+	@PatchMapping("/usuarios/{idUsuario}/clave")
+	@PreAuthorize("hasAuthority('SEGURIDAD:EDITAR')")
+	public ResponseEntity<UsuarioDTO> restablecerClave(@PathVariable Long idUsuario, @Valid @RequestBody ClaveDTO oClaveDTO) {
+		return ResponseEntity.ok(servicioUsuario.restablecerClave(idUsuario, oClaveDTO.clave()));
+	}
+
 	@PutMapping("/roles/{idRol}/permisos")
 	@PreAuthorize("hasAuthority('SEGURIDAD:EDITAR')")
 	public ResponseEntity<RolDTO> configurarPermisos(@PathVariable Long idRol, @Valid @RequestBody RolDTO oRolDTO) {

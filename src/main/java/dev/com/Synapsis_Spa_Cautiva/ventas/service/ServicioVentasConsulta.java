@@ -11,8 +11,11 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.HistorialComprasProvider;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ParametroApi;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ProductoCompradoDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.api.ComprobantePendiente;
+import dev.com.Synapsis_Spa_Cautiva.ventas.api.ComprobanteSunatDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.api.TotalMedioPago;
+import dev.com.Synapsis_Spa_Cautiva.ventas.api.VentaResumenDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.api.VentasConsultaApi;
+import dev.com.Synapsis_Spa_Cautiva.ventas.repository.FilaVentaMes;
 import dev.com.Synapsis_Spa_Cautiva.ventas.repository.RepositorioComprobante;
 import dev.com.Synapsis_Spa_Cautiva.ventas.repository.RepositorioSolicitudAnulacion;
 import dev.com.Synapsis_Spa_Cautiva.ventas.repository.RepositorioVenta;
@@ -55,6 +58,35 @@ class ServicioVentasConsulta implements VentasConsultaApi, HistorialComprasProvi
 			.map(fila -> new ComprobantePendiente(fila.getIdDocumento(), fila.getTipo(), fila.getSerie(), fila.getNumero(), fila.getEstadoSunat(),
 					fila.getFechaLimite().toLocalDate()))
 			.toList();
+	}
+
+	/** [It. 2 · CUS47, RN33] Las ventas CERRADAS del mes con su boleta o factura. */
+	@Override
+	@Transactional(readOnly = true)
+	public List<VentaResumenDTO> ventasDelMes(Integer anio, Integer mes) {
+		return repositorioVenta.findValidasDelMes(anio, mes).stream().map(ServicioVentasConsulta::aResumen).toList();
+	}
+
+	/** [It. 2 · CUS47, RF75, RN31] Boletas y facturas del mes con su nota de crédito. */
+	@Override
+	@Transactional(readOnly = true)
+	public List<ComprobanteSunatDTO> comprobantesDelMes(Integer anio, Integer mes) {
+		return repositorioComprobante.findDelMes(anio, mes).stream()
+			.map(fila -> new ComprobanteSunatDTO(fila.getIdVenta(), fila.getTipo(), fila.getSerie(), fila.getNumero(), fila.getImporte(),
+					fila.getEstadoVenta(), fila.getEstadoSunat(), fila.getNcSerie(), fila.getNcNumero(), fila.getNcEstadoSunat()))
+			.toList();
+	}
+
+	/** [It. 2 · CUS47, RF76] Ventas CERRADAS del mes sin comprobante. */
+	@Override
+	@Transactional(readOnly = true)
+	public List<VentaResumenDTO> ventasSinComprobante(Integer anio, Integer mes) {
+		return repositorioVenta.findSinComprobanteDelMes(anio, mes).stream().map(ServicioVentasConsulta::aResumen).toList();
+	}
+
+	private static VentaResumenDTO aResumen(FilaVentaMes fila) {
+		return new VentaResumenDTO(fila.getIdVenta(), fila.getIdSede(), fila.getFecha() == null ? null : fila.getFecha().toLocalDate(),
+				fila.getTipoComprobante(), fila.getSerie(), fila.getNumero(), fila.getImporte());
 	}
 
 	/**

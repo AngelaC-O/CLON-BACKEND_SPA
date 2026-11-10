@@ -2,7 +2,10 @@ package dev.com.Synapsis_Spa_Cautiva.pagos.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ParametroApi;
@@ -11,18 +14,25 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.SesionOracle;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.UsuarioActual;
 import dev.com.Synapsis_Spa_Cautiva.pagos.api.AdelantoAprobado;
 import dev.com.Synapsis_Spa_Cautiva.pagos.api.EnlacePagoDTO;
+import dev.com.Synapsis_Spa_Cautiva.pagos.api.FilaLiquidacionDTO;
 import dev.com.Synapsis_Spa_Cautiva.pagos.api.PagosApi;
+import dev.com.Synapsis_Spa_Cautiva.pagos.api.ResumenImportacionDTO;
 import dev.com.Synapsis_Spa_Cautiva.pagos.api.TransaccionDTO;
+import dev.com.Synapsis_Spa_Cautiva.pagos.api.TransaccionLiquidadaDTO;
+import dev.com.Synapsis_Spa_Cautiva.pagos.controller.MedioPagoDTO;
 import dev.com.Synapsis_Spa_Cautiva.pagos.domain.CanalTransaccionPasarela;
+import dev.com.Synapsis_Spa_Cautiva.pagos.domain.EstadoMedioPago;
 import dev.com.Synapsis_Spa_Cautiva.pagos.domain.EstadoTransaccion;
 import dev.com.Synapsis_Spa_Cautiva.pagos.domain.MedioPago;
 import dev.com.Synapsis_Spa_Cautiva.pagos.domain.TipoOperacion;
 import dev.com.Synapsis_Spa_Cautiva.pagos.domain.TransaccionPasarela;
 import dev.com.Synapsis_Spa_Cautiva.pagos.repository.FilaAprobadoDelDia;
+import dev.com.Synapsis_Spa_Cautiva.pagos.repository.RepositorioMedioPago;
 import dev.com.Synapsis_Spa_Cautiva.pagos.repository.RepositorioTransaccionPasarela;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -35,6 +45,8 @@ public class ServicioPago implements PagosApi {
 	private final PasarelaPagosPort pasarelaPagosPort;
 
 	private final RepositorioTransaccionPasarela repositorioTransaccionPasarela;
+
+	private final RepositorioMedioPago repositorioMedioPago;
 
 	private final ApplicationEventPublisher eventos;
 
@@ -192,6 +204,60 @@ public class ServicioPago implements PagosApi {
 		oDevolucion.aprobar(codigoOperacion.trim());
 		repositorioTransaccionPasarela.saveAndFlush(oDevolucion);
 		return aDTO(oDevolucion);
+	}
+
+	/**
+	 * [It. 2 · CUS47, RF105] Por cada fila del reporte, el cobro APROBADO con ese codigo_operacion recibe su comisión y su fecha de abono. Una fila
+	 * sin cobro (o de un cobro que no está APROBADO) no detiene la importación: vuelve en codigosSinTransaccion para revisarla.
+	 */
+	@Override
+	@Transactional
+	public ResumenImportacionDTO registrarLiquidacion(List<FilaLiquidacionDTO> filasLiquidacion) {
+		List<String> sinTransaccion = new ArrayList<>();
+		int registradas = 0;
+		for (FilaLiquidacionDTO oFila : filasLiquidacion) {
+			Optional<TransaccionPasarela> cobro = oFila.codigoOperacion() == null ? Optional.empty()
+					: repositorioTransaccionPasarela.findByCodigoOperacion(oFila.codigoOperacion().trim())
+						.filter(oTransaccion -> oTransaccion.getEstado() == EstadoTransaccion.APROBADA
+								&& oTransaccion.getTipoOperacion() == TipoOperacion.COBRO);
+			if (cobro.isEmpty()) {
+				sinTransaccion.add(oFila.codigoOperacion());
+				continue;
+			}
+			cobro.get().registrarLiquidacion(oFila.comision(), oFila.fechaAbono());
+			repositorioTransaccionPasarela.save(cobro.get());
+			registradas++;
+		}
+		return new ResumenImportacionDTO(filasLiquidacion.size(), registradas, sinTransaccion);
+	}
+
+	/** [It. 2 · CUS47, RF105] Las transacciones APROBADAS del mes, con comisión y abono. */
+	@Override
+	@Transactional(readOnly = true)
+	public List<TransaccionLiquidadaDTO> liquidacion(Integer anio, Integer mes) {
+		return repositorioTransaccionPasarela.findLiquidadasDelMes(anio, mes).stream()
+			.map(fila -> new TransaccionLiquidadaDTO(fila.getIdTransaccion(), fila.getIdVenta(), fila.getIdCita(), fila.getTipoOperacion(),
+					fila.getMedioPago(), fila.getMonto(), fila.getComision(), fila.getFechaAbono() == null ? null : fila.getFechaAbono().toLocalDate()))
+			.toList();
+	}
+
+	/** [It. 2 · CUS62, RF88] Los medios de pago (efectivo, Yape, Plin y tarjeta) con su estado y si usan la pasarela. */
+	@Transactional(readOnly = true)
+	public List<MedioPagoDTO> listarMediosPago() {
+		return repositorioMedioPago.findAll(Sort.by("idMedioPago")).stream().map(ServicioPago::aDTO).toList();
+	}
+
+	/** [It. 2 · CUS62, RF88, RN42] Sin estado o sin usaPasarela conserva el actual; el efectivo nunca usa la pasarela (422). */
+	@Transactional
+	public MedioPagoDTO configurarMedioPago(Long idMedioPago, EstadoMedioPago estado, Boolean usaPasarela) {
+		MedioPago oMedioPago = repositorioMedioPago.findById(idMedioPago)
+			.orElseThrow(() -> new ReglaNegocioException("RF88", "El medio de pago " + idMedioPago + " no existe.", HttpStatus.NOT_FOUND));
+		oMedioPago.configurar(estado == null ? oMedioPago.getEstado() : estado, usaPasarela == null ? oMedioPago.getUsaPasarela() : usaPasarela);
+		return aDTO(repositorioMedioPago.saveAndFlush(oMedioPago));
+	}
+
+	private static MedioPagoDTO aDTO(MedioPago oMedioPago) {
+		return new MedioPagoDTO(oMedioPago.getIdMedioPago(), oMedioPago.getNombre(), oMedioPago.getEstado(), oMedioPago.getUsaPasarela());
 	}
 
 	@Override

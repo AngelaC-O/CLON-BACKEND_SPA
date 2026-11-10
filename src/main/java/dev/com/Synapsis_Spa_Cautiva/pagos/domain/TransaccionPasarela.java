@@ -160,6 +160,21 @@ public class TransaccionPasarela {
 		this.fechaRespuesta = LocalDateTime.now();
 	}
 
+	/**
+	 * [It. 2 · CUS47, RF105] La comisión y la fecha de abono del reporte de liquidación de Izipay; TRG_TRANS_PAS_REGLAS deja cambiarlas. Solo de un
+	 * cobro APROBADO. No está en el diagrama: lo pide PagosApi.registrarLiquidacion (DF-125).
+	 */
+	public void registrarLiquidacion(BigDecimal comision, LocalDate fechaAbono) {
+		if (estado != EstadoTransaccion.APROBADA || tipoOperacion != TipoOperacion.COBRO) {
+			throw new ReglaNegocioException("RF105", "Solo se liquida un cobro APROBADO; la transacción " + idTransaccion + " está " + estado + ".");
+		}
+		if (comision != null && comision.signum() < 0) {
+			throw new ReglaNegocioException("RF105", "La comisión de la pasarela no es negativa.");
+		}
+		this.comision = comision;
+		this.fechaAbono = fechaAbono;
+	}
+
 	/** RN42: una notificación repetida de la pasarela no cambia nada (webhook idempotente). */
 	public void aprobar(String codigoOperacion) {
 		if (estado == EstadoTransaccion.APROBADA && codigoOperacion.equals(this.codigoOperacion)) {
