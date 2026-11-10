@@ -91,14 +91,59 @@ class ContratoOpenApiTest extends OracleTestcontainer {
 		assertThat(operaciones).isEqualTo(OPERACIONES);
 	}
 
-	/** Un PDF no lleva ejemplo. En los demás, cada campo del ejemplo existe en el esquema: un DTO renombrado no deja el ejemplo viejo. */
+	/**
+	 * [It. 2] Cada operación lleva x-permiso (Duda 1 del front-end): MODULO:ACCION, SESION o PUBLICO. El 403 de las que exigen sesión trae el
+	 * ejemplo de la clave temporal sin cambiar (RF82), salvo las tres que FiltroCambioClave deja pasar.
+	 */
+	@Test
+	@SuppressWarnings("unchecked")
+	void cadaOperacionDiceSuPermisoYEl403IncluyeLaClaveTemporal() throws Exception {
+		Map<String, Object> raiz = new Yaml().load(contrato());
+		Map<String, Map<String, Object>> rutas = (Map<String, Map<String, Object>>) raiz.get("paths");
+		List<String> problemas = new ArrayList<>();
+		Set<String> sinCambioDeClave = Set.of("/api/v1/auth/cambio-clave", "/api/v1/auth/logout", "/api/v1/auth/sesion");
+		for (var ruta : rutas.entrySet()) {
+			for (var entrada : ruta.getValue().entrySet()) {
+				if (!METODOS.contains(entrada.getKey())) {
+					continue;
+				}
+				String nombre = entrada.getKey() + " " + ruta.getKey();
+				Map<String, Object> operacion = (Map<String, Object>) entrada.getValue();
+				String permiso = (String) operacion.get("x-permiso");
+				if (permiso == null || !permiso.matches("[A-Z_]+:[A-Z_]+|SESION|PUBLICO")) {
+					problemas.add(nombre + ": x-permiso no válido: " + permiso);
+					continue;
+				}
+				Map<String, Map<String, Object>> respuestas = (Map<String, Map<String, Object>>) operacion.get("responses");
+				if (!"PUBLICO".equals(permiso) && !sinCambioDeClave.contains(ruta.getKey())) {
+					String prohibido = String.valueOf(respuestas.get("403"));
+					if (!prohibido.contains("RF82") || !prohibido.contains("ACCESO_DENEGADO")) {
+						problemas.add(nombre + ": el 403 no documenta ACCESO_DENEGADO y RF82");
+					}
+				}
+			}
+		}
+		assertThat(problemas).isEmpty();
+		assertThat(((Map<String, Object>) rutas.get("/api/v1/reportes/{tipoReporte}").get("get")).get("x-permiso")).isEqualTo("REPORTES:VER");
+		assertThat(((Map<String, Object>) rutas.get("/api/v1/auth/login").get("post")).get("x-permiso")).isEqualTo("PUBLICO");
+		assertThat(((Map<String, Object>) rutas.get("/api/v1/tipos-documento").get("get")).get("x-permiso")).isEqualTo("SESION");
+	}
+
+	/**
+	 * Un PDF o un archivo binario no lleva ejemplo. En los demás, cada campo del ejemplo (o del primero de examples) existe en el esquema: un DTO
+	 * renombrado no deja el ejemplo viejo.
+	 */
 	@SuppressWarnings("unchecked")
 	private void revisarContenido(String nombre, Map<String, Map<String, Object>> contenido, Map<String, Map<String, Object>> esquemas, List<String> problemas) {
 		contenido.forEach((tipo, medio) -> {
-			if ("application/pdf".equals(tipo)) {
+			Map<String, Object> esquemaMedio = (Map<String, Object>) medio.get("schema");
+			if ("application/pdf".equals(tipo) || (esquemaMedio != null && "binary".equals(esquemaMedio.get("format")))) {
 				return;
 			}
 			Object ejemplo = medio.get("example");
+			if (ejemplo == null && medio.get("examples") instanceof Map<?, ?> ejemplos && !ejemplos.isEmpty()) {
+				ejemplo = ((Map<String, Object>) ejemplos.values().iterator().next()).get("value");
+			}
 			if (ejemplo == null) {
 				problemas.add(nombre + ": sin ejemplo");
 				return;
