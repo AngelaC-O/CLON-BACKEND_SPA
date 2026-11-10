@@ -350,7 +350,7 @@
       descripcion: Pagos registrados
       ejemplo: { idVenta: 8812, estado: ABIERTA, total: 60.00, pagos: [ { idPago: 9901, idMedioPago: 2, monto: 40.00, idTransaccion: 5510, referencia: "IZ-000184322" }, { idPago: 9902, idMedioPago: 1, monto: 20.00 } ], pagado: 60.00, pendiente: 0.00, cobrosPendientes: [ ] }
     "202":
-      descripcion: Un cobro quedó PENDIENTE en Izipay y no suma; con el webhook aprobado se reenvía con idTransaccion (RN42)
+      descripcion: "Un cobro quedó PENDIENTE en Izipay y no suma: la venta sigue ABIERTA (RN52); con el webhook aprobado se reenvía con idTransaccion (RN42) y se cierra"
       ejemplo: { idVenta: 8812, estado: ABIERTA, total: 60.00, pagos: [ ], pagado: 0, pendiente: 60.00, cobrosPendientes: [ { idTransaccion: 5510, enlacePago: "https://enlace-de-izipay.example/abc" } ] }
     "404": { descripcion: La venta no existe, regla: RF21 }
     "422": { descripcion: "La pasarela rechazó el cobro (la transacción RECHAZADA queda guardada, RN52) o la transacción aún no está APROBADA", regla: RF103 }
@@ -880,7 +880,8 @@
 "POST /api/v1/conciliaciones/liquidacion":
   resumen: Importar el reporte de liquidación de Izipay
   cus: CUS47
-  solicitud: { archivoLiquidacion: "liquidacion-noviembre.csv" }
+  tipoSolicitud: multipart/form-data
+  solicitud: { archivoLiquidacion: "(archivo liquidacion-noviembre.csv o .xlsx descargado del panel de Izipay)" }
   respuestas:
     "200":
       descripcion: "Comisión y fecha de abono guardadas en cada cobro APROBADO por su código de operación; los códigos que no casaron se informan"
@@ -1023,7 +1024,7 @@
     "200":
       descripcion: "ventas (RF68), productos (RF69), margen (RF70), demanda (RF71), ocupacion (RF72) o especialistas (RF73), sin ventas anuladas (RN33); sin idSede, el consolidado (RF93)"
       ejemplo: { tipoReporte: ventas, titulo: Ventas, agrupacion: LINEA, fechaInicio: "2026-11-01", fechaFin: "2026-11-30", columnas: [ { campo: grupo, titulo: Grupo }, { campo: cantidad, titulo: "Ventas o unidades" }, { campo: importe, titulo: "Importe S/" } ], filas: [ { grupo: SALON, cantidad: 42, importe: 1470.00 }, { grupo: SPA, cantidad: 18, importe: 1260.00 } ] }
-    "403": { descripcion: "Sin REPORTES:VER, o costos y márgenes (productos y margen) sin ser la Administradora (RN24)", regla: RN24 }
+    "403": { descripcion: "Costos y márgenes (productos y margen) sin ser la Administradora", regla: RN24 }
     "404": { descripcion: El tipo de reporte no existe, regla: RF68 }
     "422": { descripcion: "Faltan las fechas, el inicio es posterior al fin, el rango pasa de 366 días o la agrupación no es de ese reporte", regla: RF68 }
 
@@ -1031,7 +1032,9 @@
   resumen: Exportar un reporte gerencial
   cus: CUS49
   respuestas:
-    "200": { descripcion: "Archivo reporte_<tipo>_<desde>_<hasta> en PDF o, con formato=EXCEL, en .xlsx (Content-Disposition attachment)", tipo: application/pdf }
-    "403": { descripcion: "Sin REPORTES:EXPORTAR, o costos y márgenes sin ser la Administradora (RN24)", regla: RN24 }
+    "200":
+      descripcion: "Descarga de reporte_<tipo>_<desde>_<hasta>.pdf (formato=PDF) o .xlsx (formato=EXCEL), con Content-Disposition: attachment"
+      tipos: [ application/pdf, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet ]
+    "403": { descripcion: "Costos y márgenes (productos y margen) sin ser la Administradora", regla: RN24 }
     "404": { descripcion: El tipo de reporte no existe, regla: RF68 }
     "422": { descripcion: "El formato no es EXCEL ni PDF (RF74), o las fechas o la agrupación no son válidas (RF68)", regla: RF74 }
