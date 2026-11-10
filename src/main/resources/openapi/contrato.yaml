@@ -1015,3 +1015,23 @@
       ejemplo: { idTipoDocumento: 4, codigoSunat: "7", nombre: "Pasaporte", abreviatura: PAS, longitudMin: 6, longitudMax: 12, soloNumeros: false, consultaApi: false, estado: INACTIVO }
     "404": { descripcion: El tipo de documento no existe, regla: RN45 }
     "422": { descripcion: Solo el DNI y el RUC se consultan en APISPERU, regla: RN45 }
+
+"GET /api/v1/reportes/{tipoReporte}":
+  resumen: Generar un reporte gerencial
+  cus: CUS48
+  respuestas:
+    "200":
+      descripcion: "ventas (RF68), productos (RF69), margen (RF70), demanda (RF71), ocupacion (RF72) o especialistas (RF73), sin ventas anuladas (RN33); sin idSede, el consolidado (RF93)"
+      ejemplo: { tipoReporte: ventas, titulo: Ventas, agrupacion: LINEA, fechaInicio: "2026-11-01", fechaFin: "2026-11-30", columnas: [ { campo: grupo, titulo: Grupo }, { campo: cantidad, titulo: "Ventas o unidades" }, { campo: importe, titulo: "Importe S/" } ], filas: [ { grupo: SALON, cantidad: 42, importe: 1470.00 }, { grupo: SPA, cantidad: 18, importe: 1260.00 } ] }
+    "403": { descripcion: "Sin REPORTES:VER, o costos y márgenes (productos y margen) sin ser la Administradora (RN24)", regla: RN24 }
+    "404": { descripcion: El tipo de reporte no existe, regla: RF68 }
+    "422": { descripcion: "Faltan las fechas, el inicio es posterior al fin, el rango pasa de 366 días o la agrupación no es de ese reporte", regla: RF68 }
+
+"GET /api/v1/reportes/{tipoReporte}/exportacion":
+  resumen: Exportar un reporte gerencial
+  cus: CUS49
+  respuestas:
+    "200": { descripcion: "Archivo reporte_<tipo>_<desde>_<hasta> en PDF o, con formato=EXCEL, en .xlsx (Content-Disposition attachment)", tipo: application/pdf }
+    "403": { descripcion: "Sin REPORTES:EXPORTAR, o costos y márgenes sin ser la Administradora (RN24)", regla: RN24 }
+    "404": { descripcion: El tipo de reporte no existe, regla: RF68 }
+    "422": { descripcion: "El formato no es EXCEL ni PDF (RF74), o las fechas o la agrupación no son válidas (RF68)", regla: RF74 }
