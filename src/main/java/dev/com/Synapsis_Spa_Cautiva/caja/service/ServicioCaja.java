@@ -1,6 +1,7 @@
 package dev.com.Synapsis_Spa_Cautiva.caja.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +14,8 @@ import dev.com.Synapsis_Spa_Cautiva.caja.controller.EsperadoMedioDTO;
 import dev.com.Synapsis_Spa_Cautiva.caja.controller.MapperCaja;
 import dev.com.Synapsis_Spa_Cautiva.caja.domain.Caja;
 import dev.com.Synapsis_Spa_Cautiva.caja.repository.RepositorioCaja;
+import dev.com.Synapsis_Spa_Cautiva.comun.api.AvisoDTO;
+import dev.com.Synapsis_Spa_Cautiva.comun.api.AvisoProvider;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.CajaAbiertaProvider;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.UsuarioActual;
@@ -28,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class ServicioCaja implements CajaAbiertaProvider {
+public class ServicioCaja implements CajaAbiertaProvider, AvisoProvider {
 
 	private final RepositorioCaja repositorioCaja;
 
@@ -81,6 +84,59 @@ public class ServicioCaja implements CajaAbiertaProvider {
 		repositorioCaja.saveAndFlush(oCaja);
 		oCaja.cerrar(idUsuario);
 		return mapperCaja.aDTO(repositorioCaja.saveAndFlush(oCaja));
+	}
+
+	/** [It. 2 · CUS46, RF67, RN30] Cierres CERRADOS de la sede con diferencia en algún medio, con la observación del arqueo, aún sin aprobar. */
+	@Transactional(readOnly = true)
+	public List<CajaDTO> listarConDiferencia(Long idSede) {
+		return repositorioCaja.findCerradasConDiferencia(idSede).stream().map(mapperCaja::aDTO).toList();
+	}
+
+	/** [It. 2 · CUS46, RF67] La caja sigue CERRADA y queda revisada; quién y cuándo los vuelve a poner TRG_CAJA_REGLAS. */
+	@Transactional
+	public CajaDTO aprobarCierre(Long idCaja) {
+		Caja oCaja = buscar(idCaja);
+		oCaja.aprobarRevision(usuarioActual.idUsuario(), LocalDateTime.now());
+		return mapperCaja.aDTO(repositorioCaja.saveAndFlush(oCaja));
+	}
+
+	/**
+	 * [It. 2 · CUS46, RF66] Las cajas abiertas hoy en la sede, de la última a la primera. El diagrama devuelve una (findDelDia, la última); se
+	 * devuelven todas las del día, porque puede haber más de una (DF-122).
+	 */
+	@Transactional(readOnly = true)
+	public List<CajaDTO> obtenerDelDia(Long idSede) {
+		LocalDateTime hoy = LocalDate.now().atStartOfDay();
+		return repositorioCaja.findAperturasEntre(idSede, hoy, hoy.plusDays(1)).stream().map(mapperCaja::aDTO).toList();
+	}
+
+	/**
+	 * [It. 2 · CUS46, RF66, RN30] La caja CERRADA del día vuelve a ABIERTA con su motivo, para la venta tardía; la recepcionista la vuelve a arquear
+	 * y cerrar (CUS45). TRG_CAJA_REGLAS pone quién y cuándo y limpia el cierre y la revisión. Otra caja ABIERTA en la sede es 409
+	 * (UQ_CAJA_ABIERTA_SEDE): se valida antes, y Oracle lo repite.
+	 */
+	@Transactional
+	public CajaDTO reabrir(Long idCaja, String motivoReapertura) {
+		Caja oCaja = buscar(idCaja);
+		// Antes de cambiar la caja: con la caja ya ABIERTA en memoria, el flush automático de la consulta la encontraría a ella misma
+		boolean otraAbierta = repositorioCaja.findAbiertaBySede(oCaja.getIdSede()).filter(abierta -> !abierta.getIdCaja().equals(idCaja)).isPresent();
+		oCaja.reabrir(usuarioActual.idUsuario(), motivoReapertura);
+		if (otraAbierta) {
+			throw new ReglaNegocioException("RN30", "La sede ya tiene una caja ABIERTA: ciérrela antes de reabrir otra.", HttpStatus.CONFLICT);
+		}
+		return mapperCaja.aDTO(repositorioCaja.saveAndFlush(oCaja));
+	}
+
+	/** [It. 2 · CUS50] «N cierres con diferencia por aprobar», solo si hay (CONCILIACION:VER: la Administradora). */
+	@Override
+	@Transactional(readOnly = true)
+	public List<AvisoDTO> avisos(Long idSede) {
+		int porAprobar = repositorioCaja.findCerradasConDiferencia(idSede).size();
+		if (porAprobar == 0) {
+			return List.of();
+		}
+		return List.of(new AvisoDTO("CIERRE_POR_APROBAR", porAprobar + (porAprobar == 1 ? " cierre con diferencia por aprobar" : " cierres con diferencia por aprobar"),
+				porAprobar, "CONCILIACION:VER", "/caja/revision"));
 	}
 
 	@Override
