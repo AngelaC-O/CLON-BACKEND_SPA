@@ -1,5 +1,6 @@
 package dev.com.Synapsis_Spa_Cautiva.ventas.repository;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.Comprobante;
@@ -21,13 +22,20 @@ public interface RepositorioComprobante extends JpaRepository<Comprobante, Long>
 			""")
 	List<FilaComprobanteMes> findDelMes(@Param("anio") Integer anio, @Param("mes") Integer mes);
 
-	/** Solo boletas y facturas: las notas de crédito no son de esta iteración. */
+	/** Boletas, facturas y [It. 2 · CUS23] notas de crédito que aún esperan el envío a SUNAT (RN46): id_documento es el id_comprobante. */
 	@Query(nativeQuery = true, value = """
 			SELECT id_documento AS "idDocumento", serie AS "serie", numero AS "numero", fecha_limite AS "fechaLimite"
 			FROM V_CPE_PENDIENTES
-			WHERE estado_sunat = 'PENDIENTE' AND documento = 'COMPROBANTE'
+			WHERE estado_sunat = 'PENDIENTE'
 			ORDER BY fecha_limite, id_documento
 			""")
 	List<FilaCpePendiente> findPendientesDeEnvio();
+
+	/** [It. 2 · CUS50, RN46] Cuántos comprobantes y notas de la sede siguen PENDIENTES con la fecha límite de envío a SUNAT hasta esa fecha. */
+	@Query(nativeQuery = true, value = """
+			SELECT COUNT(*) FROM V_CPE_PENDIENTES
+			WHERE id_sede = :idSede AND estado_sunat = 'PENDIENTE' AND fecha_limite <= :limite
+			""")
+	long contarPendientesPorVencer(@Param("idSede") Long idSede, @Param("limite") LocalDate limite);
 
 }
