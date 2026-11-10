@@ -40,6 +40,21 @@ public interface RepositorioTransaccionPasarela extends JpaRepository<Transaccio
 			""")
 	BigDecimal sumarDevuelto(@Param("idTransaccionOrigen") Long idTransaccionOrigen);
 
+	/**
+	 * [It. 2 · CUS47, RF105] Las transacciones APROBADAS del mes, una por una, con el mismo criterio que V_PASARELA_LIQUIDACION (mes de
+	 * fecha_hora), que solo da el resumen por medio. La venta sale de VENTA_PAGO, porque TRANSACCION_PASARELA no tiene id_venta (D-22, DF-71).
+	 */
+	@Query(nativeQuery = true, value = """
+			SELECT t.id_transaccion AS "idTransaccion", vp.id_venta AS "idVenta", t.id_cita AS "idCita", t.tipo_operacion AS "tipoOperacion",
+				m.nombre AS "medioPago", t.monto AS "monto", t.comision AS "comision", t.fecha_abono AS "fechaAbono"
+			FROM TRANSACCION_PASARELA t
+			JOIN MEDIO_PAGO m ON m.id_medio_pago = t.id_medio_pago
+			LEFT JOIN VENTA_PAGO vp ON vp.id_transaccion = t.id_transaccion
+			WHERE t.estado = 'APROBADA' AND EXTRACT(YEAR FROM t.fecha_hora) = :anio AND EXTRACT(MONTH FROM t.fecha_hora) = :mes
+			ORDER BY t.id_transaccion
+			""")
+	List<FilaTransaccionLiquidada> findLiquidadasDelMes(@Param("anio") Integer anio, @Param("mes") Integer mes);
+
 	/** Resumen del mes de la pasarela para conciliar (CUS47, RF105, RN31). Lee V_PASARELA_LIQUIDACION. */
 	@Query(nativeQuery = true, value = """
 			SELECT id_sede AS "idSede", medio_pago AS "medioPago", cobros AS "cobros", devoluciones AS "devoluciones",
