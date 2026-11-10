@@ -51,4 +51,24 @@ public interface RepositorioVenta extends JpaRepository<Venta, Long> {
 			""")
 	List<FilaProductoComprado> findProductosComprados(@Param("idCliente") Long idCliente);
 
+	/** [It. 2 · CUS47, RN33] Las ventas CERRADAS del mes (V_VENTA_VALIDA no trae las anuladas ni las abiertas), con su boleta o factura. */
+	@Query(nativeQuery = true, value = """
+			SELECT id_venta AS "idVenta", id_sede AS "idSede", fecha AS "fecha", tipo_comprobante AS "tipoComprobante", serie AS "serie",
+				numero AS "numero", importe AS "importe"
+			FROM V_VENTA_VALIDA
+			WHERE anio = :anio AND mes = :mes
+			ORDER BY fecha, id_venta
+			""")
+	List<FilaVentaMes> findValidasDelMes(@Param("anio") Integer anio, @Param("mes") Integer mes);
+
+	/** [It. 2 · CUS47, RF76] Las ventas CERRADAS del mes sin boleta ni factura (V_VENTAS_SIN_COMPROBANTE; las ANULADAS no cuentan, RN33). */
+	@Query(nativeQuery = true, value = """
+			SELECT id_venta AS "idVenta", id_sede AS "idSede", TRUNC(fecha_hora) AS "fecha", NULL AS "tipoComprobante", NULL AS "serie",
+				NULL AS "numero", total AS "importe"
+			FROM V_VENTAS_SIN_COMPROBANTE
+			WHERE estado = 'CERRADA' AND EXTRACT(YEAR FROM fecha_hora) = :anio AND EXTRACT(MONTH FROM fecha_hora) = :mes
+			ORDER BY fecha_hora, id_venta
+			""")
+	List<FilaVentaMes> findSinComprobanteDelMes(@Param("anio") Integer anio, @Param("mes") Integer mes);
+
 }
