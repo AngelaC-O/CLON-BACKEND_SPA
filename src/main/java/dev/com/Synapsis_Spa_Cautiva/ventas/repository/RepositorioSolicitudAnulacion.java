@@ -2,6 +2,7 @@ package dev.com.Synapsis_Spa_Cautiva.ventas.repository;
 
 import java.util.List;
 
+import dev.com.Synapsis_Spa_Cautiva.ventas.domain.EstadoSolicitudAnulacion;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.SolicitudAnulacion;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,5 +19,13 @@ public interface RepositorioSolicitudAnulacion extends JpaRepository<SolicitudAn
 			order by s.fechaSolicitud
 			""")
 	List<SolicitudAnulacion> findPendientes(@Param("idSede") Long idSede);
+
+	/** [It. 2] CUS23 con el filtro ?estado: APROBADAS o RECHAZADAS de la sede, la resuelta más reciente primero. */
+	@Query("""
+			select s from SolicitudAnulacion s, Venta v
+			where v.idVenta = s.idVenta and v.idSede = :idSede and s.estado = :estado
+			order by s.fechaResolucion desc, s.fechaSolicitud desc
+			""")
+	List<SolicitudAnulacion> findPorEstado(@Param("idSede") Long idSede, @Param("estado") EstadoSolicitudAnulacion estado);
 
 }
