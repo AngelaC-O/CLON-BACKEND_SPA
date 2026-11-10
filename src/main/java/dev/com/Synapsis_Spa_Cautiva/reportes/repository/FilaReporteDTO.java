@@ -2,9 +2,20 @@ package dev.com.Synapsis_Spa_Cautiva.reportes.repository;
 
 import java.math.BigDecimal;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 /**
- * Una fila del reporte de ventas (CUS48, RF68): el grupo (día, mes, línea, servicio, especialista, tipo de atención o medio de
- * pago), cuántas ventas o unidades y el importe. Las ventas ANULADAS no se cuentan (RN33).
+ * Una fila de un reporte gerencial (CUS48, CUS49): el grupo (día, mes, línea, servicio, especialista, producto, franja, recurso...) y sus
+ * valores. Cada tipo de reporte llena solo los suyos (ReporteDTO.columnas dice cuáles) y los demás quedan nulos y no salen en el JSON:
+ * cantidad (ventas, unidades, atenciones o bloques), importe (S/ con IGV), costo y margen (sin IGV, solo para la Administradora, RN24), stock
+ * y minutos ocupados. Las ventas ANULADAS no se cuentan (RN33). [It. 2] Antes solo grupo, cantidad e importe (reporte de ventas).
  */
-public record FilaReporteDTO(String grupo, Long cantidad, BigDecimal importe) {
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public record FilaReporteDTO(String grupo, Long cantidad, BigDecimal importe, BigDecimal costo, BigDecimal margen, Long stock, Long minutos) {
+
+	/** Reporte de ventas y de ingresos por especialista. */
+	public FilaReporteDTO(String grupo, Long cantidad, BigDecimal importe) {
+		this(grupo, cantidad, importe, null, null, null, null);
+	}
+
 }
