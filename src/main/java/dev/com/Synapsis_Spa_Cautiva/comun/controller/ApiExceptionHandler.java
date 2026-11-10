@@ -71,7 +71,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 			Map.entry("UQ_CATEGORIA_PRODUCTO_NOMBRE", "Ya existe una categoría con ese nombre."),
 			Map.entry("CK_MOV_KARDEX_SALDO", "No hay stock suficiente: el saldo no puede quedar negativo (RN15)."),
 			Map.entry("CK_CONSUMO_PEND_DESCARTADO", "Indique el motivo del descarte (RN53)."),
-			Map.entry("UQ_SOL_ANUL_PENDIENTE", "La venta ya tiene una solicitud de anulación PENDIENTE (RN32)."));
+			Map.entry("UQ_SOL_ANUL_PENDIENTE", "La venta ya tiene una solicitud de anulación PENDIENTE (RN32)."),
+			Map.entry("UQ_SERIE_COMPR_ACTIVA", "La sede ya tiene una serie ACTIVA de ese tipo de comprobante (RN47)."),
+			Map.entry("UQ_SERIE_COMPROBANTE_SERIE", "Esa serie ya está registrada (RN47)."),
+			Map.entry("UQ_CONCILIACION_ANIO_MES", "Ya existe la conciliación de ese mes (RF75)."),
+			Map.entry("CK_MEDIO_PAGO_EFECTIVO", "El efectivo no se cobra por la pasarela (RN42)."),
+			Map.entry("CK_PARAMETRO_VALOR", "El parámetro lleva un valor numérico o de texto (RF87)."));
 
 	/** [It. 2] CHECK que responden 409 y no 422: el dato es válido, pero el estado actual no lo admite. */
 	private static final Set<String> CHECK_CONFLICTO = Set.of("CK_MOV_KARDEX_SALDO");
