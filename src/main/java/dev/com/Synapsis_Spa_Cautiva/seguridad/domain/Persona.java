@@ -16,6 +16,8 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import lombok.Getter;
 
 import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
 
 @Entity
 @Table(name = "PERSONA")
@@ -53,10 +55,13 @@ public class Persona {
 	@Column(name = "correo", length = 100)
 	private String correo;
 
+	/** [It. 2 · CUS04] TRG_PERSONA_REGLAS la devuelve a MANUAL si el documento cambia sin una consulta nueva (RN45): Hibernate la vuelve a leer. */
+	@Generated(event = { EventType.INSERT, EventType.UPDATE }, writable = true)
 	@Enumerated(EnumType.STRING)
 	@Column(name = "origen_datos", nullable = false, length = 10)
 	private OrigenDatos origenDatos;
 
+	@Generated(event = { EventType.INSERT, EventType.UPDATE }, writable = true)
 	@Column(name = "fecha_verificacion")
 	private LocalDateTime fechaVerificacion;
 

@@ -2,9 +2,13 @@
 -- Cautiva Spa E.I.R.L. · Base de datos Oracle (19c o 23ai/26ai Free) · VERSIÓN 5 · Instalación completa
 -- Ejecutar con SQL*Plus o SQLcl (SQL Developer F5, o DBeaver > Herramientas > Execute in SQL*Plus)
 -- conectado como el dueño de un esquema VACÍO. Todos los archivos deben estar en la misma carpeta.
--- Este script instala 01 a 12. Para el back-end faltan, en este orden (ver README.md):
+-- Este script instala 01 a 12 (modelo v5). Para el back-end faltan, en este orden (ver README.md):
 --   14_cuenta_aplicacion.sql como DBA, 13_permisos.sql como dueño, 15_datos_iteracion1.sql como dueño
---   (solo local y pruebas), la clave de CAUTIVA_APP y 16_verificar_cuenta_aplicacion.sql como CAUTIVA_APP.
+--   (solo local y pruebas), 17_datos_iteracion2.sql como dueño (migración v5 -> v5.1 y datos de la
+--   Iteración 2), la clave de CAUTIVA_APP y 16_verificar_cuenta_aplicacion.sql como CAUTIVA_APP.
+--   Orden completo: 00 -> 14 -> 13 -> 15 -> 17 -> 16.
+-- Resultado esperado de este script: el del modelo v5 (al final de este archivo). Después de 17 (v5.1):
+--   57 tablas; P 57, R 131, U 35, C 183; 105 índices IX_; TRIGGER 129; 0 objetos inválidos.
 --
 --   01 a 05  tablas, PK, UNIQUE, CHECK, COMMENT, FOREIGN KEY e índices (modelo de 55 tablas)
 --   06       reglas de las jerarquías y del documento (2 funciones y 7 triggers)

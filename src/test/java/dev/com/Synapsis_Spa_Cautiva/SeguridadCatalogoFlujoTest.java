@@ -268,7 +268,9 @@ class SeguridadCatalogoFlujoTest extends OracleTestcontainer {
 
 		assertThat(id("SELECT COUNT(*) FROM AUDITORIA WHERE accion = 'ACCESO_DENEGADO' AND id_usuario = " + idRecepcion)).isEqualTo(antes + 1);
 		assertThat(id("SELECT COUNT(*) FROM USUARIO WHERE nombre_usuario = 'intruso'")).isZero();
-		enviar(sesion, get("/api/v1/areas"), null).andExpect(status().isForbidden());
+		// [v5.1] RECEPCIONISTA tiene CATALOGO:VER (script 17), pero no CATALOGO:CREAR
+		enviar(sesion, get("/api/v1/areas"), null).andExpect(status().isOk());
+		enviar(sesion, post("/api/v1/areas"), "{\"linea\":\"SALON\",\"nombreArea\":\"Intrusa\"}").andExpect(status().isForbidden());
 		enviar(sesion, post("/api/v1/recursos"), "{\"idSede\":1,\"nombre\":\"Intruso\",\"tipo\":\"CABINA\",\"minutosLimpieza\":5}")
 			.andExpect(status().isForbidden());
 	}
@@ -294,6 +296,105 @@ class SeguridadCatalogoFlujoTest extends OracleTestcontainer {
 			.andExpect(jsonPath("$.permisos[*].modulo", hasItem("INVENTARIO_PRUEBA")))
 			.andExpect(jsonPath("$.permisos[*].modulo", not(hasItem("KARDEX"))));
 		enviar(sesion, put("/api/v1/roles/999999/permisos"), permisos).andExpect(status().isNotFound());
+	}
+
+	// ------------------------------------------------------------------ [It. 2] CUS50, CUS52, CUS53 y CUS61 modificados
+
+	@Test
+	void cus50LaSesionVigenteVuelveAlRecargarYSinSesionEs401() throws Exception {
+		mvc.perform(get("/api/v1/auth/sesion")).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.regla").value("SIN_SESION"));
+
+		Long idPersonal = id("SELECT id_personal FROM USUARIO WHERE nombre_usuario = 'admin'");
+		enviar(admin(), get("/api/v1/auth/sesion"), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$.nombreUsuario").value("admin"))
+			.andExpect(jsonPath("$.idPersonal").value(idPersonal))
+			.andExpect(jsonPath("$.nombres").isNotEmpty())
+			.andExpect(jsonPath("$.rol").value("ADMINISTRADORA"))
+			.andExpect(jsonPath("$.permisos", hasItem("SEGURIDAD:EDITAR")));
+		// Con la clave temporal también responde: la IGU la usa para pedir el cambio de clave
+		enviar(ingresar("especialista1", CLAVE_TEMPORAL), get("/api/v1/auth/sesion"), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$.debeCambiarClave").value(true))
+			.andExpect(jsonPath("$.rol").value("ESPECIALISTA_TECNICA"));
+	}
+
+	@Test
+	void cus50ElPanelDeAvisosSoloMuestraLoQueElRolPuedeVer() throws Exception {
+		mvc.perform(get("/api/v1/avisos")).andExpect(status().isUnauthorized());
+		// [It. 2 · B10] Inventario ya publica sus avisos: la recepcionista tiene PRODUCTOS:VER pero no KARDEX:VER
+		enviar(recepcion(), get("/api/v1/avisos"), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$[*].tipo", not(hasItem("CONSUMO_PENDIENTE"))))
+			.andExpect(jsonPath("$[*].permisoRequerido", not(hasItem("KARDEX:VER"))));
+	}
+
+	@Test
+	void cus52ListaElPersonalSinUsuarioConSusNombres() throws Exception {
+		Long conUsuario = id("SELECT id_personal FROM USUARIO WHERE nombre_usuario = 'especialista1'");
+		comoDueno("INSERT INTO PERSONA (tipo_persona, nombres, apellidos, id_tipo_documento, numero_documento, telefono) "
+				+ "SELECT 'NATURAL', 'Sin Cuenta', 'De Prueba', id_tipo_documento, '72990001', '987650990' FROM TIPO_DOCUMENTO WHERE codigo_sunat = '1'");
+		Long idPersona = id("SELECT id_persona FROM PERSONA WHERE telefono = '987650990'");
+		comoDueno("INSERT INTO PERSONAL (id_personal, id_sede, cargo, modalidad_pago, sueldo_base, porcentaje_comision, fecha_ingreso) VALUES ("
+				+ idPersona + ", " + idSede() + ", 'ESPECIALISTA_TECNICA', 'MIXTO', 800, 20, TRUNC(SYSDATE))");
+
+		String respuesta = enviar(admin(), get("/api/v1/usuarios/personal-sin-usuario"), null).andExpect(status().isOk())
+			.andReturn().getResponse().getContentAsString();
+		assertThat(JsonPath.<List<Number>>read(respuesta, "$[*].idPersonal")).extracting(Number::longValue).contains(idPersona).doesNotContain(conUsuario);
+		assertThat(JsonPath.<List<String>>read(respuesta, "$[?(@.idPersonal == " + idPersona + ")].nombres")).containsExactly("Sin Cuenta");
+		assertThat(JsonPath.<List<String>>read(respuesta, "$[?(@.idPersonal == " + idPersona + ")].cargo")).containsExactly("ESPECIALISTA_TECNICA");
+
+		enviar(recepcion(), get("/api/v1/usuarios/personal-sin-usuario"), null).andExpect(status().isForbidden());
+	}
+
+	@Test
+	void cus53ListaUsuariosYPermisos() throws Exception {
+		enviar(admin(), get("/api/v1/usuarios"), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$[*].nombreUsuario", hasItem("recepcion")))
+			.andExpect(jsonPath("$[0].clave").doesNotExist());
+		enviar(admin(), get("/api/v1/permisos"), null).andExpect(status().isOk()).andExpect(jsonPath("$[*].modulo", hasItem("SEGURIDAD")));
+		enviar(recepcion(), get("/api/v1/usuarios"), null).andExpect(status().isForbidden());
+	}
+
+	@Test
+	void cus53QuitarSeguridadALaAdministradoraEs422YNoCambiaNada() throws Exception {
+		Long idRolAdmin = id("SELECT id_rol FROM ROL WHERE nombre = 'ADMINISTRADORA'");
+		Long antes = id("SELECT COUNT(*) FROM ROL_PERMISO WHERE id_rol = " + idRolAdmin);
+		String sinSeguridad = "{\"descripcion\":\"Sin seguridad\",\"estado\":\"ACTIVO\",\"permisos\":[{\"modulo\":\"AGENDA\",\"accion\":\"VER\"},"
+				+ "{\"modulo\":\"SEGURIDAD\",\"accion\":\"VER\"}]}";
+
+		enviar(admin(), put("/api/v1/roles/" + idRolAdmin + "/permisos"), sinSeguridad).andExpect(status().isUnprocessableContent())
+			.andExpect(jsonPath("$.regla").value("RN48"));
+
+		assertThat(id("SELECT COUNT(*) FROM ROL_PERMISO WHERE id_rol = " + idRolAdmin)).isEqualTo(antes);
+	}
+
+	@Test
+	void cus53NoSeCambiaElRolDeLaUltimaAdministradoraActiva() throws Exception {
+		Long idAdmin = idUsuario("admin");
+		Long idRolAdmin = id("SELECT id_rol FROM ROL WHERE nombre = 'ADMINISTRADORA'");
+		Long idRecepcionista = id("SELECT id_rol FROM ROL WHERE nombre = 'RECEPCIONISTA'");
+		assertThat(id("SELECT COUNT(*) FROM USUARIO WHERE id_rol = " + idRolAdmin + " AND estado = 'ACTIVO' AND id_usuario <> " + idAdmin)).isZero();
+
+		enviar(admin(), patch("/api/v1/usuarios/" + idAdmin + "/rol"), "{\"idRol\":" + idRecepcionista + "}").andExpect(status().isUnprocessableContent())
+			.andExpect(jsonPath("$.regla").value("RN48"));
+		// Asignarle el mismo rol no la deja sin administradora
+		enviar(admin(), patch("/api/v1/usuarios/" + idAdmin + "/rol"), "{\"idRol\":" + idRolAdmin + "}").andExpect(status().isOk());
+
+		assertThat(id("SELECT id_rol FROM USUARIO WHERE id_usuario = " + idAdmin)).isEqualTo(idRolAdmin);
+	}
+
+	@Test
+	void cus61ListaLosRecursosDeLaSedeYRechazaQuinceMinutosDeLimpieza() throws Exception {
+		Sesion sesion = admin();
+		Long recursos = id("SELECT COUNT(*) FROM RECURSO WHERE id_sede = " + idSede());
+		enviar(sesion, get("/api/v1/recursos").param("idSede", idSede().toString()), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$", hasSize(recursos.intValue())))
+			.andExpect(jsonPath("$[0].minutosLimpieza").isNumber())
+			.andExpect(jsonPath("$[0].estado").exists());
+		enviar(sesion, get("/api/v1/recursos"), null).andExpect(status().isBadRequest());
+
+		enviar(sesion, post("/api/v1/recursos"), "{\"idSede\":" + idSede() + ",\"nombre\":\"Con quince\",\"tipo\":\"CABINA\",\"minutosLimpieza\":15}")
+			.andExpect(status().isUnprocessableContent())
+			.andExpect(jsonPath("$.regla").value("RN03"));
+		assertThat(id("SELECT COUNT(*) FROM RECURSO WHERE nombre = 'Con quince'")).isZero();
 	}
 
 	// ------------------------------------------------------------------ CUS57
@@ -330,10 +431,11 @@ class SeguridadCatalogoFlujoTest extends OracleTestcontainer {
 	@Test
 	void cus61RegistraRecursoConLaLimpiezaDelParametro() throws Exception {
 		Sesion sesion = admin();
-		String recurso = "{\"idSede\":" + idSede() + ",\"nombre\":\"Camilla de prueba\",\"tipo\":\"CAMILLA\",\"minutosLimpieza\":15}";
+		// LIMPIEZA_MAX_MIN = 10 desde v5.1 (RN03)
+		String recurso = "{\"idSede\":" + idSede() + ",\"nombre\":\"Camilla de prueba\",\"tipo\":\"CAMILLA\",\"minutosLimpieza\":10}";
 		enviar(sesion, post("/api/v1/recursos"), recurso).andExpect(status().isCreated()).andExpect(jsonPath("$.estado").value("DISPONIBLE"));
 		enviar(sesion, post("/api/v1/recursos"), recurso).andExpect(status().isConflict());
-		enviar(sesion, post("/api/v1/recursos"), recurso.replace("Camilla de prueba", "Otra").replace("15", "31"))
+		enviar(sesion, post("/api/v1/recursos"), recurso.replace("Camilla de prueba", "Otra").replace("\"minutosLimpieza\":10", "\"minutosLimpieza\":11"))
 			.andExpect(status().isUnprocessableContent())
 			.andExpect(jsonPath("$.regla").value("RN03"));
 	}

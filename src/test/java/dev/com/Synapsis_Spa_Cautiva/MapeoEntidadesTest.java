@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.TemporalAdjusters;
 
 import dev.com.Synapsis_Spa_Cautiva.agenda.domain.Cita;
@@ -13,15 +14,25 @@ import dev.com.Synapsis_Spa_Cautiva.agenda.repository.RepositorioAtencion;
 import dev.com.Synapsis_Spa_Cautiva.agenda.repository.RepositorioCita;
 import dev.com.Synapsis_Spa_Cautiva.agenda.repository.RepositorioCliente;
 import dev.com.Synapsis_Spa_Cautiva.agenda.repository.RepositorioClientePaquete;
+import dev.com.Synapsis_Spa_Cautiva.agenda.repository.RepositorioListaEspera;
 import dev.com.Synapsis_Spa_Cautiva.caja.domain.Caja;
 import dev.com.Synapsis_Spa_Cautiva.caja.repository.RepositorioCaja;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.Area;
+import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.EstadoServicio;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.LineaNegocio;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.Servicio;
+import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.TipoPaquete;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.domain.TipoRecurso;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.repository.RepositorioArea;
+import dev.com.Synapsis_Spa_Cautiva.catalogo.repository.RepositorioPaquete;
+import dev.com.Synapsis_Spa_Cautiva.catalogo.repository.RepositorioPromocion;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.repository.RepositorioServicio;
+import dev.com.Synapsis_Spa_Cautiva.inventario.repository.RepositorioCategoriaProducto;
+import dev.com.Synapsis_Spa_Cautiva.inventario.repository.RepositorioConsumoPendiente;
+import dev.com.Synapsis_Spa_Cautiva.inventario.repository.RepositorioProducto;
+import dev.com.Synapsis_Spa_Cautiva.pagos.repository.RepositorioMedioPago;
 import dev.com.Synapsis_Spa_Cautiva.pagos.repository.RepositorioTransaccionPasarela;
+import dev.com.Synapsis_Spa_Cautiva.reportes.repository.RepositorioReporte;
 import dev.com.Synapsis_Spa_Cautiva.sedes.domain.Recurso;
 import dev.com.Synapsis_Spa_Cautiva.sedes.repository.RepositorioRecurso;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.domain.Permiso;
@@ -30,6 +41,8 @@ import dev.com.Synapsis_Spa_Cautiva.seguridad.domain.Rol;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.domain.TipoDocumento;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.domain.TipoPersona;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.domain.Usuario;
+import dev.com.Synapsis_Spa_Cautiva.seguridad.repository.RepositorioAuditoria;
+import dev.com.Synapsis_Spa_Cautiva.seguridad.repository.RepositorioParametro;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.repository.RepositorioPermiso;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.repository.RepositorioPersona;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.repository.RepositorioRol;
@@ -38,6 +51,9 @@ import dev.com.Synapsis_Spa_Cautiva.seguridad.repository.RepositorioUsuario;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.Comprobante;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.TipoComprobante;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.Venta;
+import dev.com.Synapsis_Spa_Cautiva.ventas.repository.RepositorioComprobante;
+import dev.com.Synapsis_Spa_Cautiva.ventas.repository.RepositorioSerieComprobante;
+import dev.com.Synapsis_Spa_Cautiva.ventas.repository.RepositorioSolicitudAnulacion;
 import dev.com.Synapsis_Spa_Cautiva.ventas.repository.RepositorioVenta;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,7 +71,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 class MapeoEntidadesTest extends OracleTestcontainer {
 
-	private static final int TABLAS_DE_LA_ITERACION = 44;
+	/** Las 51 de la página «BD · Modelo lógico-relacional · It. 2» (57 del modelo v5.1 menos 6 fuera de alcance). */
+	private static final int TABLAS_DE_LA_ITERACION = 51;
 
 	@Autowired
 	private EntityManager entityManager;
@@ -108,6 +125,45 @@ class MapeoEntidadesTest extends OracleTestcontainer {
 	@Autowired
 	private RepositorioTipoDocumento repositorioTipoDocumento;
 
+	@Autowired
+	private RepositorioListaEspera repositorioListaEspera;
+
+	@Autowired
+	private RepositorioPaquete repositorioPaquete;
+
+	@Autowired
+	private RepositorioPromocion repositorioPromocion;
+
+	@Autowired
+	private RepositorioProducto repositorioProducto;
+
+	@Autowired
+	private RepositorioCategoriaProducto repositorioCategoriaProducto;
+
+	@Autowired
+	private RepositorioConsumoPendiente repositorioConsumoPendiente;
+
+	@Autowired
+	private RepositorioSolicitudAnulacion repositorioSolicitudAnulacion;
+
+	@Autowired
+	private RepositorioSerieComprobante repositorioSerieComprobante;
+
+	@Autowired
+	private RepositorioComprobante repositorioComprobante;
+
+	@Autowired
+	private RepositorioMedioPago repositorioMedioPago;
+
+	@Autowired
+	private RepositorioAuditoria repositorioAuditoria;
+
+	@Autowired
+	private RepositorioParametro repositorioParametro;
+
+	@Autowired
+	private RepositorioReporte repositorioReporte;
+
 	private Long idAdmin;
 
 	private Long idSede;
@@ -137,6 +193,44 @@ class MapeoEntidadesTest extends OracleTestcontainer {
 		assertThat(repositorioUsuario.findRolesActivos()).hasSize(4);
 		assertThat(repositorioUsuario.existsByNombreUsuario("admin")).isTrue();
 		assertThat(repositorioUsuario.findPermisosPorRol(1L)).isNotNull();
+	}
+
+	@Test
+	void lasConsultasDeLaIteracion2CorrenEnOracle() {
+		LocalDate hoy = LocalDate.now();
+		Long idEspecialista = jdbcTemplate.queryForObject("SELECT id_personal FROM USUARIO WHERE nombre_usuario = 'especialista1'", Long.class);
+		assertThat(repositorioCita.findPendientesPorCliente(-1L)).isEmpty();
+		assertThat(repositorioCita.findDelDiaPorPersonal(idEspecialista, hoy)).isNotNull();
+		assertThat(repositorioAtencion.findByCliente(-1L)).isEmpty();
+		assertThat(repositorioAtencion.findEnCursoPorCita(-1L)).isEmpty();
+		assertThat(repositorioCliente.saldoFavorDisponible(-1L)).isEqualByComparingTo("0");
+		assertThat(repositorioClientePaquete.findActivosPorCliente(-1L)).isEmpty();
+		assertThat(repositorioListaEspera.findPendientes(idSede, hoy)).isNotNull();
+		assertThat(repositorioCaja.findCerradasConDiferencia(idSede)).isNotNull();
+		assertThat(repositorioCaja.findDelDia(idSede, LocalDateTime.now())).isNotNull();
+		assertThat(repositorioServicio.findByAreaAndEstado(null, EstadoServicio.ACTIVO)).hasSizeGreaterThanOrEqualTo(20);
+		assertThat(repositorioPaquete.findByTipo(TipoPaquete.MEMBRESIA)).isNotNull();
+		assertThat(repositorioPromocion.findVigentes(hoy)).isNotNull();
+		assertThat(repositorioProducto.findByFiltros("Champú", null, idSede)).isNotEmpty();
+		assertThat(repositorioProducto.findMovimientos(1L, idSede, hoy.minusDays(1), hoy)).isNotNull();
+		assertThat(repositorioProducto.findEnStockMinimo(idSede)).isNotNull();
+		assertThat(repositorioCategoriaProducto.existsByNombre("Cuidado Capilar")).isTrue();
+		assertThat(repositorioConsumoPendiente.findPendientes(idSede)).isEmpty();
+		assertThat(repositorioVenta.findAbiertasPorSede(idSede)).isNotNull();
+		assertThat(repositorioSolicitudAnulacion.findPendientes(idSede)).isNotNull();
+		assertThat(repositorioSerieComprobante.findBySede(idSede)).hasSize(4);
+		assertThat(repositorioComprobante.findDelMes(hoy.getYear(), hoy.getMonthValue())).isNotNull();
+		assertThat(repositorioMedioPago.findAll()).hasSize(4);
+		assertThat(repositorioTransaccionPasarela.findLiquidacionDelMes(hoy.getYear(), hoy.getMonthValue())).isNotNull();
+		assertThat(repositorioRecurso.findBySede(idSede)).hasSizeGreaterThanOrEqualTo(20);
+		assertThat(repositorioUsuario.findIdsPersonalConUsuario()).hasSizeGreaterThanOrEqualTo(5);
+		assertThat(repositorioUsuario.existeOtraAdministradoraActiva(-1L)).isTrue();
+		assertThat(repositorioAuditoria.findByFiltros(null, null, null, hoy.minusDays(1), hoy)).isNotNull();
+		assertThat(repositorioAuditoria.findByFiltros(idAdmin, "Seguridad y auditoría", "USUARIO", hoy.minusDays(1), hoy)).isNotNull();
+		assertThat(repositorioParametro.findByCodigo("AGENDA_PASO_MIN")).isPresent();
+		assertThat(repositorioReporte.ventasAgrupadas(hoy.minusDays(30), hoy, "LINEA", null)).isNotNull();
+		assertThat(repositorioReporte.ventasAgrupadas(hoy.minusDays(30), hoy, "MEDIO_PAGO", idSede)).isNotNull();
+		assertThat(repositorioReporte.ventasAgrupadas(hoy.minusDays(30), hoy, "DIA", idSede)).isNotNull();
 	}
 
 	@Test
@@ -183,7 +277,7 @@ class MapeoEntidadesTest extends OracleTestcontainer {
 				"SELECT id_personal FROM USUARIO WHERE nombre_usuario = 'especialista2'", Long.class);
 		Long idCuidadoFacial = jdbcTemplate.queryForObject("SELECT id_area FROM AREA WHERE nombre = 'Cuidado Facial'", Long.class);
 		Recurso recurso = repositorioRecurso.saveAndFlush(new Recurso(idSede, "Cabina de mapeo",
-				dev.com.Synapsis_Spa_Cautiva.sedes.domain.TipoRecurso.CABINA, 15));
+				dev.com.Synapsis_Spa_Cautiva.sedes.domain.TipoRecurso.CABINA, 10));
 		Servicio servicio = new Servicio(idCuidadoFacial, "Limpieza de mapeo", 30, TipoRecurso.CABINA);
 		servicio.agregarVariante("Única", new BigDecimal("50.00"));
 		repositorioServicio.saveAndFlush(servicio);
@@ -192,12 +286,12 @@ class MapeoEntidadesTest extends OracleTestcontainer {
 				servicio.getVariantes().getFirst().getIdVariante(), lunes.atTime(10, 0), 30, idAdmin);
 		repositorioCita.saveAndFlush(cita);
 
-		assertThat(cita.getFechaHoraFin()).isEqualTo(lunes.atTime(10, 45));
+		assertThat(cita.getFechaHoraFin()).isEqualTo(lunes.atTime(10, 40));
 		assertThat(repositorioCita.findOcupacion(idSede, lunes)).containsExactly(cita);
 
 		cita.iniciarAtencion(40);
 		repositorioCita.saveAndFlush(cita);
-		assertThat(cita.getFechaHoraFin()).isEqualTo(lunes.atTime(10, 55));
+		assertThat(cita.getFechaHoraFin()).isEqualTo(lunes.atTime(10, 50));
 	}
 
 	@Test

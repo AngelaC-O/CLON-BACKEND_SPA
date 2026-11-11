@@ -19,6 +19,8 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 
+import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
+
 import lombok.AccessLevel;
 import lombok.Getter;
 
@@ -62,7 +64,21 @@ public class VarianteServicio {
 	}
 
 	void definirInsumo(Long idProducto, BigDecimal cantidadEstimada) {
-		insumos.add(new ServicioInsumo(this, idProducto, cantidadEstimada));
+		if (cantidadEstimada == null || cantidadEstimada.signum() <= 0) {
+			throw new ReglaNegocioException("RN54", "El consumo estimado del insumo es mayor que 0, en su unidad mínima.");
+		}
+		insumos.stream()
+			.filter(insumo -> insumo.getIdProducto().equals(idProducto))
+			.findFirst()
+			.ifPresentOrElse(insumo -> insumo.cambiarCantidad(cantidadEstimada),
+					() -> insumos.add(new ServicioInsumo(this, idProducto, cantidadEstimada)));
+	}
+
+	void cambiarPrecio(BigDecimal precioNuevo) {
+		if (precioNuevo == null || precioNuevo.signum() < 0) {
+			throw new ReglaNegocioException("RN40", "Cada variante tiene un precio fijo mayor o igual a 0.");
+		}
+		this.precio = precioNuevo;
 	}
 
 	public Long getIdServicio() {

@@ -88,18 +88,36 @@ class ServicioPersona implements PersonaApi {
 
 	@Override
 	@Transactional
-	public void actualizarPersona(Long idPersona, PersonaDTO oPersonaDTO) {
+	public PersonaDTO actualizarPersona(Long idPersona, PersonaDTO oPersonaDTO) {
 		validarDocumentoOpcional(oPersonaDTO);
 		Persona oPersona = buscar(idPersona);
+		boolean deOtra = repositorioPersona.findByDocumentoOTelefono(oPersonaDTO.idTipoDocumento(), oPersonaDTO.numeroDocumento(), oPersonaDTO.telefono())
+			.stream()
+			.anyMatch(existente -> !existente.getIdPersona().equals(idPersona));
+		if (deOtra) {
+			throw new ReglaNegocioException("RF05", "El teléfono o el documento ya pertenecen a otra ficha.", HttpStatus.CONFLICT);
+		}
 		oPersona.actualizar(oPersonaDTO.nombres(), oPersonaDTO.apellidos(), oPersonaDTO.idTipoDocumento(), oPersonaDTO.numeroDocumento(),
 				oPersonaDTO.telefono(), oPersonaDTO.correo());
-		repositorioPersona.save(oPersona);
+		if (oPersonaDTO.fechaVerificacion() != null && !oPersonaDTO.fechaVerificacion().equals(oPersona.getFechaVerificacion())) {
+			oPersona.marcarVerificado(oPersonaDTO.fechaVerificacion());
+		}
+		return aDTO(repositorioPersona.saveAndFlush(oPersona));
 	}
 
 	@Override
 	@Transactional(readOnly = true)
 	public PersonaDTO obtenerPersona(Long idPersona) {
 		return aDTO(buscar(idPersona));
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<PersonaDTO> obtenerPersonas(List<Long> idsPersona) {
+		if (idsPersona.isEmpty()) {
+			return List.of();
+		}
+		return repositorioPersona.findAllById(idsPersona.stream().distinct().toList()).stream().map(this::aDTO).toList();
 	}
 
 	private Persona buscar(Long idPersona) {

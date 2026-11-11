@@ -7,6 +7,9 @@ public interface PasarelaPagosPort {
 
 	RespuestaPasarela crearEnlace(SolicitudCobro oSolicitudCobro);
 
+	/** [It. 2 · CUS24, RN44] Reembolso de un cobro con tarjeta. estado: APROBADA, RECHAZADA o PENDIENTE (si la pasarela no respondió). */
+	RespuestaPasarela devolver(SolicitudDevolucion oSolicitudDevolucion);
+
 	/** Valida la firma y traduce el cuerpo que define Izipay. Responde 401 si la firma no es válida. */
 	NotificacionPasarela traducirNotificacion(String cuerpo, String firmaHmac);
 

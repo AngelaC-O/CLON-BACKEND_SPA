@@ -12,6 +12,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.SiNoConverter;
 
 import lombok.Getter;
@@ -54,11 +55,23 @@ public class TipoDocumento {
 	private EstadoTipoDocumento estado;
 
 	private static final String CODIGO_RUC = "6";
+	private static final String CODIGO_DNI = "1";
 	private static final Pattern FORMATO_RUC = Pattern.compile("(10|15|17|20)[0-9]{9}");
 	private static final Pattern SOLO_DIGITOS = Pattern.compile("[0-9]+");
 	private static final Pattern ALFANUMERICO = Pattern.compile("[A-Z0-9]+");
 
 	protected TipoDocumento() {
+	}
+
+	/** RN45 (CUS65): se activa o desactiva el tipo y se marca si se consulta en APISPERU (solo DNI y RUC lo admiten). */
+	public void configurar(Boolean consultaApi, EstadoTipoDocumento estado) {
+		// [It. 2 · CUS65] Sin valor conserva el actual; APISPERU solo consulta DNI (1) y RUC (6), como dice la nota del diagrama (RN45)
+		boolean consulta = consultaApi == null ? this.consultaApi : consultaApi;
+		if (consulta && !CODIGO_DNI.equals(codigoSunat) && !CODIGO_RUC.equals(codigoSunat)) {
+			throw new ReglaNegocioException("RN45", "Solo el DNI y el RUC se consultan en APISPERU.");
+		}
+		this.consultaApi = consulta;
+		this.estado = estado == null ? this.estado : estado;
 	}
 
 	/** RN45: las mismas reglas de FN_VALIDAR_DOCUMENTO, para responder antes de llegar a Oracle. */

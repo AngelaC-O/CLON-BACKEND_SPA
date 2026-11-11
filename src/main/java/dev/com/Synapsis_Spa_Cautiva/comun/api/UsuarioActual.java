@@ -12,4 +12,10 @@ public interface UsuarioActual {
 
 	Long idSede();
 
+	/** [It. 2] La persona del personal de la sesión (CUS11: «Mi agenda» y RN50). */
+	Long idPersonal();
+
+	/** [It. 2] true si el usuario tiene el rol ADMINISTRADORA (RN50). */
+	boolean esAdministradora(Long idUsuario);
+
 }

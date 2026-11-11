@@ -56,6 +56,12 @@ class PasarelaPagosFalsa implements PasarelaPagosPort {
 		return new RespuestaPasarela(PENDIENTE, codigo, "https://pasarela-falsa.invalid/enlace/" + codigo, "Respuesta del adaptador falso");
 	}
 
+	/** [It. 2 · CUS24] Responde lo mismo que el cobro: APROBADA en dev y en las pruebas. */
+	@Override
+	public RespuestaPasarela devolver(SolicitudDevolucion oSolicitudDevolucion) {
+		return new RespuestaPasarela(respuestaFalsa, nuevoCodigo(), null, "Respuesta del adaptador falso");
+	}
+
 	@Override
 	public NotificacionPasarela traducirNotificacion(String cuerpo, String firmaHmac) {
 		if (claveHmac.isBlank() || firmaHmac == null || !firmaValida(cuerpo, firmaHmac)) {

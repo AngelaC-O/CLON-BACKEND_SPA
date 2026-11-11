@@ -31,6 +31,27 @@ public class ControladorUsuario {
 		return ResponseEntity.ok(servicioUsuario.listarRoles());
 	}
 
+	/** [It. 2] CUS52 (D-06). */
+	@GetMapping("/usuarios/personal-sin-usuario")
+	@PreAuthorize("hasAuthority('SEGURIDAD:VER')")
+	public ResponseEntity<List<PersonalSinUsuarioDTO>> listarPersonalSinUsuario() {
+		return ResponseEntity.ok(servicioUsuario.listarPersonalSinUsuario());
+	}
+
+	/** [It. 2] CUS53. */
+	@GetMapping("/usuarios")
+	@PreAuthorize("hasAuthority('SEGURIDAD:VER')")
+	public ResponseEntity<List<UsuarioDTO>> listarUsuarios() {
+		return ResponseEntity.ok(servicioUsuario.listarUsuarios());
+	}
+
+	/** [It. 2] CUS53. */
+	@GetMapping("/permisos")
+	@PreAuthorize("hasAuthority('SEGURIDAD:VER')")
+	public ResponseEntity<List<PermisoDTO>> listarPermisos() {
+		return ResponseEntity.ok(servicioUsuario.listarPermisos());
+	}
+
 	@PostMapping("/usuarios")
 	@PreAuthorize("hasAuthority('SEGURIDAD:CREAR')")
 	public ResponseEntity<UsuarioDTO> registrar(@Valid @RequestBody UsuarioDTO oUsuarioDTO) {
@@ -42,6 +63,13 @@ public class ControladorUsuario {
 	@PreAuthorize("hasAuthority('SEGURIDAD:EDITAR')")
 	public ResponseEntity<UsuarioDTO> asignarRol(@PathVariable Long idUsuario, @Valid @RequestBody AsignarRolDTO oAsignarRolDTO) {
 		return ResponseEntity.ok(servicioUsuario.asignarRol(idUsuario, oAsignarRolDTO.idRol()));
+	}
+
+	/** [It. 2] CUS54: la clave temporal; en su siguiente ingreso la persona la cambia (RF82). */
+	@PatchMapping("/usuarios/{idUsuario}/clave")
+	@PreAuthorize("hasAuthority('SEGURIDAD:EDITAR')")
+	public ResponseEntity<UsuarioDTO> restablecerClave(@PathVariable Long idUsuario, @Valid @RequestBody ClaveDTO oClaveDTO) {
+		return ResponseEntity.ok(servicioUsuario.restablecerClave(idUsuario, oClaveDTO.clave()));
 	}
 
 	@PutMapping("/roles/{idRol}/permisos")

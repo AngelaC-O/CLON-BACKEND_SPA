@@ -12,7 +12,11 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
+
 import lombok.Getter;
+
+import org.springframework.http.HttpStatus;
 
 @Entity
 @Table(name = "LISTA_ESPERA")
@@ -69,6 +73,26 @@ public class ListaEspera {
 		this.idUsuario = idUsuario;
 		this.estado = EstadoListaEspera.PENDIENTE;
 		this.fechaRegistro = LocalDateTime.now();
+	}
+
+	/** RF09: la espera se convirtió en la cita creada en CUS05 (CK_LISTA_ESPERA_ASIGNADA). */
+	public void asignarCita(Long idCita) {
+		exigirPendiente();
+		this.idCita = idCita;
+		this.estado = EstadoListaEspera.ASIGNADA;
+	}
+
+	/** RF09: la recepcionista descarta la espera que ya no se atenderá. */
+	public void descartar() {
+		exigirPendiente();
+		this.estado = EstadoListaEspera.DESCARTADA;
+	}
+
+	/** [It. 2] 409: la espera ya se asignó o se descartó (CUS05 con idEspera, CUS06). */
+	private void exigirPendiente() {
+		if (estado != EstadoListaEspera.PENDIENTE) {
+			throw new ReglaNegocioException("RF09", "La espera está " + estado + " y ya no cambia.", HttpStatus.CONFLICT);
+		}
 	}
 
 }

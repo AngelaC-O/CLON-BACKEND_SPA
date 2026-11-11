@@ -12,7 +12,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -47,6 +49,20 @@ public class ControladorCliente {
 	public ResponseEntity<ClienteDTO> registrar(@Valid @RequestBody ClienteDTO oClienteDTO) {
 		ClienteDTO creado = servicioCliente.registrar(oClienteDTO);
 		return ResponseEntity.created(URI.create("/api/v1/clientes/" + creado.idCliente())).body(creado);
+	}
+
+	/** [It. 2] CUS03: la ficha de la clienta (RF02). */
+	@GetMapping("/{idCliente}")
+	@PreAuthorize("hasAuthority('CLIENTAS:VER')")
+	public ResponseEntity<FichaClienteDTO> obtenerFicha(@PathVariable Long idCliente) {
+		return ResponseEntity.ok(servicioCliente.obtenerFicha(idCliente));
+	}
+
+	/** [It. 2] CUS04: los datos comunes van a PERSONA y los propios a CLIENTE (RF02, RN27, RN45). */
+	@PutMapping("/{idCliente}")
+	@PreAuthorize("hasAuthority('CLIENTAS:EDITAR')")
+	public ResponseEntity<ClienteDTO> actualizar(@PathVariable Long idCliente, @Valid @RequestBody ClienteDTO oClienteDTO) {
+		return ResponseEntity.ok(servicioCliente.actualizar(idCliente, oClienteDTO));
 	}
 
 }

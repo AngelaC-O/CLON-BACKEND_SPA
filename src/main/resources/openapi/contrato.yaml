@@ -9,10 +9,26 @@
   respuestas:
     "200":
       descripcion: Sesión creada, con las cookies de sesión y XSRF-TOKEN
-      ejemplo: { idUsuario: 2, nombreUsuario: recepcion, idSede: 1, debeCambiarClave: false, permisos: [ "AGENDA:VER", "CLIENTAS:CREAR", "VENTAS:CREAR" ] }
+      ejemplo: { idUsuario: 2, nombreUsuario: recepcion, idSede: 1, debeCambiarClave: false, permisos: [ "AGENDA:VER", "CLIENTAS:CREAR", "VENTAS:CREAR" ], idPersonal: 3, nombres: "Rosa", apellidos: "Quispe", rol: RECEPCIONISTA }
     "400": { descripcion: Faltan el usuario o la clave, regla: VALIDACION }
     "401": { descripcion: Usuario o clave incorrectos, regla: RF77 }
     "423": { descripcion: La cuenta está bloqueada por intentos fallidos o inactiva, regla: RF77 }
+
+"GET /api/v1/auth/sesion":
+  resumen: Sesión vigente al recargar la página
+  cus: CUS50
+  respuestas:
+    "200":
+      descripcion: La sesión del servidor, con el personal, sus nombres, el rol y los permisos; el navegador no la guarda
+      ejemplo: { idUsuario: 2, nombreUsuario: recepcion, idSede: 1, debeCambiarClave: false, permisos: [ "AGENDA:VER", "VENTAS:CREAR" ], idPersonal: 3, nombres: "Rosa", apellidos: "Quispe", rol: RECEPCIONISTA }
+
+"GET /api/v1/avisos":
+  resumen: Panel de avisos de Inicio
+  cus: CUS50
+  respuestas:
+    "200":
+      descripcion: Los avisos de los módulos (AvisoProvider) que el rol de la sesión puede ver; vacía si no hay
+      ejemplo: [ { tipo: STOCK_MINIMO, mensaje: "3 productos en stock mínimo", cantidad: 3, permisoRequerido: "PRODUCTOS:VER", ruta: "/inventario/productos" } ]
 
 "POST /api/v1/auth/logout":
   resumen: Cerrar sesión
@@ -37,6 +53,30 @@
       descripcion: Roles
       ejemplo: [ { idRol: 2, nombre: RECEPCIONISTA, descripcion: "Clientas, agenda, cobros y caja.", estado: ACTIVO, permisos: [ { modulo: AGENDA, accion: VER } ] } ]
 
+"GET /api/v1/usuarios/personal-sin-usuario":
+  resumen: Personal activo que aún no tiene usuario
+  cus: CUS52
+  respuestas:
+    "200":
+      descripcion: PersonalApi da el id y el cargo; los nombres los pone PersonaApi (DF-23)
+      ejemplo: [ { idPersonal: 7, nombres: "Lucía", apellidos: "Ramos", cargo: ESPECIALISTA_TECNICA } ]
+
+"GET /api/v1/usuarios":
+  resumen: Listar los usuarios
+  cus: CUS53
+  respuestas:
+    "200":
+      descripcion: Usuarios con su rol y estado
+      ejemplo: [ { idUsuario: 5, idPersonal: 3, idRol: 2, nombreUsuario: recepcion2, estado: ACTIVO, debeCambiarClave: false } ]
+
+"GET /api/v1/permisos":
+  resumen: Listar los permisos (módulo y acción)
+  cus: CUS53
+  respuestas:
+    "200":
+      descripcion: Permisos que existen, para armar los de un rol
+      ejemplo: [ { modulo: AGENDA, accion: VER }, { modulo: SEGURIDAD, accion: EDITAR } ]
+
 "POST /api/v1/usuarios":
   resumen: Registrar un usuario
   cus: CUS52
@@ -57,6 +97,7 @@
       descripcion: Rol asignado
       ejemplo: { idUsuario: 5, idPersonal: 3, idRol: 3, nombreUsuario: recepcion2, estado: ACTIVO, debeCambiarClave: false }
     "404": { descripcion: El usuario o el rol no existen, regla: RF53 }
+    "422": { descripcion: Es la última administradora activa o el rol no existe, regla: RN48 }
 
 "PUT /api/v1/roles/{idRol}/permisos":
   resumen: Reemplazar los permisos de un rol (vale desde el siguiente ingreso)
@@ -67,6 +108,7 @@
       descripcion: Permisos reemplazados
       ejemplo: { idRol: 2, nombre: RECEPCIONISTA, descripcion: "Clientas, agenda, cobros y caja.", estado: ACTIVO, permisos: [ { modulo: AGENDA, accion: VER }, { modulo: VENTAS, accion: CREAR } ] }
     "404": { descripcion: El rol no existe, regla: RF53 }
+    "422": { descripcion: "El rol ADMINISTRADORA conserva SEGURIDAD:VER, SEGURIDAD:CREAR y SEGURIDAD:EDITAR", regla: RN48 }
 
 "GET /api/v1/areas":
   resumen: Listar las áreas
@@ -96,15 +138,24 @@
       ejemplo: { idServicio: 21, idArea: 1, nombre: "Corte de novia", duracionRefMin: 60, tipoRecurso: SILLON, estado: ACTIVO, variantes: [ { idVariante: 30, nombreVariante: "Estándar", precio: 80.00 } ] }
     "422": { descripcion: Cada variante tiene un precio fijo mayor o igual a 0, regla: RN40 }
 
+"GET /api/v1/recursos":
+  resumen: Listar los recursos de una sede
+  cus: CUS61
+  respuestas:
+    "200":
+      descripcion: Recursos con su tipo, estado y limpieza
+      ejemplo: [ { idRecurso: 1, idSede: 1, nombre: "Sillón 1", tipo: SILLON, minutosLimpieza: 10, estado: DISPONIBLE } ]
+    "400": { descripcion: Falta la sede, regla: VALIDACION }
+
 "POST /api/v1/recursos":
   resumen: Registrar un recurso con su limpieza
   cus: CUS61
-  solicitud: { idSede: 1, nombre: "Sillón 11", tipo: SILLON, minutosLimpieza: 15 }
+  solicitud: { idSede: 1, nombre: "Sillón 11", tipo: SILLON, minutosLimpieza: 10 }
   respuestas:
     "201":
       descripcion: Recurso creado
-      ejemplo: { idRecurso: 21, idSede: 1, nombre: "Sillón 11", tipo: SILLON, minutosLimpieza: 15, estado: DISPONIBLE }
-    "422": { descripcion: El tiempo de limpieza va de 0 a LIMPIEZA_MAX_MIN minutos, regla: RN03 }
+      ejemplo: { idRecurso: 21, idSede: 1, nombre: "Sillón 11", tipo: SILLON, minutosLimpieza: 10, estado: DISPONIBLE }
+    "422": { descripcion: El tiempo de limpieza va de 0 a LIMPIEZA_MAX_MIN (10) minutos, regla: RN03 }
 
 "GET /api/v1/clientes":
   resumen: Buscar clientas por nombre o teléfono
@@ -142,20 +193,21 @@
   cus: CUS05
   respuestas:
     "200":
-      descripcion: Horas con las especialistas y recursos libres; la limpieza ya está descontada
+      descripcion: Horas cada AGENDA_PASO_MIN minutos (RN51) con las especialistas y recursos libres; la limpieza solo ocupa al recurso (RN03)
       ejemplo: [ { inicio: "2026-11-09T09:00:00", duracionMin: 30, idsPersonal: [ 4 ], idsRecurso: [ 1, 2, 3 ] } ]
     "404": { descripcion: La variante no existe, regla: RN40 }
 
 "POST /api/v1/citas":
   resumen: Agendar una cita
   cus: CUS05
-  solicitud: { idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30 }
+  solicitud: { idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, idEspera: 31 }
   respuestas:
     "201":
-      descripcion: Cita creada; Oracle calcula el fin con la limpieza del recurso
-      ejemplo: { idCita: 950, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-09T11:00:00", estado: PENDIENTE, idUsuario: 2, adelantoMonto: 0.00 }
-    "409": { descripcion: Cruce de horario de la especialista o del recurso, con limpieza, regla: RN02 }
-    "422": { descripcion: La especialista no tiene el área del servicio (-20012) o la clienta no existe, regla: RF83 }
+      descripcion: "Cita creada; Oracle calcula el fin con la limpieza del recurso. Con idEspera, la espera queda ASIGNADA con esta cita (RF09)"
+      ejemplo: { idCita: 950, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-09T10:40:00", estado: PENDIENTE, idUsuario: 2, adelantoMonto: 0.00, idEspera: 31 }
+    "404": { descripcion: La espera no existe, regla: RF09 }
+    "409": { descripcion: "Cruce de horario de la especialista o del recurso, con limpieza (RN02), o la espera ya no está PENDIENTE (RF09)", regla: RN02 }
+    "422": { descripcion: "La fecha y hora ya pasaron (RN49), la especialista no tiene el área del servicio (-20012) o la clienta no existe", regla: RN49 }
 
 "POST /api/v1/citas/lista-espera":
   resumen: Anotar en la lista de espera
@@ -191,14 +243,40 @@
     "422": { descripcion: El medio no se cobra por la pasarela o Izipay rechazó el enlace, regla: RN42 }
     "503": { descripcion: Izipay no respondió, regla: RF104 }
 
+"GET /api/v1/citas/filtros":
+  resumen: Especialistas y recursos de la sede para filtrar la agenda
+  cus: CUS08
+  respuestas:
+    "200":
+      descripcion: Especialistas (PersonalApi, con nombres de PersonaApi) y recursos (RecursoApi) de la sede de la sesión
+      ejemplo: { especialistas: [ { idPersonal: 4, nombres: "Lucía", apellidos: "Ramos" } ], recursos: [ { idRecurso: 1, nombre: "Sillón 1", tipo: SILLON, estado: DISPONIBLE } ] }
+
 "GET /api/v1/citas/agenda":
   resumen: Consultar la agenda del día
   cus: CUS08
   respuestas:
     "200":
-      descripcion: Franjas ocupadas (con limpieza) y libres; LIBRE es de una especialista o de un recurso
-      ejemplo: [ { franja: OCUPADA, origen: CITA, idOrigen: 950, idPersonal: 4, idRecurso: 1, idVariante: 2, inicio: "2026-11-09T10:00:00", fin: "2026-11-09T11:00:00", estado: PENDIENTE }, { franja: LIBRE, idPersonal: 4, inicio: "2026-11-09T11:00:00", fin: "2026-11-09T19:00:00" } ]
+      descripcion: Franjas ocupadas (fin con la limpieza del recurso; finServicio, sin ella, libera a la especialista, RN03) y libres; LIBRE es de una especialista o de un recurso. Cada franja trae los nombres de la clienta, la especialista y el servicio
+      ejemplo: [ { franja: OCUPADA, origen: CITA, idOrigen: 950, idPersonal: 4, idRecurso: 1, idVariante: 2, inicio: "2026-11-09T10:00:00", fin: "2026-11-09T10:40:00", estado: PENDIENTE, finServicio: "2026-11-09T10:30:00", idCliente: 407, nombreCliente: "Marisol Quispe", nombreEspecialista: "Lucía Ramos", nombreServicio: "Corte de Cabello Caballero" }, { franja: LIBRE, idPersonal: 4, inicio: "2026-11-09T10:30:00", fin: "2026-11-09T19:00:00", nombreEspecialista: "Lucía Ramos" } ]
     "400": { descripcion: Falta la fecha, regla: VALIDACION }
+
+"GET /api/v1/atenciones/mi-agenda":
+  resumen: Mi agenda del día (la especialista de la sesión)
+  cus: CUS11
+  respuestas:
+    "200":
+      descripcion: Citas del día de la especialista de la sesión, con su atención EN_CURSO si la tiene; sin fecha, la de hoy
+      ejemplo: [ { idCita: 950, idCliente: 407, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-09T10:40:00", estado: EN_ATENCION, idAtencion: 1532, estadoAtencion: EN_CURSO } ]
+
+"GET /api/v1/atenciones/en-curso":
+  resumen: Retomar la atención en curso de una cita
+  cus: CUS11
+  respuestas:
+    "200":
+      descripcion: La atención EN_CURSO de la cita, para retomarla desde otro equipo
+      ejemplo: { idAtencion: 1532, idCita: 950, idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, horaInicio: "2026-11-09T10:02:00", tiempoDeclaradoMin: 45, estado: EN_CURSO }
+    "400": { descripcion: Falta la cita, regla: VALIDACION }
+    "404": { descripcion: La cita no tiene una atención EN_CURSO, regla: RF13 }
 
 "POST /api/v1/atenciones":
   resumen: Iniciar la atención de una cita
@@ -206,7 +284,7 @@
   solicitud: { idCita: 950, tiempoDeclaradoMin: 45 }
   respuestas:
     "201":
-      descripcion: Atención EN_CURSO y cita EN_ATENCION
+      descripcion: Atención EN_CURSO y cita EN_ATENCION; solo la especialista asignada o la administradora (si no, 403 por RN50)
       ejemplo: { idAtencion: 1532, idCita: 950, idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, horaInicio: "2026-11-09T10:02:00", tiempoDeclaradoMin: 45, estado: EN_CURSO }
     "404": { descripcion: La cita no existe, regla: RF13 }
     "409": { descripcion: El tiempo declarado choca con otra cita, regla: RN02 }
@@ -218,10 +296,27 @@
   solicitud: { observaciones: "Sin novedad" }
   respuestas:
     "200":
-      descripcion: Atención y cita FINALIZADAS; con un paquete activo, la sesión se descuenta
-      ejemplo: { idAtencion: 1532, idCita: 950, idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, horaInicio: "2026-11-09T10:02:00", horaFin: "2026-11-09T10:45:00", tiempoDeclaradoMin: 45, observaciones: "Sin novedad", estado: FINALIZADA }
+      descripcion: Atención y cita FINALIZADAS; con un paquete activo, la sesión se descuenta; solo la especialista asignada o la administradora (si no, 403 por RN50). Descuenta el consumo estimado de los insumos de la variante (RN53, RN54) y, si el stock no alcanza, trae los consumos pendientes creados
+      ejemplo: { idAtencion: 1532, idCita: 950, idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, horaInicio: "2026-11-09T10:02:00", horaFin: "2026-11-09T10:45:00", tiempoDeclaradoMin: 45, observaciones: "Sin novedad", estado: FINALIZADA, consumosPendientes: [ { idConsumo: 12, idAtencion: 1532, idProducto: 40, codigo: "INS-007", producto: "Keratina", unidad: ML, idSede: 1, cantidadEstimada: 30, cantidadDescontada: 10, cantidadPendiente: 20, estado: PENDIENTE, fechaRegistro: "2026-11-09T10:45:00" } ] }
     "404": { descripcion: La atención no existe, regla: RF13 }
     "422": { descripcion: Solo se finaliza una atención EN_CURSO, regla: RF13 }
+
+"GET /api/v1/ventas/por-cobrar":
+  resumen: Atenciones por cobrar y ventas abiertas de la sede
+  cus: CUS18
+  respuestas:
+    "200":
+      descripcion: Atenciones FINALIZADAS que aún no están en una venta y ventas ABIERTAS para retomarlas (RN52)
+      ejemplo: { atenciones: [ { idAtencion: 1532, idCliente: 407, idPersonal: 4, idVariante: 2, adelantoMonto: 10.00 } ], ventasAbiertas: [ { idVenta: 8812, idSede: 1, idCaja: 214, idCliente: 407, estado: ABIERTA, total: 60.00, pagado: 0, pendiente: 60.00, cobrosPendientes: [ ] } ] }
+
+"GET /api/v1/ventas/{idVenta}":
+  resumen: Consultar una venta con sus cobros digitales
+  cus: CUS18
+  respuestas:
+    "200":
+      descripcion: La venta; cada pago digital trae el estado actual de su transacción en la pasarela (RN42, RN52)
+      ejemplo: { idVenta: 8812, idSede: 1, idCaja: 214, idCliente: 407, estado: ABIERTA, total: 60.00, pagos: [ { idPago: 9901, idMedioPago: 2, monto: 40.00, idTransaccion: 5510, estadoTransaccion: APROBADA } ], pagado: 40.00, pendiente: 20.00, cobrosPendientes: [ ] }
+    "404": { descripcion: La venta no existe, regla: RF21 }
 
 "POST /api/v1/ventas":
   resumen: Crear la venta desde una atención
@@ -255,10 +350,10 @@
       descripcion: Pagos registrados
       ejemplo: { idVenta: 8812, estado: ABIERTA, total: 60.00, pagos: [ { idPago: 9901, idMedioPago: 2, monto: 40.00, idTransaccion: 5510, referencia: "IZ-000184322" }, { idPago: 9902, idMedioPago: 1, monto: 20.00 } ], pagado: 60.00, pendiente: 0.00, cobrosPendientes: [ ] }
     "202":
-      descripcion: Un cobro quedó PENDIENTE en Izipay y no suma; con el webhook aprobado se reenvía con idTransaccion (RN42)
+      descripcion: "Un cobro quedó PENDIENTE en Izipay y no suma: la venta sigue ABIERTA (RN52); con el webhook aprobado se reenvía con idTransaccion (RN42) y se cierra"
       ejemplo: { idVenta: 8812, estado: ABIERTA, total: 60.00, pagos: [ ], pagado: 0, pendiente: 60.00, cobrosPendientes: [ { idTransaccion: 5510, enlacePago: "https://enlace-de-izipay.example/abc" } ] }
     "404": { descripcion: La venta no existe, regla: RF21 }
-    "422": { descripcion: La pasarela rechazó el cobro o la transacción aún no está APROBADA, regla: RF103 }
+    "422": { descripcion: "La pasarela rechazó el cobro (la transacción RECHAZADA queda guardada, RN52) o la transacción aún no está APROBADA", regla: RF103 }
 
 "GET /api/v1/ventas/consulta-ruc/{ruc}":
   resumen: Consultar el RUC del comprador
@@ -283,6 +378,15 @@
     "404": { descripcion: La venta no existe, regla: RF21 }
     "422": { descripcion: Los pagos no suman el total (RN11) o falta el comprador (RN08), regla: RN11 }
 
+"GET /api/v1/comprobantes/{idComprobante}":
+  resumen: Consultar el comprobante con su estado SUNAT
+  cus: CUS20
+  respuestas:
+    "200":
+      descripcion: Estado SUNAT actual (ACEPTADO, PENDIENTE o RECHAZADO), también después del reenvío automático (RN46)
+      ejemplo: { idComprobante: 7120, tipo: BOLETA, serie: B001, numero: "00000125", fechaEmision: "2026-10-22", estadoSunat: ACEPTADO, codigoRespuesta: "0" }
+    "404": { descripcion: El comprobante no existe, regla: RF102 }
+
 "GET /api/v1/comprobantes/{idComprobante}/representacion":
   resumen: Representación impresa en PDF con QR y hash
   cus: CUS20
@@ -295,7 +399,7 @@
   cus: CUS20
   respuestas:
     "200":
-      descripcion: Enlace para compartir por correo o WhatsApp
+      descripcion: Enlace para compartir por correo o WhatsApp; el correo lo abre el front-end con mailto (sin servidor de correo, D-12)
       ejemplo: { enlace: "https://backoffice.example/api/v1/comprobantes/publico/7120?expira=1793000000&firma=ab12", canal: CORREO, correo: "clienta@ejemplo.com" }
     "404": { descripcion: El comprobante no existe, regla: RF102 }
     "503": { descripcion: Falta configurar la clave de los enlaces, regla: RF102 }
@@ -334,10 +438,22 @@
   solicitud: { nombreClientePaso: "De paso", idPersonal: 4, idRecurso: 1, idVariante: 2, tiempoDeclaradoMin: 30, idMedioPago: 1, monto: 35.00, tipo: BOLETA }
   respuestas:
     "201":
-      descripcion: Venta CERRADA; con Izipay real, un pago digital aún no se puede cerrar aquí (DF-51)
+      descripcion: Venta CERRADA con su comprobante
       ejemplo: { idVenta: 8813, idSede: 1, idCaja: 214, estado: CERRADA, total: 35.00, pagado: 35.00, pendiente: 0.00, comprobante: { idComprobante: 7121, tipo: BOLETA, serie: B001, numero: "00000420", fechaEmision: "2026-10-22", estadoSunat: PENDIENTE } }
+    "202":
+      descripcion: El cobro digital quedó PENDIENTE en la pasarela; la atención y la venta ABIERTA quedan guardadas y se cierra después con POST /ventas/{idVenta}/cierre (RN52)
+      ejemplo: { idVenta: 8814, idSede: 1, idCaja: 214, estado: ABIERTA, total: 35.00, pagos: [ ], pagado: 0, pendiente: 35.00, cobrosPendientes: [ { idTransaccion: 5512, enlacePago: "https://enlace-de-izipay.example/xyz" } ] }
     "409": { descripcion: La especialista o el recurso están ocupados, regla: RN34 }
     "422": { descripcion: El monto no coincide con el total; no queda atención huérfana, regla: RN11 }
+
+"GET /api/v1/cajas/abierta":
+  resumen: Caja abierta de la sede
+  cus: CUS44
+  respuestas:
+    "200":
+      descripcion: La caja ABIERTA de la sede de la sesión
+      ejemplo: { idCaja: 214, idSede: 1, idUsuarioApertura: 2, fechaApertura: "2026-10-22T08:55:00", montoInicial: 100.00, estado: ABIERTA, arqueos: [ ] }
+    "204": { descripcion: La sede no tiene caja abierta }
 
 "POST /api/v1/cajas":
   resumen: Abrir la caja de la sede
@@ -380,3 +496,545 @@
     "400": { descripcion: El cuerpo no se puede leer, regla: RN42 }
     "401": { descripcion: La firma HMAC no es válida, regla: RN42 }
     "404": { descripcion: No hay una transacción con ese código de operación, regla: RN42 }
+
+"GET /api/v1/categorias-producto":
+  resumen: Listar las categorías de producto
+  cus: CUS32
+  respuestas:
+    "200":
+      descripcion: Categorías por nombre
+      ejemplo: [ { idCategoria: 1, nombre: "Cuidado Capilar" } ]
+
+"POST /api/v1/categorias-producto":
+  resumen: Registrar una categoría de producto
+  cus: CUS66
+  solicitud: { nombre: "Accesorios" }
+  respuestas:
+    "201":
+      descripcion: Categoría creada
+      ejemplo: { idCategoria: 5, nombre: "Accesorios" }
+    "409": { descripcion: Ya existe una categoría con ese nombre, regla: RF45 }
+    "422": { descripcion: Falta el nombre, regla: RF45 }
+
+"GET /api/v1/productos":
+  resumen: Listar productos e insumos con su stock de la sede
+  cus: CUS32
+  respuestas:
+    "200":
+      descripcion: "Productos de la sede de la sesión, filtrados por nombre y categoría; el margen solo viene para la Administradora (RN24)"
+      ejemplo: [ { idProducto: 1, codigo: "CAP-001", nombre: "Champú Post-Alisado 400ml", marca: "Marca", idCategoria: 1, unidad: UND, tipoUso: VENTA, costo: 43.33, precioVenta: 65.00, esPremium: false, estado: ACTIVO, stockActual: 8, stockMinimo: 5, ubicacion: "Vitrina 1" } ]
+
+"POST /api/v1/productos":
+  resumen: Registrar un producto o insumo
+  cus: CUS32
+  solicitud: { codigo: "INS-007", nombre: "Keratina", idCategoria: 4, unidad: ML, tipoUso: INSUMO, costo: 0.50, esPremium: false, stockMinimo: 100, ubicacion: "Estante A" }
+  respuestas:
+    "201":
+      descripcion: "Producto creado con stock 0 en la sede de la sesión; precio = costo × (1 + margen de PARAMETRO o el que indique la encargada) (RF87)"
+      ejemplo: { idProducto: 40, codigo: "INS-007", nombre: "Keratina", idCategoria: 4, unidad: ML, tipoUso: INSUMO, costo: 0.50, precioVenta: 0.75, esPremium: false, estado: ACTIVO, stockActual: 0, stockMinimo: 100, ubicacion: "Estante A" }
+    "409": { descripcion: Ya existe un producto con ese código, regla: UQ_PRODUCTO_CODIGO }
+    "422": { descripcion: "Un insumo va en su unidad mínima (ML, G o UND) o falta un dato", regla: RN54 }
+
+"POST /api/v1/productos/{idProducto}/salidas":
+  resumen: Registrar una salida de insumo
+  cus: CUS33
+  solicitud: { cantidad: 4, motivo: "Uso en cabina", idAtencion: 1532 }
+  respuestas:
+    "200":
+      descripcion: "Salida registrada; Oracle fija saldo, usuario y fecha. estaEnMinimo avisa que quedó en el stock mínimo (RF47)"
+      ejemplo: { idMovimiento: 310, idProducto: 40, idSede: 1, tipo: SALIDA, cantidad: 4, motivo: "Uso en cabina", idAtencion: 1532, saldo: 1, fechaHora: "2026-11-09T11:00:00", estaEnMinimo: true }
+    "404": { descripcion: El producto no existe, regla: RF44 }
+    "409": { descripcion: No hay stock suficiente en la sede, regla: RN15 }
+    "422": { descripcion: Falta el motivo o la cantidad no es mayor que 0, regla: RN18 }
+
+"POST /api/v1/productos/{idProducto}/ajustes":
+  resumen: Registrar un ajuste de inventario por conteo
+  cus: CUS34
+  solicitud: { cantidad: 5, motivo: "Conteo físico" }
+  respuestas:
+    "200":
+      descripcion: "AJUSTE por la diferencia con signo (contado − stock); estaEnMinimo avisa el stock mínimo (RF47)"
+      ejemplo: { idMovimiento: 311, idProducto: 40, idSede: 1, tipo: AJUSTE, cantidad: 5, motivo: "Conteo físico", saldo: 5, fechaHora: "2026-11-09T11:05:00", estaEnMinimo: false }
+    "404": { descripcion: El producto no existe, regla: RF44 }
+    "422": { descripcion: "Lo contado es igual al stock, o falta el motivo", regla: RF48 }
+
+"GET /api/v1/productos/{idProducto}/kardex":
+  resumen: Consultar el kardex de un producto
+  cus: CUS35
+  respuestas:
+    "200":
+      descripcion: "Movimientos de V_KARDEX en la sede (por defecto la de la sesión) entre las fechas (por defecto los últimos 30 días)"
+      ejemplo: [ { idMovimiento: 311, fechaHora: "2026-11-09T11:05:00", tipo: SALIDA, motivo: "Consumo estimado de la atención N° 1532", cantidad: -3, saldo: 7, usuario: "especialista1", idAtencion: 1532 } ]
+    "404": { descripcion: El producto no existe, regla: RF44 }
+    "422": { descripcion: La fecha de inicio es posterior a la de fin, regla: RF50 }
+
+"GET /api/v1/consumos-pendientes":
+  resumen: Listar los consumos pendientes de la sede
+  cus: CUS33
+  respuestas:
+    "200":
+      descripcion: "Lo que faltó descontar al finalizar atenciones (RN53), del más antiguo al más reciente"
+      ejemplo: [ { idConsumo: 12, idAtencion: 1532, idProducto: 40, codigo: "INS-007", producto: "Keratina", unidad: ML, idSede: 1, cantidadEstimada: 30, cantidadDescontada: 10, cantidadPendiente: 20, estado: PENDIENTE, fechaRegistro: "2026-11-09T10:45:00" } ]
+
+"POST /api/v1/consumos-pendientes/{idConsumo}/regularizacion":
+  resumen: Regularizar un consumo pendiente
+  cus: CUS33
+  respuestas:
+    "200":
+      descripcion: "SALIDA del mismo producto, sede y atención por lo pendiente; queda REGULARIZADO con su movimiento"
+      ejemplo: { idConsumo: 12, idAtencion: 1532, idProducto: 40, codigo: "INS-007", producto: "Keratina", unidad: ML, idSede: 1, cantidadEstimada: 30, cantidadDescontada: 10, cantidadPendiente: 20, estado: REGULARIZADO, fechaRegistro: "2026-11-09T10:45:00", idMovimiento: 330 }
+    "404": { descripcion: El consumo pendiente no existe, regla: RN53 }
+    "409": { descripcion: "Aún no hay stock (RN15) o ya está resuelto", regla: RN53 }
+
+"PATCH /api/v1/consumos-pendientes/{idConsumo}/descarte":
+  resumen: Descartar un consumo pendiente con su motivo
+  cus: CUS33
+  solicitud: { observacion: "Se usó menos de lo estimado" }
+  respuestas:
+    "200":
+      descripcion: Queda DESCARTADO con la observación
+      ejemplo: { idConsumo: 12, idAtencion: 1532, idProducto: 40, codigo: "INS-007", producto: "Keratina", unidad: ML, idSede: 1, cantidadEstimada: 30, cantidadDescontada: 10, cantidadPendiente: 20, estado: DESCARTADO, fechaRegistro: "2026-11-09T10:45:00", observacion: "Se usó menos de lo estimado" }
+    "404": { descripcion: El consumo pendiente no existe, regla: RN53 }
+    "409": { descripcion: Ya está resuelto y no cambia, regla: RN53 }
+    "422": { descripcion: Falta la observación (CK_CONSUMO_PEND_DESCARTADO), regla: RN53 }
+
+"GET /api/v1/clientes/{idCliente}":
+  resumen: Consultar la ficha de la clienta
+  cus: CUS03
+  respuestas:
+    "200":
+      descripcion: "Datos de PERSONA y CLIENTE, saldo a favor (RN05), atenciones con sus recomendaciones, citas pendientes, paquetes con sesiones (RN36) y productos comprados"
+      ejemplo: { cliente: { idCliente: 407, nombres: "Rosaura", apellidos: "Quispe", telefono: "987610001", origenDatos: MANUAL, aceptaComunicaciones: true, estado: ACTIVO }, saldoFavor: 20.00, atenciones: [ { idAtencion: 1532, idPersonal: 4, idVariante: 2, horaInicio: "2026-11-02T10:00:00", horaFin: "2026-11-02T10:30:00", estado: COBRADA, recomendaciones: [ { idRecomendacion: 8, idAtencion: 1532, idProducto: 40, observacion: "Para mantener el color", fecha: "2026-11-02T10:31:00" } ] } ], citasPendientes: [ { idCita: 951, idCliente: 407, fechaHoraInicio: "2026-11-16T10:00:00", duracionMin: 30, estado: PENDIENTE } ], paquetes: [ { idClientePaquete: 5, idPaquete: 3, sesionesTotales: 3, sesionesUsadas: 1, sesionesRestantes: 2, fechaCompra: "2026-11-02", fechaVencimiento: "2027-01-31", estado: ACTIVO } ], productosComprados: [ { idVenta: 610, fecha: "2026-11-02", idProducto: 40, producto: "Shampoo reparador", cantidad: 1, precioUnitario: 45.00, subtotal: 45.00 } ] }
+    "404": { descripcion: La clienta no existe, regla: RF02 }
+
+"PUT /api/v1/clientes/{idCliente}":
+  resumen: Actualizar los datos de la clienta
+  cus: CUS04
+  solicitud: { idTipoDocumento: 1, numeroDocumento: "71234567", nombres: "Rosaura", apellidos: "Quispe", telefono: "987610001", correo: "rosaura@correo.pe", fechaVerificacion: null, fechaCumpleanos: "1992-03-15", aceptaComunicaciones: true, observaciones: "Alérgica al tinte" }
+  respuestas:
+    "200":
+      descripcion: "PERSONA por PersonaApi y CLIENTE en agenda; un documento cambiado sin consulta nueva queda MANUAL (RN45)"
+      ejemplo: { idCliente: 407, idTipoDocumento: 1, numeroDocumento: "71234567", nombres: "Rosaura", apellidos: "Quispe", telefono: "987610001", correo: "rosaura@correo.pe", origenDatos: MANUAL, fechaCumpleanos: "1992-03-15", aceptaComunicaciones: true, fechaConsentimiento: "2026-11-09T10:00:00", observaciones: "Alérgica al tinte", estado: ACTIVO }
+    "400": { descripcion: Faltan los nombres, el teléfono o el consentimiento, regla: VALIDACION }
+    "404": { descripcion: La clienta no existe, regla: RF02 }
+    "409": { descripcion: El teléfono o el documento ya pertenecen a otra ficha, regla: RF05 }
+    "422": { descripcion: El número no cumple el formato del tipo de documento, regla: RN45 }
+
+"GET /api/v1/citas/lista-espera":
+  resumen: Listar las esperas pendientes del día
+  cus: CUS06
+  respuestas:
+    "200":
+      descripcion: Esperas PENDIENTES de la sede en el orden en que se anotaron, con la clienta, el servicio y el rango de horas
+      ejemplo: [ { idEspera: 31, idCliente: 407, idSede: 1, idVariante: 2, fechaDeseada: "2026-11-09", horaDesde: "15:00", horaHasta: "18:00", estado: PENDIENTE, idUsuario: 2, nombreCliente: "Rosaura Quispe", nombreServicio: "Corte de Cabello Caballero" } ]
+
+"PATCH /api/v1/citas/lista-espera/{idEspera}/descarte":
+  resumen: Descartar una espera
+  cus: CUS06
+  respuestas:
+    "200":
+      descripcion: La espera queda DESCARTADA
+      ejemplo: { idEspera: 31, idCliente: 407, idSede: 1, idVariante: 2, fechaDeseada: "2026-11-09", horaDesde: "15:00", horaHasta: "18:00", estado: DESCARTADA, idUsuario: 2 }
+    "404": { descripcion: La espera no existe, regla: RF09 }
+    "409": { descripcion: La espera ya se asignó o se descartó, regla: RF09 }
+
+"POST /api/v1/citas/{idCita}/reprogramacion":
+  resumen: Reprogramar una cita
+  cus: CUS09
+  solicitud: { fechaHoraInicio: "2026-11-16T15:00:00", idPersonal: 4, idRecurso: 2 }
+  respuestas:
+    "201":
+      descripcion: "La cita origen queda REPROGRAMADA; la nueva hereda el adelanto y guarda id_cita_origen (RN05)"
+      ejemplo: { idCita: 952, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 2, idVariante: 2, fechaHoraInicio: "2026-11-16T15:00:00", duracionMin: 30, fechaHoraFin: "2026-11-16T15:40:00", estado: PENDIENTE, idUsuario: 2, adelantoMonto: 20.00, idMedioPago: 1, idCaja: 12, idCitaOrigen: 951 }
+    "404": { descripcion: La cita no existe, regla: RF10 }
+    "409": { descripcion: Cruce de horario de la especialista o del recurso, regla: RN02 }
+    "422": { descripcion: "La fecha y hora ya pasaron (RN49) o la cita no está PENDIENTE", regla: RN49 }
+
+"PATCH /api/v1/citas/{idCita}/cancelacion":
+  resumen: Cancelar una cita
+  cus: CUS10
+  solicitud: { motivoCancelacion: "No se presentó" }
+  respuestas:
+    "200":
+      descripcion: "Cita CANCELADA; si tenía adelanto, pasa a saldo a favor de la clienta (RN05). La inasistencia es una cancelación con el motivo «No se presentó»"
+      ejemplo: { idCita: 951, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-16T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-16T10:40:00", estado: CANCELADA, idUsuario: 2, adelantoMonto: 20.00, motivoCancelacion: "No se presentó" }
+    "404": { descripcion: La cita no existe, regla: RF10 }
+    "422": { descripcion: "Falta el motivo o la cita no está PENDIENTE", regla: RF12 }
+
+"GET /api/v1/atenciones/productos":
+  resumen: Buscar productos para recomendar
+  cus: CUS12
+  respuestas:
+    "200":
+      descripcion: Productos de venta activos de la sede, con su precio y su stock (sin costo, RN24)
+      ejemplo: [ { idProducto: 40, codigo: "PRD-001", nombre: "Shampoo reparador", marca: "Loreal", idCategoria: 2, unidad: UND, precioVenta: 45.00, stockActual: 8 } ]
+
+"POST /api/v1/atenciones/{idAtencion}/recomendaciones":
+  resumen: Registrar una recomendación de producto
+  cus: CUS12
+  solicitud: { idProducto: 40, observacion: "Para mantener el color" }
+  respuestas:
+    "201":
+      descripcion: La recomendación queda ligada a la atención y aparece en la ficha de la clienta
+      ejemplo: { idRecomendacion: 8, idAtencion: 1532, idProducto: 40, observacion: "Para mantener el color", fecha: "2026-11-09T10:31:00" }
+    "403": { descripcion: Solo la especialista de la atención o la Administradora, regla: RN50 }
+    "404": { descripcion: La atención no existe, regla: RF13 }
+    "409": { descripcion: El producto ya se recomendó en esta atención, regla: RF16 }
+
+"GET /api/v1/servicios":
+  resumen: Listar los servicios con sus variantes y precios
+  cus: CUS58
+  respuestas:
+    "200":
+      descripcion: Servicios del área y estado pedidos (filtros opcionales), con variantes, precios e insumos
+      ejemplo: [ { idServicio: 21, idArea: 1, nombre: "Corte de novia", duracionRefMin: 60, tipoRecurso: SILLON, estado: ACTIVO, variantes: [ { idVariante: 30, nombreVariante: "Estándar", precio: 80.00, insumos: [ { idProducto: 4, cantidadEstimada: 15 } ] } ] } ]
+
+"PUT /api/v1/servicios/{idServicio}":
+  resumen: Actualizar un servicio
+  cus: CUS58
+  solicitud: { idArea: 1, nombre: "Corte de novia", duracionRefMin: 45, tipoRecurso: SILLON, estado: INACTIVO, variantes: [ { idVariante: 30, nombreVariante: "Estándar", precio: 80.00, insumos: [ { idProducto: 4, cantidadEstimada: 15 } ] } ] }
+  respuestas:
+    "200":
+      descripcion: "Datos e insumos actualizados; desactivar es estado INACTIVO (no se borra). El precio se cambia aparte"
+      ejemplo: { idServicio: 21, idArea: 1, nombre: "Corte de novia", duracionRefMin: 45, tipoRecurso: SILLON, estado: INACTIVO, variantes: [ { idVariante: 30, nombreVariante: "Estándar", precio: 80.00, insumos: [ { idProducto: 4, cantidadEstimada: 15 } ] } ] }
+    "400": { descripcion: Faltan datos del servicio o de sus variantes, regla: VALIDACION }
+    "404": { descripcion: El servicio no existe, regla: RF83 }
+    "422": { descripcion: "La duración va de 5 a 600 minutos, la variante no es del servicio o el consumo estimado no es mayor que 0 (RN54)", regla: RF83 }
+
+"PATCH /api/v1/servicios/{idServicio}/variantes/{idVariante}/precio":
+  resumen: Cambiar el precio de una variante
+  cus: CUS58
+  solicitud: { precioNuevo: 95.00 }
+  respuestas:
+    "200":
+      descripcion: "Precio cambiado; el anterior y el nuevo quedan en AUDITORIA (TRG_AUD_VARIANTE_SERVICIO, RN25)"
+      ejemplo: { idServicio: 21, idArea: 1, nombre: "Corte de novia", duracionRefMin: 60, tipoRecurso: SILLON, estado: ACTIVO, variantes: [ { idVariante: 30, nombreVariante: "Estándar", precio: 95.00 } ] }
+    "404": { descripcion: El servicio no existe, regla: RF83 }
+    "422": { descripcion: El precio es mayor o igual a 0, regla: RN40 }
+
+"GET /api/v1/paquetes":
+  resumen: Listar paquetes y membresías
+  cus: CUS59
+  respuestas:
+    "200":
+      descripcion: Paquetes o membresías con sus servicios (sin tipo, todos)
+      ejemplo: [ { idPaquete: 3, nombre: "Tres cortes", tipo: PAQUETE, numSesiones: 3, precio: 90.00, vigenciaDias: 90, estado: ACTIVO, idsServicio: [ 1 ] } ]
+
+"POST /api/v1/paquetes":
+  resumen: Registrar un paquete o membresía
+  cus: CUS59
+  solicitud: { nombre: "Tres cortes", tipo: PAQUETE, numSesiones: 3, precio: 90.00, vigenciaDias: 90, idsServicio: [ 1 ] }
+  respuestas:
+    "201":
+      descripcion: "Paquete con sus servicios en PAQUETE_SERVICIO; CUS11 descuenta de él las sesiones (RN36)"
+      ejemplo: { idPaquete: 3, nombre: "Tres cortes", tipo: PAQUETE, numSesiones: 3, precio: 90.00, vigenciaDias: 90, estado: ACTIVO, idsServicio: [ 1 ] }
+    "400": { descripcion: Faltan el nombre o el tipo, regla: VALIDACION }
+    "422": { descripcion: "Al menos una sesión, precio mayor o igual a 0 y vigencia de al menos un día", regla: RF84 }
+
+"GET /api/v1/promociones":
+  resumen: Listar promociones
+  cus: CUS60
+  respuestas:
+    "200":
+      descripcion: Con vigentes=true, solo las ACTIVAS cuya vigencia incluye hoy; si no, todas
+      ejemplo: [ { idPromocion: 7, nombre: "Noviembre feliz", tipoDescuento: PORCENTAJE, valor: 10.00, fechaInicio: "2026-11-01", fechaFin: "2026-11-30", estado: ACTIVA, idsServicio: [ 1, 2 ] } ]
+
+"POST /api/v1/promociones":
+  resumen: Registrar una promoción
+  cus: CUS60
+  solicitud: { nombre: "Noviembre feliz", tipoDescuento: PORCENTAJE, valor: 10.00, fechaInicio: "2026-11-01", fechaFin: "2026-11-30", idsServicio: [ 1, 2 ] }
+  respuestas:
+    "201":
+      descripcion: Promoción ACTIVA con sus servicios en PROMOCION_SERVICIO
+      ejemplo: { idPromocion: 7, nombre: "Noviembre feliz", tipoDescuento: PORCENTAJE, valor: 10.00, fechaInicio: "2026-11-01", fechaFin: "2026-11-30", estado: ACTIVA, idsServicio: [ 1, 2 ] }
+    "400": { descripcion: Faltan el nombre o el tipo de descuento, regla: VALIDACION }
+    "422": { descripcion: "El descuento es mayor que 0 (hasta 100 si es porcentaje) y la vigencia termina el mismo día o después", regla: RF84 }
+
+"GET /api/v1/ventas/productos":
+  resumen: Buscar productos para vender
+  cus: CUS25
+  respuestas:
+    "200":
+      descripcion: Productos de venta activos con su precio y su stock en la sede de la sesión (los insumos no aparecen)
+      ejemplo: [ { idProducto: 40, codigo: "PRD-001", nombre: "Shampoo reparador", marca: "Loreal", idCategoria: 2, unidad: UND, precioVenta: 45.00, stockActual: 8 } ]
+
+"POST /api/v1/ventas/productos":
+  resumen: Vender productos
+  cus: CUS26
+  solicitud: { idCliente: 407, lineas: [ { idProducto: 40, cantidad: 2, idPersonal: 4 } ], idMedioPago: 1, monto: 90.00, tipo: BOLETA }
+  respuestas:
+    "201":
+      descripcion: "Venta CERRADA con su boleta o factura; Oracle registra la salida de kardex al cerrar (TRG_VENTA_EFECTOS)"
+      ejemplo: { idVenta: 620, idSede: 1, idCaja: 12, idCliente: 407, estado: CERRADA, detalles: [ { idDetalle: 900, tipoItem: PRODUCTO, cantidad: 2, precioUnitario: 45.00, descuento: 0.00, subtotal: 90.00, idPersonal: 4, idProducto: 40 } ], subtotal: 90.00, igv: 0.00, descuento: 0.00, adelantoAplicado: 0.00, saldoFavorAplicado: 0.00, total: 90.00, pagos: [ { idMedioPago: 1, monto: 90.00 } ], pagado: 90.00, pendiente: 0.00, cobrosPendientes: [ ], comprobante: { idComprobante: 700, tipo: BOLETA, serie: B001, numero: "00000125", estadoSunat: PENDIENTE } }
+    "202":
+      descripcion: "El cobro digital quedó PENDIENTE: la venta queda ABIERTA y se cierra con POST /ventas/{idVenta}/cierre cuando la pasarela lo aprueba (RN52)"
+      ejemplo: { idVenta: 621, idSede: 1, idCaja: 12, estado: ABIERTA, total: 45.00, pagos: [ ], pagado: 0.00, pendiente: 45.00, cobrosPendientes: [ { idTransaccion: 77, enlacePago: "https://pasarela.example/qr/77" } ] }
+    "400": { descripcion: Faltan las líneas, el medio de pago, el monto o el tipo de comprobante, regla: VALIDACION }
+    "409": { descripcion: No hay stock suficiente en la sede, regla: RN15 }
+    "422": { descripcion: "Sin caja abierta (RN30), el monto no es el total (RN11), un insumo no se vende (RN13) o la pasarela rechazó el cobro (RF103)", regla: RN11 }
+
+"POST /api/v1/ventas/{idVenta}/solicitudes-anulacion":
+  resumen: Solicitar la anulación de una venta
+  cus: CUS22
+  solicitud: { motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: SALDO_FAVOR }
+  respuestas:
+    "201":
+      descripcion: Solicitud PENDIENTE en la bandeja de la Administradora; la venta no cambia
+      ejemplo: { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: SALDO_FAVOR, estado: PENDIENTE, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125" }
+    "404": { descripcion: La venta no existe, regla: RF32 }
+    "409": { descripcion: La venta ya tiene una solicitud de anulación PENDIENTE, regla: UQ_SOL_ANUL_PENDIENTE }
+    "422": { descripcion: "La venta no está CERRADA (RN12), falta el motivo o el código no es 01, 02 o 06 (RN32), o un cliente de paso eligió saldo a favor (RN44)", regla: RN12 }
+
+"GET /api/v1/solicitudes-anulacion":
+  resumen: Bandeja de solicitudes de anulación
+  cus: CUS23
+  respuestas:
+    "200":
+      descripcion: "Solicitudes de la sede con su venta, total, motivo, quién la pidió y cuándo; sin estado, las PENDIENTES"
+      ejemplo: [ { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: SALDO_FAVOR, estado: PENDIENTE, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125" } ]
+
+"POST /api/v1/solicitudes-anulacion/{idSolicitud}/aprobacion":
+  resumen: Aprobar una solicitud de anulación
+  cus: CUS23
+  respuestas:
+    "200":
+      descripcion: "En una transacción: nota de crédito enviada a SUNAT (PENDIENTE si no responde), venta ANULADA (Oracle devuelve la atención, anula el paquete, abona el saldo y reingresa los productos) y solicitud APROBADA"
+      ejemplo: { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: SALDO_FAVOR, estado: APROBADA, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idUsuarioResuelve: 1, fechaResolucion: "2026-11-09T11:30:00", idNotaCredito: 701, idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125" }
+    "404": { descripcion: La solicitud no existe, regla: RN32 }
+    "409": { descripcion: "La solicitud ya está resuelta (RN32) o SUNAT aún no acepta el comprobante (RN46)", regla: RN32 }
+
+"POST /api/v1/solicitudes-anulacion/{idSolicitud}/rechazo":
+  resumen: Rechazar una solicitud de anulación
+  cus: CUS23
+  solicitud: { motivoRechazo: "La venta es correcta" }
+  respuestas:
+    "200":
+      descripcion: Solicitud RECHAZADA con su motivo; la venta sigue CERRADA
+      ejemplo: { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: MEDIO_ORIGINAL, estado: RECHAZADA, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idUsuarioResuelve: 1, fechaResolucion: "2026-11-09T11:30:00", motivoRechazo: "La venta es correcta", idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125" }
+    "404": { descripcion: La solicitud no existe, regla: RN32 }
+    "409": { descripcion: La solicitud ya está resuelta, regla: RN32 }
+    "422": { descripcion: Falta el motivo del rechazo, regla: RN32 }
+
+"POST /api/v1/ventas/{idVenta}/devolucion":
+  resumen: Devolver los pagos con tarjeta por la pasarela
+  cus: CUS24
+  solicitud: { formaDevolucion: MEDIO_ORIGINAL }
+  respuestas:
+    "200":
+      descripcion: "Una DEVOLUCION por cada pago con tarjeta de la venta ANULADA con nota MEDIO_ORIGINAL; no escribe saldo a favor"
+      ejemplo: { idVenta: 620, formaDevolucion: MEDIO_ORIGINAL, idNotaCredito: 701, devoluciones: [ { idTransaccion: 80, estado: APROBADA, codigoOperacion: "REEMB-80", canal: POS } ] }
+    "404": { descripcion: La venta no existe, regla: RF32 }
+    "409": { descripcion: El cobro ya tiene su devolución, regla: RN44 }
+    "422": { descripcion: "La venta no está ANULADA con nota MEDIO_ORIGINAL, no tiene pagos con tarjeta o la pasarela rechazó la devolución", regla: RN44 }
+
+"POST /api/v1/ventas/{idVenta}/devolucion-manual":
+  resumen: Registrar la devolución manual de Yape o Plin
+  cus: CUS24
+  solicitud: { idTransaccion: 81, codigoOperacion: "YAPE-123456" }
+  respuestas:
+    "201":
+      descripcion: "DEVOLUCION APROBADA, con canal QR y el número de operación de la app de la Administradora"
+      ejemplo: { idVenta: 620, formaDevolucion: MEDIO_ORIGINAL, idTransaccion: 81, codigoOperacion: "YAPE-123456", idNotaCredito: 701, devoluciones: [ { idTransaccion: 82, estado: APROBADA, codigoOperacion: "YAPE-123456", canal: QR } ] }
+    "404": { descripcion: La venta o la transacción no existen, regla: RN44 }
+    "409": { descripcion: El cobro ya tiene su devolución, regla: RN44 }
+    "422": { descripcion: "La venta no está ANULADA con nota MEDIO_ORIGINAL, el cobro no es de la venta o no se pagó por QR, o falta el número de operación", regla: RN44 }
+
+"GET /api/v1/cajas/con-diferencia":
+  resumen: Listar los cierres con diferencia por aprobar
+  cus: CUS46
+  respuestas:
+    "200":
+      descripcion: Cajas CERRADAS de la sede con diferencia en algún medio y su observación, aún sin aprobar (RN30)
+      ejemplo: [ { idCaja: 12, idSede: 1, idUsuarioApertura: 2, fechaApertura: "2026-11-09T08:55:00", montoInicial: 100.00, idUsuarioCierre: 2, fechaCierre: "2026-11-09T20:05:00", estado: CERRADA, arqueos: [ { idMedioPago: 1, montoEsperado: 450.00, montoContado: 440.00, diferencia: -10.00, observacion: "Faltó vuelto" } ] } ]
+
+"PATCH /api/v1/cajas/{idCaja}/revision":
+  resumen: Aprobar un cierre con diferencia
+  cus: CUS46
+  respuestas:
+    "200":
+      descripcion: La caja sigue CERRADA y queda revisada (RF67)
+      ejemplo: { idCaja: 12, idSede: 1, estado: CERRADA, idUsuarioRevisa: 1, fechaRevision: "2026-11-10T09:00:00" }
+    "404": { descripcion: La caja no existe, regla: RN30 }
+    "422": { descripcion: "La caja no está CERRADA, ya se aprobó o no tiene diferencias", regla: RF67 }
+
+"GET /api/v1/cajas/del-dia":
+  resumen: Listar las cajas de hoy de la sede
+  cus: CUS46
+  respuestas:
+    "200":
+      descripcion: Cajas abiertas hoy en la sede, de la última a la primera, para reabrir la CERRADA (RF66)
+      ejemplo: [ { idCaja: 12, idSede: 1, fechaApertura: "2026-11-09T08:55:00", montoInicial: 100.00, fechaCierre: "2026-11-09T20:05:00", estado: CERRADA } ]
+
+"PATCH /api/v1/cajas/{idCaja}/reapertura":
+  resumen: Reabrir la caja del día
+  cus: CUS46
+  solicitud: { motivoReapertura: "Venta registrada después del cierre" }
+  respuestas:
+    "200":
+      descripcion: "La caja vuelve a ABIERTA; Oracle guarda quién y cuándo y limpia el cierre y la revisión. Luego se vuelve a arquear y cerrar (CUS45)"
+      ejemplo: { idCaja: 12, idSede: 1, estado: ABIERTA, idUsuarioReapertura: 1, fechaReapertura: "2026-11-09T20:30:00", motivoReapertura: "Venta registrada después del cierre" }
+    "404": { descripcion: La caja no existe, regla: RN30 }
+    "409": { descripcion: La sede ya tiene otra caja ABIERTA (UQ_CAJA_ABIERTA_SEDE), regla: RN30 }
+    "422": { descripcion: "Falta el motivo, la caja no está CERRADA o no es la del día", regla: RN30 }
+
+"POST /api/v1/conciliaciones/liquidacion":
+  resumen: Importar el reporte de liquidación de Izipay
+  cus: CUS47
+  tipoSolicitud: multipart/form-data
+  solicitud: { archivoLiquidacion: "(archivo liquidacion-noviembre.csv o .xlsx descargado del panel de Izipay)" }
+  respuestas:
+    "200":
+      descripcion: "Comisión y fecha de abono guardadas en cada cobro APROBADO por su código de operación; los códigos que no casaron se informan"
+      ejemplo: { filasLeidas: 3, filasRegistradas: 2, codigosSinTransaccion: [ "CS-0000-DESCONOCIDO" ] }
+    "422": { descripcion: "El archivo está vacío, le falta una columna configurada o una comisión o fecha no se entiende", regla: RF105 }
+
+"POST /api/v1/conciliaciones":
+  resumen: Conciliar las ventas del mes
+  cus: CUS47
+  solicitud: { anio: 2026, mes: 11 }
+  respuestas:
+    "201":
+      descripcion: "Conciliación ABIERTA con una diferencia por venta, comprobante o transacción (RN31); las ventas anuladas no cuentan (RN33)"
+      ejemplo: { idConciliacion: 3, anio: 2026, mes: 11, idUsuario: 1, estado: ABIERTA, sinJustificar: 1, items: [ { idItem: 40, idVenta: 620, referenciaSunat: "B001-00000125", aceptadoSunat: true, pagoRespaldado: true, estado: COINCIDE }, { idItem: 41, idTransaccion: 82, aceptadoSunat: false, pagoRespaldado: false, estado: SIN_JUSTIFICAR } ] }
+    "409": { descripcion: Ya existe la conciliación de ese mes, regla: RF75 }
+    "422": { descripcion: Indique un mes válido desde 2026, regla: RF75 }
+
+"PATCH /api/v1/conciliaciones/{idConciliacion}/items/{idItem}":
+  resumen: Justificar o excluir una diferencia
+  cus: CUS47
+  solicitud: { estado: JUSTIFICADA, justificacion: "Devolución de Yape hecha desde la app (CUS24)" }
+  respuestas:
+    "200":
+      descripcion: La diferencia queda JUSTIFICADA o EXCLUIDA
+      ejemplo: { idConciliacion: 3, anio: 2026, mes: 11, estado: ABIERTA, sinJustificar: 0, items: [ { idItem: 41, idTransaccion: 82, aceptadoSunat: false, pagoRespaldado: false, estado: JUSTIFICADA, justificacion: "Devolución de Yape hecha desde la app (CUS24)" } ] }
+    "404": { descripcion: La conciliación no existe, regla: RF75 }
+    "422": { descripcion: "Falta la justificación, el ítem coincide o no es de la conciliación, o la conciliación ya está CERRADA", regla: RF75 }
+
+"PATCH /api/v1/conciliaciones/{idConciliacion}/cierre":
+  resumen: Cerrar la conciliación del mes
+  cus: CUS47
+  respuestas:
+    "200":
+      descripcion: CERRADA con su fecha; ya no cambia (CK_CONCILIACION_CIERRE)
+      ejemplo: { idConciliacion: 3, anio: 2026, mes: 11, idUsuario: 1, estado: CERRADA, fechaCierre: "2026-12-02T10:00:00", sinJustificar: 0, items: [ ] }
+    "404": { descripcion: La conciliación no existe, regla: RF75 }
+    "422": { descripcion: "Quedan diferencias SIN_JUSTIFICAR o ya está CERRADA", regla: RF75 }
+
+"PATCH /api/v1/usuarios/{idUsuario}/clave":
+  resumen: Restablecer la contraseña
+  cus: CUS54
+  solicitud: { clave: "Temporal2026" }
+  respuestas:
+    "200":
+      descripcion: "Clave temporal guardada como BCrypt, debe cambiarla en su siguiente ingreso, sin intentos fallidos y desbloqueada; la clave no vuelve"
+      ejemplo: { idUsuario: 3, idPersonal: 4, idRol: 3, nombreUsuario: especialista1, estado: ACTIVO, debeCambiarClave: true }
+    "400": { descripcion: La clave tiene de 8 a 72 caracteres, regla: VALIDACION }
+    "404": { descripcion: El usuario no existe, regla: RF82 }
+
+"GET /api/v1/auditoria":
+  resumen: Consultar la auditoría
+  cus: CUS55
+  respuestas:
+    "200":
+      descripcion: "V_AUDITORIA con filtros opcionales de usuario, módulo, entidad y fechas (sin fechas, los últimos 30 días)"
+      ejemplo: [ { idAuditoria: 900, fechaHora: "2026-11-09T11:30:00", usuario: admin, rol: ADMINISTRADORA, modulo: Ventas, accion: EDITAR, entidad: VENTA, idEntidad: 620, detalle: "estado: CERRADA -> ANULADA" } ]
+    "422": { descripcion: La fecha de inicio es posterior a la de fin, regla: RF80 }
+
+"GET /api/v1/medios-pago":
+  resumen: Listar los medios de pago
+  cus: CUS62
+  respuestas:
+    "200":
+      descripcion: Efectivo, Yape, Plin y tarjeta con su estado y si usan la pasarela
+      ejemplo: [ { idMedioPago: 1, nombre: EFECTIVO, estado: ACTIVO, usaPasarela: false }, { idMedioPago: 2, nombre: YAPE, estado: ACTIVO, usaPasarela: true } ]
+
+"PATCH /api/v1/medios-pago/{idMedioPago}":
+  resumen: Configurar un medio de pago
+  cus: CUS62
+  solicitud: { estado: ACTIVO, usaPasarela: true }
+  respuestas:
+    "200":
+      descripcion: Medio de pago actualizado
+      ejemplo: { idMedioPago: 2, nombre: YAPE, estado: ACTIVO, usaPasarela: true }
+    "404": { descripcion: El medio de pago no existe, regla: RF88 }
+    "422": { descripcion: El efectivo no se cobra por la pasarela (CK_MEDIO_PAGO_EFECTIVO), regla: RN42 }
+
+"GET /api/v1/series-comprobante":
+  resumen: Listar las series de comprobante de la sede
+  cus: CUS63
+  respuestas:
+    "200":
+      descripcion: Series de la sede (sin idSede, la de la sesión) con su último número, que lleva Oracle (RN47)
+      ejemplo: [ { idSerie: 1, idSede: 1, tipo: BOLETA, serie: B001, ultimoNumero: 125, estado: ACTIVA } ]
+
+"POST /api/v1/series-comprobante":
+  resumen: Registrar una serie de comprobante
+  cus: CUS63
+  solicitud: { idSede: 2, tipo: BOLETA, serie: B002 }
+  respuestas:
+    "201":
+      descripcion: Serie ACTIVA con el correlativo en 0
+      ejemplo: { idSerie: 9, idSede: 2, tipo: BOLETA, serie: B002, ultimoNumero: 0, estado: ACTIVA }
+    "400": { descripcion: Falta el tipo de comprobante, regla: VALIDACION }
+    "409": { descripcion: "La sede ya tiene una serie ACTIVA de ese tipo o la serie ya existe", regla: UQ_SERIE_COMPR_ACTIVA }
+    "422": { descripcion: La serie tiene 4 caracteres y empieza con B o F según el tipo, regla: RF107 }
+
+"GET /api/v1/parametros":
+  resumen: Listar los parámetros del negocio
+  cus: CUS65
+  respuestas:
+    "200":
+      descripcion: Parámetros con su valor, su vigencia y quién los cambió
+      ejemplo: [ { idParametro: 9, codigo: AGENDA_PASO_MIN, descripcion: "Minutos entre horas libres de la agenda (RN51)", valorNumero: 15, fechaVigencia: "2026-11-08", idUsuario: 1 } ]
+
+"PATCH /api/v1/parametros/{codigo}":
+  resumen: Cambiar el valor de un parámetro
+  cus: CUS65
+  solicitud: { valorNumero: 10, fechaVigencia: "2026-11-10" }
+  respuestas:
+    "200":
+      descripcion: Valor cambiado; TRG_AUD_PARAMETRO lo audita (RN29)
+      ejemplo: { idParametro: 8, codigo: LIMPIEZA_MAX_MIN, descripcion: "Minutos máximos de limpieza del recurso (RN03)", valorNumero: 10, fechaVigencia: "2026-11-10", idUsuario: 1 }
+    "404": { descripcion: El parámetro no existe (los códigos no se crean), regla: RF87 }
+    "422": { descripcion: "Falta el valor (CK_PARAMETRO_VALOR), AGENDA_PASO_MIN no es un entero mayor que 0 (RN51) o LIMPIEZA_MAX_MIN no es un entero de 0 a 10 (RN03)", regla: RN03 }
+
+"GET /api/v1/tipos-documento":
+  resumen: Listar los tipos de documento
+  cus: CUS65
+  respuestas:
+    "200":
+      descripcion: "Catálogo 06 de SUNAT con su longitud y formato; reemplaza los id fijos del front-end"
+      ejemplo: [ { idTipoDocumento: 1, codigoSunat: "1", nombre: "Documento Nacional de Identidad", abreviatura: DNI, longitudMin: 8, longitudMax: 8, soloNumeros: true, consultaApi: true, estado: ACTIVO } ]
+
+"PATCH /api/v1/tipos-documento/{idTipoDocumento}":
+  resumen: Configurar un tipo de documento
+  cus: CUS65
+  solicitud: { consultaApi: false, estado: INACTIVO }
+  respuestas:
+    "200":
+      descripcion: Tipo de documento activado o desactivado y marcado para consultar en APISPERU
+      ejemplo: { idTipoDocumento: 4, codigoSunat: "7", nombre: "Pasaporte", abreviatura: PAS, longitudMin: 6, longitudMax: 12, soloNumeros: false, consultaApi: false, estado: INACTIVO }
+    "404": { descripcion: El tipo de documento no existe, regla: RN45 }
+    "422": { descripcion: Solo el DNI y el RUC se consultan en APISPERU, regla: RN45 }
+
+"GET /api/v1/reportes/{tipoReporte}":
+  resumen: Generar un reporte gerencial
+  cus: CUS48
+  respuestas:
+    "200":
+      descripcion: "ventas (RF68), productos (RF69), margen (RF70), demanda (RF71), ocupacion (RF72) o especialistas (RF73), sin ventas anuladas (RN33); sin idSede, el consolidado (RF93)"
+      ejemplo: { tipoReporte: ventas, titulo: Ventas, agrupacion: LINEA, fechaInicio: "2026-11-01", fechaFin: "2026-11-30", columnas: [ { campo: grupo, titulo: Grupo }, { campo: cantidad, titulo: "Ventas o unidades" }, { campo: importe, titulo: "Importe S/" } ], filas: [ { grupo: SALON, cantidad: 42, importe: 1470.00 }, { grupo: SPA, cantidad: 18, importe: 1260.00 } ] }
+    "403": { descripcion: "Costos y márgenes (productos y margen) sin ser la Administradora", regla: RN24 }
+    "404": { descripcion: El tipo de reporte no existe, regla: RF68 }
+    "422": { descripcion: "Faltan las fechas, el inicio es posterior al fin, el rango pasa de 366 días o la agrupación no es de ese reporte", regla: RF68 }
+
+"GET /api/v1/reportes/{tipoReporte}/exportacion":
+  resumen: Exportar un reporte gerencial
+  cus: CUS49
+  respuestas:
+    "200":
+      descripcion: "Descarga de reporte_<tipo>_<desde>_<hasta>.pdf (formato=PDF) o .xlsx (formato=EXCEL), con Content-Disposition: attachment"
+      tipos: [ application/pdf, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet ]
+    "403": { descripcion: "Costos y márgenes (productos y margen) sin ser la Administradora", regla: RN24 }
+    "404": { descripcion: El tipo de reporte no existe, regla: RF68 }
+    "422": { descripcion: "El formato no es EXCEL ni PDF (RF74), o las fechas o la agrupación no son válidas (RF68)", regla: RF74 }

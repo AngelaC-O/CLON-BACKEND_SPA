@@ -112,6 +112,20 @@ public class Usuario {
 		this.debeCambiarClave = Boolean.FALSE;
 	}
 
+	/**
+	 * RF82: la Administradora pone una clave temporal; la cuenta queda desbloqueada, sin intentos fallidos y obliga a
+	 * cambiar la clave en el siguiente ingreso (CUS50). Una cuenta INACTIVA sigue INACTIVA.
+	 */
+	public void restablecerClave(String claveHash) {
+		this.claveHash = claveHash;
+		this.debeCambiarClave = Boolean.TRUE;
+		this.intentosFallidos = 0;
+		this.bloqueadoHasta = null;
+		if (estado == EstadoUsuario.BLOQUEADO) {
+			this.estado = EstadoUsuario.ACTIVO;
+		}
+	}
+
 	public void asignarRol(Long idRol) {
 		this.idRol = idRol;
 	}

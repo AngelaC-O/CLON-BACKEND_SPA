@@ -14,11 +14,19 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.SesionOracle;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.UsuarioActual;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.PersonaApi;
+import dev.com.Synapsis_Spa_Cautiva.ventas.controller.ComprobanteDTO;
+import dev.com.Synapsis_Spa_Cautiva.ventas.controller.MapperVenta;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.Comprobante;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.EstadoSunat;
+import dev.com.Synapsis_Spa_Cautiva.ventas.domain.NotaCredito;
+import dev.com.Synapsis_Spa_Cautiva.ventas.domain.SolicitudAnulacion;
+import dev.com.Synapsis_Spa_Cautiva.ventas.domain.TipoComprobante;
+import dev.com.Synapsis_Spa_Cautiva.ventas.domain.Venta;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.VentaDetalle;
 import dev.com.Synapsis_Spa_Cautiva.ventas.repository.FilaCpePendiente;
 import dev.com.Synapsis_Spa_Cautiva.ventas.repository.RepositorioComprobante;
+import dev.com.Synapsis_Spa_Cautiva.ventas.repository.RepositorioNotaCredito;
+import dev.com.Synapsis_Spa_Cautiva.ventas.repository.RepositorioVenta;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -37,6 +45,10 @@ public class ServicioFacturacionElectronica {
 	private static final long DIAS_DE_ALERTA = 1;
 
 	private final RepositorioComprobante repositorioComprobante;
+
+	private final RepositorioNotaCredito repositorioNotaCredito;
+
+	private final RepositorioVenta repositorioVenta;
 
 	private final FacturacionElectronicaPort facturacionElectronicaPort;
 
@@ -60,16 +72,21 @@ public class ServicioFacturacionElectronica {
 
 	private final TransactionTemplate transacciones;
 
+	private final MapperVenta mapperVenta;
+
 	private final String urlPublica;
 
 	private final long vigenciaHoras;
 
-	ServicioFacturacionElectronica(RepositorioComprobante repositorioComprobante, FacturacionElectronicaPort facturacionElectronicaPort,
+	ServicioFacturacionElectronica(RepositorioComprobante repositorioComprobante, RepositorioNotaCredito repositorioNotaCredito, RepositorioVenta repositorioVenta,
+			FacturacionElectronicaPort facturacionElectronicaPort,
 			AlmacenArchivosPort almacenArchivosPort, GeneradorPdfComprobante generadorPdfComprobante, FirmaEnlaceComprobante firmaEnlaceComprobante,
 			PersonaApi personaApi, AtencionApi atencionApi, CatalogoApi catalogoApi, ParametroApi parametroApi, SesionOracle sesionOracle,
-			UsuarioActual usuarioActual, TransactionTemplate transacciones, @Value("${cautiva.comprobantes.url-publica}") String urlPublica,
+			UsuarioActual usuarioActual, TransactionTemplate transacciones, MapperVenta mapperVenta, @Value("${cautiva.comprobantes.url-publica}") String urlPublica,
 			@Value("${cautiva.comprobantes.enlace-vigencia-horas}") long vigenciaHoras) {
 		this.repositorioComprobante = repositorioComprobante;
+		this.repositorioNotaCredito = repositorioNotaCredito;
+		this.repositorioVenta = repositorioVenta;
 		this.facturacionElectronicaPort = facturacionElectronicaPort;
 		this.almacenArchivosPort = almacenArchivosPort;
 		this.generadorPdfComprobante = generadorPdfComprobante;
@@ -81,6 +98,7 @@ public class ServicioFacturacionElectronica {
 		this.sesionOracle = sesionOracle;
 		this.usuarioActual = usuarioActual;
 		this.transacciones = transacciones;
+		this.mapperVenta = mapperVenta;
 		this.urlPublica = urlPublica;
 		this.vigenciaHoras = vigenciaHoras;
 	}
@@ -92,13 +110,50 @@ public class ServicioFacturacionElectronica {
 		if (usuarioActual.buscarIdUsuario().isEmpty()) {
 			sesionOracle.iniciar(oComprobante.getIdUsuarioVenta());
 		}
+		registrarEnvio(oComprobante);
+		return repositorioComprobante.saveAndFlush(oComprobante);
+	}
+
+	/**
+	 * [It. 2 · CUS23, RF33, RN12, RN46, RN47] La nota de crédito de la venta, con los datos de la solicitud aprobada: NC_BOLETA anula la BOLETA y
+	 * NC_FACTURA la FACTURA (UQ_COMPROBANTE_VENTA_CLASE); serie (BC01 o FC01), número y comprador los pone Oracle al insertar (PKG_VENTA,
+	 * TRG_COMPROBANTE_REGLAS). id_usuario_autoriza es la Administradora de la sesión; id_usuario_solicita sale de la solicitud, pero
+	 * TRG_NOTA_CREDITO_REGLAS lo reemplaza por el usuario de PKG_SESION (D-21). Se envía a APISPERU como el comprobante de CUS19: si no responde
+	 * queda PENDIENTE y la reenvía ReenvioCpeJob (RN46). SUNAT solo acepta la nota de un comprobante que ya aceptó (-20076): antes, 409.
+	 */
+	@Transactional
+	public NotaCredito emitirNotaCredito(Long idVenta, SolicitudAnulacion oSolicitud) {
+		Venta oVenta = repositorioVenta.findById(idVenta)
+			.orElseThrow(() -> new ReglaNegocioException("RF33", "La venta " + idVenta + " no existe.", HttpStatus.NOT_FOUND));
+		Comprobante oOriginal = comprobanteDeVenta(oVenta);
+		if (oOriginal.getEstadoSunat() != EstadoSunat.ACEPTADO && oOriginal.getEstadoSunat() != EstadoSunat.OBSERVADO) {
+			throw new ReglaNegocioException("RN46", "El comprobante " + oOriginal.getSerie() + "-" + oOriginal.getNumero() + " está " + oOriginal.getEstadoSunat()
+					+ " en SUNAT: la nota de crédito se emite cuando SUNAT lo acepta.", HttpStatus.CONFLICT);
+		}
+		TipoComprobante tipo = oOriginal.getTipo() == TipoComprobante.BOLETA ? TipoComprobante.NC_BOLETA : TipoComprobante.NC_FACTURA;
+		NotaCredito oNotaCredito = new NotaCredito(oVenta, tipo, oSolicitud.getMotivo(), oSolicitud.getCodigoMotivo(), oSolicitud.getFormaDevolucion(),
+				oSolicitud.getIdUsuarioSolicita(), usuarioActual.idUsuario());
+		repositorioNotaCredito.saveAndFlush(oNotaCredito);
+		registrarEnvio(oNotaCredito);
+		return repositorioNotaCredito.saveAndFlush(oNotaCredito);
+	}
+
+	/** Envía el comprobante o la nota, guarda el XML y el CDR y registra la respuesta de SUNAT (RN47). */
+	private void registrarEnvio(Comprobante oComprobante) {
 		RespuestaCpe oRespuestaCpe = enviar(oComprobante);
 		String base = "comprobantes/" + oComprobante.getSerie() + "-" + oComprobante.getNumero();
 		String rutaXml = oRespuestaCpe.xml() == null ? null : almacenArchivosPort.guardar(base + ".xml", oRespuestaCpe.xml());
 		String rutaCdr = oRespuestaCpe.cdr() == null ? null : almacenArchivosPort.guardar(base + "-cdr.xml", oRespuestaCpe.cdr());
 		oComprobante.registrarRespuestaSunat(oRespuestaCpe.estadoSunat(), oRespuestaCpe.codigoRespuesta(), oRespuestaCpe.descripcionRespuesta(),
 				oRespuestaCpe.hashCpe(), rutaXml, rutaCdr);
-		return repositorioComprobante.saveAndFlush(oComprobante);
+	}
+
+	/** La BOLETA o FACTURA de la venta, la que anula la nota de crédito (RN12). */
+	private static Comprobante comprobanteDeVenta(Venta oVenta) {
+		return oVenta.getComprobantes().stream()
+			.filter(comprobante -> comprobante.getTipo() == TipoComprobante.BOLETA || comprobante.getTipo() == TipoComprobante.FACTURA)
+			.findFirst()
+			.orElseThrow(() -> new ReglaNegocioException("RN12", "La venta " + oVenta.getIdVenta() + " no tiene boleta ni factura que anular."));
 	}
 
 	/** Una transacción por comprobante: un fallo no deshace los demás. Devuelve cuántos se reenviaron (RF101, RN46). */
@@ -117,6 +172,12 @@ public class ServicioFacturacionElectronica {
 			}
 		}
 		return reenviados;
+	}
+
+	/** [It. 2] CUS20: el comprobante con su estado SUNAT actual, también después del reenvío de ReenvioCpeJob (RN46, Duda 12 del front-end). */
+	@Transactional(readOnly = true)
+	public ComprobanteDTO obtenerComprobante(Long idComprobante) {
+		return mapperVenta.aDTO(buscar(idComprobante));
 	}
 
 	@Transactional(readOnly = true)
@@ -158,12 +219,23 @@ public class ServicioFacturacionElectronica {
 		}
 	}
 
+	/**
+	 * [It. 2] Una nota de crédito lleva el comprador y las líneas del comprobante que anula (TRG_COMPROBANTE_REGLAS copia el comprador al insertar,
+	 * pero la entidad recién guardada no lo vuelve a leer) y la referencia a ese comprobante con el motivo.
+	 */
 	private DocumentoElectronico aDocumento(Comprobante oComprobante) {
 		BigDecimal igvPorcentaje = parametroApi.valorNumero("IGV_PORCENTAJE");
-		String codigoSunat = oComprobante.getIdTipoDocComprador() == null ? null : personaApi.obtenerCodigoSunat(oComprobante.getIdTipoDocComprador());
 		List<DocumentoElectronico.Linea> lineas = oComprobante.getDetallesVenta().stream().map(this::aLinea).toList();
+		Comprobante oComprador = oComprobante;
+		DocumentoElectronico.NotaAfectada oNotaAfectada = null;
+		if (oComprobante instanceof NotaCredito oNotaCredito) {
+			oComprador = comprobanteDeVenta(repositorioVenta.findById(oNotaCredito.getIdVenta()).orElseThrow());
+			oNotaAfectada = new DocumentoElectronico.NotaAfectada(oComprador.getTipo().name(), oComprador.getSerie(), oComprador.getNumero(),
+					oNotaCredito.getCodigoMotivo(), oNotaCredito.getMotivo());
+		}
+		String codigoSunat = oComprador.getIdTipoDocComprador() == null ? null : personaApi.obtenerCodigoSunat(oComprador.getIdTipoDocComprador());
 		return new DocumentoElectronico(oComprobante.getTipo().name(), oComprobante.getSerie(), oComprobante.getNumero(), oComprobante.getFechaEmision(), codigoSunat,
-				oComprobante.getNroDocComprador(), oComprobante.getNombreComprador(), oComprobante.getImporteVenta(), igvPorcentaje, lineas);
+				oComprador.getNroDocComprador(), oComprador.getNombreComprador(), oComprobante.getImporteVenta(), igvPorcentaje, lineas, oNotaAfectada);
 	}
 
 	private DocumentoElectronico.Linea aLinea(VentaDetalle oDetalle) {

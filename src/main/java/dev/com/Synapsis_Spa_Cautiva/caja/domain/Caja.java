@@ -1,6 +1,7 @@
 package dev.com.Synapsis_Spa_Cautiva.caja.domain;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -23,7 +24,13 @@ import lombok.AccessLevel;
 import lombok.Getter;
 
 import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
 
+/**
+ * TRG_CAJA_REGLAS fija quién abre, cierra, revisa y reabre la caja, y cuándo, con PKG_SESION y SYSTIMESTAMP; al reabrir
+ * limpia el cierre y la revisión (RN30, v5.1). Hibernate vuelve a leer esas columnas al guardar.
+ */
 @Entity
 @Table(name = "CAJA")
 @DynamicUpdate
@@ -38,6 +45,7 @@ public class Caja {
 	@Column(name = "id_sede", nullable = false)
 	private Long idSede;
 
+	@Generated(event = EventType.INSERT, writable = true)
 	@Column(name = "id_usuario_apertura", nullable = false)
 	private Long idUsuarioApertura;
 
@@ -47,21 +55,36 @@ public class Caja {
 	@Column(name = "monto_inicial", nullable = false, precision = 10, scale = 2)
 	private BigDecimal montoInicial;
 
+	@Generated(event = EventType.UPDATE, writable = true)
 	@Column(name = "id_usuario_cierre")
 	private Long idUsuarioCierre;
 
+	@Generated(event = EventType.UPDATE, writable = true)
 	@Column(name = "fecha_cierre")
 	private LocalDateTime fechaCierre;
 
+	@Generated(event = EventType.UPDATE, writable = true)
 	@Column(name = "id_usuario_revisa")
 	private Long idUsuarioRevisa;
 
+	@Generated(event = EventType.UPDATE, writable = true)
 	@Column(name = "fecha_revision")
 	private LocalDateTime fechaRevision;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "estado", nullable = false, length = 10)
 	private EstadoCaja estado;
+
+	@Generated(event = EventType.UPDATE, writable = true)
+	@Column(name = "id_usuario_reapertura")
+	private Long idUsuarioReapertura;
+
+	@Generated(event = EventType.UPDATE, writable = true)
+	@Column(name = "fecha_reapertura")
+	private LocalDateTime fechaReapertura;
+
+	@Column(name = "motivo_reapertura", length = 300)
+	private String motivoReapertura;
 
 	@Getter(AccessLevel.NONE)
 	@OneToMany(mappedBy = "caja", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -109,6 +132,45 @@ public class Caja {
 		this.idUsuarioCierre = idUsuarioCierre;
 		this.fechaCierre = LocalDateTime.now();
 		this.estado = EstadoCaja.CERRADA;
+	}
+
+	/** RF67: la Administradora aprueba el cierre con diferencia; la caja sigue CERRADA y queda revisada. */
+	public void aprobarRevision(Long idUsuarioRevisa, LocalDateTime fechaRevision) {
+		if (estado != EstadoCaja.CERRADA) {
+			throw new ReglaNegocioException("RF67", "Solo se revisa una caja CERRADA; esta está " + estado + ".");
+		}
+		if (this.idUsuarioRevisa != null) {
+			throw new ReglaNegocioException("RF67", "El cierre de esta caja ya se aprobó.");
+		}
+		if (arqueos.stream().noneMatch(CajaArqueo::tieneDiferencia)) {
+			throw new ReglaNegocioException("RF67", "El cierre no tiene diferencias que aprobar.");
+		}
+		this.idUsuarioRevisa = idUsuarioRevisa;
+		this.fechaRevision = fechaRevision;
+	}
+
+	/**
+	 * RF66, RN30: la Administradora reabre la caja CERRADA del día con un motivo, para registrar una venta tardía; luego se
+	 * vuelve a arquear y cerrar. Que no haya otra caja ABIERTA en la sede lo exige UQ_CAJA_ABIERTA_SEDE (409).
+	 */
+	public void reabrir(Long idUsuarioReapertura, String motivoReapertura) {
+		if (estado != EstadoCaja.CERRADA) {
+			throw new ReglaNegocioException("RN30", "Solo se reabre una caja CERRADA; esta está " + estado + ".");
+		}
+		if (!fechaApertura.toLocalDate().equals(LocalDate.now())) {
+			throw new ReglaNegocioException("RN30", "Solo se reabre la caja del día.");
+		}
+		if (motivoReapertura == null || motivoReapertura.isBlank()) {
+			throw new ReglaNegocioException("RN30", "Indique el motivo de la reapertura.");
+		}
+		this.estado = EstadoCaja.ABIERTA;
+		this.idUsuarioReapertura = idUsuarioReapertura;
+		this.fechaReapertura = LocalDateTime.now();
+		this.motivoReapertura = motivoReapertura.trim();
+		this.idUsuarioCierre = null;
+		this.fechaCierre = null;
+		this.idUsuarioRevisa = null;
+		this.fechaRevision = null;
 	}
 
 	private void exigirAbierta() {

@@ -16,6 +16,10 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
+
+/** TRG_CAJA_EGRESO_REGLAS fija el usuario de PKG_SESION y la fecha de Oracle al insertar. */
 @Entity
 @Table(name = "CAJA_EGRESO")
 @Getter
@@ -37,9 +41,11 @@ public class CajaEgreso {
 	@Column(name = "monto", nullable = false, precision = 10, scale = 2)
 	private BigDecimal monto;
 
+	@Generated(event = EventType.INSERT, writable = true)
 	@Column(name = "fecha", nullable = false)
 	private LocalDateTime fecha;
 
+	@Generated(event = EventType.INSERT, writable = true)
 	@Column(name = "id_usuario", nullable = false)
 	private Long idUsuario;
 

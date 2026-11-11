@@ -35,4 +35,17 @@ public interface RepositorioUsuario extends JpaRepository<Usuario, Long> {
 	@Query("select r from Rol r where r.estado = dev.com.Synapsis_Spa_Cautiva.seguridad.domain.EstadoRol.ACTIVO")
 	List<Rol> findRolesActivos();
 
+	/** CUS52 (D-06): el personal que ya tiene cuenta, para ofrecer solo al que no la tiene (UQ_USUARIO_ID_PERSONAL). */
+	@Query("select u.idPersonal from Usuario u")
+	List<Long> findIdsPersonalConUsuario();
+
+	/** RN48: queda otra usuaria ACTIVA con el rol ADMINISTRADORA además de esta (CUS53). */
+	@Query("""
+			select case when count(u) > 0 then true else false end from Usuario u, Rol r
+			where r.idRol = u.idRol and r.nombre = 'ADMINISTRADORA'
+			and u.estado = dev.com.Synapsis_Spa_Cautiva.seguridad.domain.EstadoUsuario.ACTIVO
+			and u.idUsuario <> :idUsuario
+			""")
+	boolean existeOtraAdministradoraActiva(@Param("idUsuario") Long idUsuario);
+
 }

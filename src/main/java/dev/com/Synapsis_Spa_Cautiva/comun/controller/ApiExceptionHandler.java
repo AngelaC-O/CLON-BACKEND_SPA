@@ -3,6 +3,7 @@ package dev.com.Synapsis_Spa_Cautiva.comun.controller;
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,6 +35,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 	private static final int SOLO_ADMINISTRADORA = 20003;
 	private static final int CRUCE_CITA = 20010;
 	private static final int CRUCE_ATENCION = 20011;
+	/** [It. 2] Inventario: stock insuficiente al aplicar el kardex o al vender (RN15). */
+	private static final int STOCK_INSUFICIENTE = 20030;
+	private static final int STOCK_INSUFICIENTE_VENTA = 20035;
+	/** [It. 2] RN17: solo almacén o la Administradora mueven inventario o resuelven un consumo pendiente. */
+	private static final int SOLO_ALMACEN = 20031;
+	private static final int SOLO_ALMACEN_CONSUMO = 20104;
+	/** [It. 2] RN53: un consumo pendiente resuelto no cambia; la regularización exige su SALIDA. */
+	private static final int CONSUMO_RESUELTO = 20103;
+	private static final int CONSUMO_SIN_SALIDA = 20105;
+	/** [It. 2] RN32: una solicitud de anulación resuelta no cambia; RN46: la nota de crédito espera a que SUNAT acepte el comprobante; un paquete
+	 * con sesiones usadas no se anula. El dato es válido, pero el estado actual no lo admite. */
+	private static final int SOLICITUD_RESUELTA = 20102;
+	private static final int COMPROBANTE_SIN_ACEPTAR = 20076;
+	private static final int PAQUETE_CONSUMIDO = 20059;
 	private static final int UNICA = 1;
 	private static final int CHECK = 2290;
 	private static final int PADRE_NO_EXISTE = 2291;
@@ -43,16 +58,28 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 	private static final Pattern REGLA = Pattern.compile("\\b(RN\\d+|RF\\d+)\\b");
 	private static final Pattern CONSTRAINT = Pattern.compile("\\([\\w$#]+\\.([\\w$#]+)\\)");
 
-	private static final Map<String, String> MENSAJES = Map.of(
-			"UQ_PERSONA_TELEFONO", "El teléfono ya pertenece a otra ficha.",
-			"UQ_PERSONA_DOCUMENTO", "El documento ya pertenece a otra ficha.",
-			"UQ_USUARIO_NOMBRE_USUARIO", "Ese nombre de usuario ya existe.",
-			"UQ_USUARIO_ID_PERSONAL", "Esa persona del personal ya tiene un usuario.",
-			"UQ_AREA_NOMBRE", "Ya existe un área con ese nombre.",
-			"UQ_SERVICIO_ID_AREA_NOMBRE", "El área ya tiene un servicio con ese nombre.",
-			"UQ_RECURSO_ID_SEDE_NOMBRE", "La sede ya tiene un recurso con ese nombre.",
-			"UQ_CAJA_ABIERTA_SEDE", "La sede ya tiene una caja abierta (RN30).",
-			"CK_CAJA_ARQUEO_OBSERVACION", "Toda diferencia del arqueo lleva una observación (RN30).");
+	private static final Map<String, String> MENSAJES = Map.ofEntries(
+			Map.entry("UQ_PERSONA_TELEFONO", "El teléfono ya pertenece a otra ficha."),
+			Map.entry("UQ_PERSONA_DOCUMENTO", "El documento ya pertenece a otra ficha."),
+			Map.entry("UQ_USUARIO_NOMBRE_USUARIO", "Ese nombre de usuario ya existe."),
+			Map.entry("UQ_USUARIO_ID_PERSONAL", "Esa persona del personal ya tiene un usuario."),
+			Map.entry("UQ_AREA_NOMBRE", "Ya existe un área con ese nombre."),
+			Map.entry("UQ_SERVICIO_ID_AREA_NOMBRE", "El área ya tiene un servicio con ese nombre."),
+			Map.entry("UQ_RECURSO_ID_SEDE_NOMBRE", "La sede ya tiene un recurso con ese nombre."),
+			Map.entry("UQ_CAJA_ABIERTA_SEDE", "La sede ya tiene una caja abierta (RN30)."),
+			Map.entry("CK_CAJA_ARQUEO_OBSERVACION", "Toda diferencia del arqueo lleva una observación (RN30)."),
+			Map.entry("UQ_CATEGORIA_PRODUCTO_NOMBRE", "Ya existe una categoría con ese nombre."),
+			Map.entry("CK_MOV_KARDEX_SALDO", "No hay stock suficiente: el saldo no puede quedar negativo (RN15)."),
+			Map.entry("CK_CONSUMO_PEND_DESCARTADO", "Indique el motivo del descarte (RN53)."),
+			Map.entry("UQ_SOL_ANUL_PENDIENTE", "La venta ya tiene una solicitud de anulación PENDIENTE (RN32)."),
+			Map.entry("UQ_SERIE_COMPR_ACTIVA", "La sede ya tiene una serie ACTIVA de ese tipo de comprobante (RN47)."),
+			Map.entry("UQ_SERIE_COMPROBANTE_SERIE", "Esa serie ya está registrada (RN47)."),
+			Map.entry("UQ_CONCILIACION_ANIO_MES", "Ya existe la conciliación de ese mes (RF75)."),
+			Map.entry("CK_MEDIO_PAGO_EFECTIVO", "El efectivo no se cobra por la pasarela (RN42)."),
+			Map.entry("CK_PARAMETRO_VALOR", "El parámetro lleva un valor numérico o de texto (RF87)."));
+
+	/** [It. 2] CHECK que responden 409 y no 422: el dato es válido, pero el estado actual no lo admite. */
+	private static final Set<String> CHECK_CONFLICTO = Set.of("CK_MOV_KARDEX_SALDO");
 
 	private final UsuarioActual usuarioActual;
 
@@ -88,7 +115,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 		String constraint = extraer(CONSTRAINT, mensaje);
 		return switch (codigo) {
 			case UNICA -> conConstraint(HttpStatus.CONFLICT, constraint, "Ya existe un registro con ese dato.");
-			case CHECK -> conConstraint(HttpStatus.UNPROCESSABLE_CONTENT, constraint, "El dato no cumple una regla de la base de datos.");
+			case CHECK -> conConstraint(constraint != null && CHECK_CONFLICTO.contains(constraint) ? HttpStatus.CONFLICT : HttpStatus.UNPROCESSABLE_CONTENT, constraint,
+					"El dato no cumple una regla de la base de datos.");
 			case PADRE_NO_EXISTE -> conConstraint(HttpStatus.UNPROCESSABLE_CONTENT, constraint, "El dato relacionado no existe.");
 			case TIENE_HIJOS -> conConstraint(HttpStatus.CONFLICT, constraint, "El registro está en uso y no se puede eliminar.");
 			default -> errorInterno(ex);
@@ -100,8 +128,9 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 			return errorInterno(ex);
 		}
 		HttpStatus estado = switch (codigo) {
-			case SOLO_ADMINISTRADORA -> HttpStatus.FORBIDDEN;
-			case CRUCE_CITA, CRUCE_ATENCION -> HttpStatus.CONFLICT;
+			case SOLO_ADMINISTRADORA, SOLO_ALMACEN, SOLO_ALMACEN_CONSUMO -> HttpStatus.FORBIDDEN;
+			case CRUCE_CITA, CRUCE_ATENCION, STOCK_INSUFICIENTE, STOCK_INSUFICIENTE_VENTA, CONSUMO_RESUELTO, CONSUMO_SIN_SALIDA, SOLICITUD_RESUELTA,
+					COMPROBANTE_SIN_ACEPTAR, PAQUETE_CONSUMIDO -> HttpStatus.CONFLICT;
 			default -> HttpStatus.UNPROCESSABLE_CONTENT;
 		};
 		String detalle = extraer(MENSAJE_APLICACION, mensaje);

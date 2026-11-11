@@ -6,11 +6,15 @@ import java.util.List;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.SesionOracle;
 import dev.com.Synapsis_Spa_Cautiva.personal.api.PersonalApi;
+import dev.com.Synapsis_Spa_Cautiva.seguridad.api.PersonaApi;
+import dev.com.Synapsis_Spa_Cautiva.seguridad.api.PersonaDTO;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.controller.SesionDTO;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.domain.Auditoria;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.domain.EstadoUsuario;
+import dev.com.Synapsis_Spa_Cautiva.seguridad.domain.Rol;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.domain.Usuario;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.repository.RepositorioAuditoria;
+import dev.com.Synapsis_Spa_Cautiva.seguridad.repository.RepositorioRol;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.repository.RepositorioUsuario;
 import lombok.RequiredArgsConstructor;
 
@@ -34,6 +38,10 @@ public class ServicioAutenticacion {
 
 	private final PersonalApi personalApi;
 
+	private final PersonaApi personaApi;
+
+	private final RepositorioRol repositorioRol;
+
 	/** Corre sin PKG_SESION hasta validar la clave. El error debe confirmar: el intento fallido tiene que quedar. */
 	@Transactional(noRollbackFor = ReglaNegocioException.class)
 	public SesionDTO iniciarSesion(String nombreUsuario, String clave) {
@@ -51,11 +59,26 @@ public class ServicioAutenticacion {
 		sesionOracle.iniciar(oUsuario.getIdUsuario());
 		oUsuario.registrarAcceso(LocalDateTime.now());
 		repositorioUsuario.save(oUsuario);
+		return armarSesion(oUsuario);
+	}
+
+	/** [It. 2] La sesión vigente al recargar (CUS50 modificado); sin sesión, Spring Security ya respondió 401. */
+	@Transactional(readOnly = true)
+	public SesionDTO obtenerSesion(Long idUsuario) {
+		Usuario oUsuario = repositorioUsuario.findById(idUsuario)
+			.orElseThrow(() -> new ReglaNegocioException("SIN_SESION", "Inicie sesión para continuar.", HttpStatus.UNAUTHORIZED));
+		return armarSesion(oUsuario);
+	}
+
+	private SesionDTO armarSesion(Usuario oUsuario) {
 		List<String> permisos = repositorioUsuario.findPermisosPorRol(oUsuario.getIdRol()).stream()
 			.map(permiso -> permiso.getModulo() + ":" + permiso.getAccion())
 			.toList();
 		Long idSede = personalApi.obtenerIdSede(oUsuario.getIdPersonal()).orElseThrow();
-		return new SesionDTO(oUsuario.getIdUsuario(), oUsuario.getNombreUsuario(), idSede, oUsuario.getDebeCambiarClave(), permisos);
+		PersonaDTO oPersonaDTO = personaApi.obtenerPersona(oUsuario.getIdPersonal());
+		String rol = repositorioRol.findById(oUsuario.getIdRol()).map(Rol::getNombre).orElse(null);
+		return new SesionDTO(oUsuario.getIdUsuario(), oUsuario.getNombreUsuario(), idSede, oUsuario.getDebeCambiarClave(), permisos,
+				oUsuario.getIdPersonal(), oPersonaDTO.nombres(), oPersonaDTO.apellidos(), rol);
 	}
 
 	@Transactional
