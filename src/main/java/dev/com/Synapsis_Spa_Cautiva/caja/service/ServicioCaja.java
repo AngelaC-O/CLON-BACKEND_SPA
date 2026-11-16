@@ -20,6 +20,7 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.CajaAbiertaProvider;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.UsuarioActual;
 import dev.com.Synapsis_Spa_Cautiva.pagos.api.PagosApi;
+import dev.com.Synapsis_Spa_Cautiva.seguridad.api.UsuarioApi;
 import dev.com.Synapsis_Spa_Cautiva.ventas.api.ComprobantePendiente;
 import dev.com.Synapsis_Spa_Cautiva.ventas.api.TotalMedioPago;
 import dev.com.Synapsis_Spa_Cautiva.ventas.api.VentasConsultaApi;
@@ -43,10 +44,13 @@ public class ServicioCaja implements CajaAbiertaProvider, AvisoProvider {
 
 	private final MapperCaja mapperCaja;
 
+	/** [It. 2.1 · nombres] Quién abrió, cerró, revisó y reabrió cada caja (Duda 25). */
+	private final UsuarioApi usuarioApi;
+
 	/** [It. 2] CUS44: la caja ABIERTA de la sede, para la cabecera y para retomar el cierre (Duda 10 del front-end). Vacío si no hay. */
 	@Transactional(readOnly = true)
 	public Optional<CajaDTO> obtenerAbierta(Long idSede) {
-		return repositorioCaja.findAbiertaBySede(idSede).map(mapperCaja::aDTO);
+		return repositorioCaja.findAbiertaBySede(idSede).map(mapperCaja::aDTO).map(this::conNombres);
 	}
 
 	@Transactional
@@ -55,7 +59,7 @@ public class ServicioCaja implements CajaAbiertaProvider, AvisoProvider {
 			throw new ReglaNegocioException("RN30", "La sede ya tiene una caja abierta.", HttpStatus.CONFLICT);
 		}
 		Caja oCaja = new Caja(idSede, usuarioActual.idUsuario(), montoInicial);
-		return mapperCaja.aDTO(repositorioCaja.save(oCaja));
+		return conNombres(mapperCaja.aDTO(repositorioCaja.save(oCaja)));
 	}
 
 	@Transactional(readOnly = true)
@@ -83,13 +87,13 @@ public class ServicioCaja implements CajaAbiertaProvider, AvisoProvider {
 		oArqueoDTO.arqueos().forEach(arqueo -> oCaja.registrarArqueo(arqueo.idMedioPago(), arqueo.montoContado(), arqueo.observacion()));
 		repositorioCaja.saveAndFlush(oCaja);
 		oCaja.cerrar(idUsuario);
-		return mapperCaja.aDTO(repositorioCaja.saveAndFlush(oCaja));
+		return conNombres(mapperCaja.aDTO(repositorioCaja.saveAndFlush(oCaja)));
 	}
 
 	/** [It. 2 · CUS46, RF67, RN30] Cierres CERRADOS de la sede con diferencia en algún medio, con la observación del arqueo, aún sin aprobar. */
 	@Transactional(readOnly = true)
 	public List<CajaDTO> listarConDiferencia(Long idSede) {
-		return repositorioCaja.findCerradasConDiferencia(idSede).stream().map(mapperCaja::aDTO).toList();
+		return conNombres(repositorioCaja.findCerradasConDiferencia(idSede).stream().map(mapperCaja::aDTO).toList());
 	}
 
 	/** [It. 2 · CUS46, RF67] La caja sigue CERRADA y queda revisada; quién y cuándo los vuelve a poner TRG_CAJA_REGLAS. */
@@ -97,7 +101,7 @@ public class ServicioCaja implements CajaAbiertaProvider, AvisoProvider {
 	public CajaDTO aprobarCierre(Long idCaja) {
 		Caja oCaja = buscar(idCaja);
 		oCaja.aprobarRevision(usuarioActual.idUsuario(), LocalDateTime.now());
-		return mapperCaja.aDTO(repositorioCaja.saveAndFlush(oCaja));
+		return conNombres(mapperCaja.aDTO(repositorioCaja.saveAndFlush(oCaja)));
 	}
 
 	/**
@@ -107,7 +111,7 @@ public class ServicioCaja implements CajaAbiertaProvider, AvisoProvider {
 	@Transactional(readOnly = true)
 	public List<CajaDTO> obtenerDelDia(Long idSede) {
 		LocalDateTime hoy = LocalDate.now().atStartOfDay();
-		return repositorioCaja.findAperturasEntre(idSede, hoy, hoy.plusDays(1)).stream().map(mapperCaja::aDTO).toList();
+		return conNombres(repositorioCaja.findAperturasEntre(idSede, hoy, hoy.plusDays(1)).stream().map(mapperCaja::aDTO).toList());
 	}
 
 	/**
@@ -124,7 +128,7 @@ public class ServicioCaja implements CajaAbiertaProvider, AvisoProvider {
 		if (otraAbierta) {
 			throw new ReglaNegocioException("RN30", "La sede ya tiene una caja ABIERTA: ciérrela antes de reabrir otra.", HttpStatus.CONFLICT);
 		}
-		return mapperCaja.aDTO(repositorioCaja.saveAndFlush(oCaja));
+		return conNombres(mapperCaja.aDTO(repositorioCaja.saveAndFlush(oCaja)));
 	}
 
 	/** [It. 2 · CUS50] «N cierres con diferencia por aprobar», solo si hay (CONCILIACION:VER: la Administradora). */
@@ -154,6 +158,22 @@ public class ServicioCaja implements CajaAbiertaProvider, AvisoProvider {
 	private Caja buscar(Long idCaja) {
 		return repositorioCaja.findById(idCaja)
 			.orElseThrow(() -> new ReglaNegocioException("RN30", "La caja " + idCaja + " no existe.", HttpStatus.NOT_FOUND));
+	}
+
+	/** [It. 2.1 · nombres] Los nombres de los usuarios de todas las cajas, en una llamada. */
+	private List<CajaDTO> conNombres(List<CajaDTO> cajas) {
+		List<Long> idsUsuario = cajas.stream()
+			.flatMap(oCajaDTO -> java.util.stream.Stream.of(oCajaDTO.idUsuarioApertura(), oCajaDTO.idUsuarioCierre(), oCajaDTO.idUsuarioRevisa(),
+					oCajaDTO.idUsuarioReapertura()))
+			.filter(java.util.Objects::nonNull)
+			.distinct()
+			.toList();
+		Map<Long, String> usuarios = idsUsuario.isEmpty() ? Map.of() : usuarioApi.nombresUsuarios(idsUsuario);
+		return cajas.stream().map(oCajaDTO -> oCajaDTO.conNombres(usuarios)).toList();
+	}
+
+	private CajaDTO conNombres(CajaDTO oCajaDTO) {
+		return conNombres(List.of(oCajaDTO)).getFirst();
 	}
 
 }

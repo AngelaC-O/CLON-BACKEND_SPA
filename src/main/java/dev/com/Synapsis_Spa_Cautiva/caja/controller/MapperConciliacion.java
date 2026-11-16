@@ -14,7 +14,7 @@ public interface MapperConciliacion {
 	@Mapping(target = "sinJustificar", expression = "java(contarSinJustificar(oConciliacion))")
 	ConciliacionDTO aDTO(Conciliacion oConciliacion);
 
-	ConciliacionDTO.Item aDTO(ConciliacionItem oItem);
+	ConciliacionDTO.ItemConciliacion aDTO(ConciliacionItem oItem);
 
 	default Long contarSinJustificar(Conciliacion oConciliacion) {
 		return oConciliacion.getItems().stream().filter(oItem -> oItem.getEstado() == EstadoConciliacionItem.SIN_JUSTIFICAR).count();
