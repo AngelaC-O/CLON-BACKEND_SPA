@@ -10,6 +10,8 @@ import dev.com.Synapsis_Spa_Cautiva.ventas.domain.Venta;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.VentaDetalle;
 import dev.com.Synapsis_Spa_Cautiva.ventas.domain.VentaPago;
 
+import dev.com.Synapsis_Spa_Cautiva.pagos.api.CobroPendienteDTO;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
