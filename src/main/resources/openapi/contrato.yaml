@@ -143,19 +143,18 @@
   cus: CUS61
   respuestas:
     "200":
-      descripcion: Recursos con su tipo, estado y limpieza
-      ejemplo: [ { idRecurso: 1, idSede: 1, nombre: "Sillón 1", tipo: SILLON, minutosLimpieza: 10, estado: DISPONIBLE } ]
+      descripcion: Recursos con su tipo y estado
+      ejemplo: [ { idRecurso: 1, idSede: 1, nombre: "Sillón 1", tipo: SILLON, estado: DISPONIBLE } ]
     "400": { descripcion: Falta la sede, regla: VALIDACION }
 
 "POST /api/v1/recursos":
-  resumen: Registrar un recurso con su limpieza
+  resumen: Registrar un recurso con su tipo y su sede
   cus: CUS61
-  solicitud: { idSede: 1, nombre: "Sillón 11", tipo: SILLON, minutosLimpieza: 10 }
+  solicitud: { idSede: 1, nombre: "Sillón 11", tipo: SILLON }
   respuestas:
     "201":
       descripcion: Recurso creado
-      ejemplo: { idRecurso: 21, idSede: 1, nombre: "Sillón 11", tipo: SILLON, minutosLimpieza: 10, estado: DISPONIBLE }
-    "422": { descripcion: El tiempo de limpieza va de 0 a LIMPIEZA_MAX_MIN (10) minutos, regla: RN03 }
+      ejemplo: { idRecurso: 21, idSede: 1, nombre: "Sillón 11", tipo: SILLON, estado: DISPONIBLE }
 
 "GET /api/v1/clientes":
   resumen: Buscar clientas por nombre o teléfono
@@ -193,7 +192,7 @@
   cus: CUS05
   respuestas:
     "200":
-      descripcion: Horas cada AGENDA_PASO_MIN minutos (RN51) con las especialistas y recursos libres; la limpieza solo ocupa al recurso (RN03)
+      descripcion: Horas cada AGENDA_PASO_MIN minutos (RN51) con las especialistas y recursos libres; quedan libres al terminar el servicio, sin limpieza (RN03)
       ejemplo: [ { inicio: "2026-11-09T09:00:00", duracionMin: 30, idsPersonal: [ 4 ], idsRecurso: [ 1, 2, 3 ] } ]
     "404": { descripcion: La variante no existe, regla: RN40 }
 
@@ -203,10 +202,10 @@
   solicitud: { idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, idEspera: 31 }
   respuestas:
     "201":
-      descripcion: "Cita creada; Oracle calcula el fin con la limpieza del recurso. Con idEspera, la espera queda ASIGNADA con esta cita (RF09)"
+      descripcion: "Cita creada; Oracle calcula el fin del servicio (inicio + duración, RN03). Con idEspera, la espera queda ASIGNADA con esta cita (RF09)"
       ejemplo: { idCita: 950, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-09T10:40:00", estado: PENDIENTE, idUsuario: 2, adelantoMonto: 0.00, idEspera: 31 }
     "404": { descripcion: La espera no existe, regla: RF09 }
-    "409": { descripcion: "Cruce de horario de la especialista o del recurso, con limpieza (RN02), o la espera ya no está PENDIENTE (RF09)", regla: RN02 }
+    "409": { descripcion: "Cruce de horario de la especialista o del recurso (RN02), o la espera ya no está PENDIENTE (RF09)", regla: RN02 }
     "422": { descripcion: "La fecha y hora ya pasaron (RN49), la especialista no tiene el área del servicio (-20012) o la clienta no existe", regla: RN49 }
 
 "POST /api/v1/citas/lista-espera":
@@ -256,8 +255,8 @@
   cus: CUS08
   respuestas:
     "200":
-      descripcion: Franjas ocupadas (fin con la limpieza del recurso; finServicio, sin ella, libera a la especialista, RN03) y libres; LIBRE es de una especialista o de un recurso. Cada franja trae los nombres de la clienta, la especialista y el servicio
-      ejemplo: [ { franja: OCUPADA, origen: CITA, idOrigen: 950, idPersonal: 4, idRecurso: 1, idVariante: 2, inicio: "2026-11-09T10:00:00", fin: "2026-11-09T10:40:00", estado: PENDIENTE, finServicio: "2026-11-09T10:30:00", idCliente: 407, nombreCliente: "Marisol Quispe", nombreEspecialista: "Lucía Ramos", nombreServicio: "Corte de Cabello Caballero" }, { franja: LIBRE, idPersonal: 4, inicio: "2026-11-09T10:30:00", fin: "2026-11-09T19:00:00", nombreEspecialista: "Lucía Ramos" } ]
+      descripcion: "Franjas ocupadas (fin del servicio: libera a la especialista y al recurso, RN03) y libres; LIBRE es de una especialista o de un recurso. Cada franja trae los nombres de la clienta, la especialista y el servicio"
+      ejemplo: [ { franja: OCUPADA, origen: CITA, idOrigen: 950, idPersonal: 4, idRecurso: 1, idVariante: 2, inicio: "2026-11-09T10:00:00", fin: "2026-11-09T10:30:00", estado: PENDIENTE, idCliente: 407, nombreCliente: "Marisol Quispe", nombreEspecialista: "Lucía Ramos", nombreServicio: "Corte de Cabello Caballero" }, { franja: LIBRE, idPersonal: 4, inicio: "2026-11-09T10:30:00", fin: "2026-11-09T19:00:00", nombreEspecialista: "Lucía Ramos" } ]
     "400": { descripcion: Falta la fecha, regla: VALIDACION }
 
 "GET /api/v1/atenciones/mi-agenda":
@@ -994,9 +993,9 @@
   respuestas:
     "200":
       descripcion: Valor cambiado; TRG_AUD_PARAMETRO lo audita (RN29)
-      ejemplo: { idParametro: 8, codigo: LIMPIEZA_MAX_MIN, descripcion: "Minutos máximos de limpieza del recurso (RN03)", valorNumero: 10, fechaVigencia: "2026-11-10", idUsuario: 1 }
+      ejemplo: { idParametro: 9, codigo: AGENDA_PASO_MIN, descripcion: "Minutos entre horas libres de la agenda (RN51)", valorNumero: 10, fechaVigencia: "2026-11-10", idUsuario: 1 }
     "404": { descripcion: El parámetro no existe (los códigos no se crean), regla: RF87 }
-    "422": { descripcion: "Falta el valor (CK_PARAMETRO_VALOR), AGENDA_PASO_MIN no es un entero mayor que 0 (RN51) o LIMPIEZA_MAX_MIN no es un entero de 0 a 10 (RN03)", regla: RN03 }
+    "422": { descripcion: "Falta el valor (CK_PARAMETRO_VALOR) o AGENDA_PASO_MIN no es un entero mayor que 0 (RN51)", regla: RN51 }
 
 "GET /api/v1/tipos-documento":
   resumen: Listar los tipos de documento
