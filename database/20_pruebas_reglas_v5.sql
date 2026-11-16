@@ -11,6 +11,8 @@
 --      (CLIENTE, PERSONAL), el historial de precios se comprueba en AUDITORIA, la sesión de paquete es
 --      ATENCION.id_cliente_paquete, la nota de crédito es un COMPROBANTE NC_BOLETA más su fila en NOTA_CREDITO,
 --      el stock solo vive en INVENTARIO_SEDE y la verificación del documento usa TIPO_DOCUMENTO.
+-- [v5.2] (15/11/2026, 18_ajustes_v52.sql) Ya no hay tiempo de limpieza (RN03): los casos de la sección 3 que
+--      dependían de ella pasan a la regla v5.2 y se marcan [v5.2]. Los demás casos no cambian.
 -- =====================================================================
 SET DEFINE OFF
 SET SERVEROUTPUT ON SIZE UNLIMITED
@@ -236,17 +238,20 @@ BEGIN
         || c1 || ', ' || v_sede || ', ' || p_esp || ', ' || r1 || ', ' || v_var || ', ' || v_manana || ' + INTERVAL ''10'' HOUR, 30)');
     SELECT MAX(id_cita) INTO v_cita FROM CITA WHERE id_recurso = r1;
     SELECT TO_CHAR(fecha_hora_fin, 'HH24:MI') INTO v_txt FROM CITA WHERE id_cita = v_cita;
-    comprobar('El fin incluye la limpieza: 10:00 + 30 + 30 = 11:00 (RN03) -> ' || v_txt, v_txt = '11:00');
-    debe_fallar('Misma especialista a las 10:30 en otro sillón',
+    comprobar('[v5.2] El fin es el del servicio: 10:00 + 30 = 10:30, sin limpieza (RN03) -> ' || v_txt, v_txt = '10:30');
+    SAVEPOINT sp_v52;
+    debe_funcionar('[v5.2] Misma especialista a las 10:30 en otro sillón (queda libre al terminar, RN03)',
         'INSERT INTO CITA (id_cliente, id_sede, id_personal, id_recurso, id_variante, fecha_hora_inicio, duracion_min) VALUES ('
-        || c2 || ', ' || v_sede || ', ' || p_esp || ', ' || r2 || ', ' || v_var || ', ' || v_manana || ' + NUMTODSINTERVAL(630, ''MINUTE''), 30)', -20010);
-    debe_fallar('Mismo sillón a las 10:45 con otra especialista (aún en limpieza)',
+        || c2 || ', ' || v_sede || ', ' || p_esp || ', ' || r2 || ', ' || v_var || ', ' || v_manana || ' + NUMTODSINTERVAL(630, ''MINUTE''), 30)');
+    ROLLBACK TO sp_v52;
+    debe_funcionar('[v5.2] Mismo sillón a las 10:30 con otra especialista (sin limpieza, RN03)',
         'INSERT INTO CITA (id_cliente, id_sede, id_personal, id_recurso, id_variante, fecha_hora_inicio, duracion_min) VALUES ('
-        || c2 || ', ' || v_sede || ', ' || p_adm || ', ' || r1 || ', ' || v_var || ', ' || v_manana || ' + NUMTODSINTERVAL(645, ''MINUTE''), 30)', -20010);
-    debe_funcionar('Misma especialista a las 11:00 (justo al terminar la limpieza)',
+        || c2 || ', ' || v_sede || ', ' || p_adm || ', ' || r1 || ', ' || v_var || ', ' || v_manana || ' + NUMTODSINTERVAL(630, ''MINUTE''), 30)');
+    ROLLBACK TO sp_v52;
+    debe_funcionar('[v5.2] Misma especialista a las 10:30 en el mismo sillón (justo al terminar el servicio)',
         'INSERT INTO CITA (id_cliente, id_sede, id_personal, id_recurso, id_variante, fecha_hora_inicio, duracion_min) VALUES ('
-        || c2 || ', ' || v_sede || ', ' || p_esp || ', ' || r1 || ', ' || v_var || ', ' || v_manana || ' + INTERVAL ''11'' HOUR, 30)');
-    debe_fallar('La especialista declara 60 min en la cita de las 10:00 y choca con la de las 11:00 (RN41: se reprograma primero)',
+        || c2 || ', ' || v_sede || ', ' || p_esp || ', ' || r1 || ', ' || v_var || ', ' || v_manana || ' + NUMTODSINTERVAL(630, ''MINUTE''), 30)');
+    debe_fallar('[v5.2] La especialista declara 60 min en la cita de las 10:00 y choca con la de las 10:30 (RN41: se reprograma primero)',
         'INSERT INTO ATENCION (id_cita, id_personal, id_recurso, id_variante, hora_inicio, tiempo_declarado_min) VALUES ('
         || v_cita || ', ' || p_esp || ', ' || r1 || ', ' || v_var || ', ' || v_manana || ' + INTERVAL ''10'' HOUR, 60)', -20010);
     SAVEPOINT sp_rn41;
