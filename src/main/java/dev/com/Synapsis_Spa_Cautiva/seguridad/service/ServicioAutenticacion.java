@@ -7,6 +7,7 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.SesionOracle;
 import dev.com.Synapsis_Spa_Cautiva.personal.api.PersonalApi;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.PersonaApi;
+import dev.com.Synapsis_Spa_Cautiva.sedes.api.SedeApi;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.PersonaDTO;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.controller.SesionDTO;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.domain.Auditoria;
@@ -41,6 +42,9 @@ public class ServicioAutenticacion {
 	private final PersonaApi personaApi;
 
 	private final RepositorioRol repositorioRol;
+
+	/** [It. 2.1 · nombres] El nombre de la sede de la sesión (Duda 7). */
+	private final SedeApi sedeApi;
 
 	/** Corre sin PKG_SESION hasta validar la clave. El error debe confirmar: el intento fallido tiene que quedar. */
 	@Transactional(noRollbackFor = ReglaNegocioException.class)
@@ -78,7 +82,7 @@ public class ServicioAutenticacion {
 		PersonaDTO oPersonaDTO = personaApi.obtenerPersona(oUsuario.getIdPersonal());
 		String rol = repositorioRol.findById(oUsuario.getIdRol()).map(Rol::getNombre).orElse(null);
 		return new SesionDTO(oUsuario.getIdUsuario(), oUsuario.getNombreUsuario(), idSede, oUsuario.getDebeCambiarClave(), permisos,
-				oUsuario.getIdPersonal(), oPersonaDTO.nombres(), oPersonaDTO.apellidos(), rol);
+				oUsuario.getIdPersonal(), oPersonaDTO.nombres(), oPersonaDTO.apellidos(), rol, sedeApi.obtenerSede(idSede).nombre());
 	}
 
 	@Transactional
