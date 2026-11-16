@@ -56,19 +56,14 @@ public interface RepositorioCita extends JpaRepository<Cita, Long> {
 	List<Cita> findOcupacionEntre(@Param("idSede") Long idSede, @Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
 
 	/**
-	 * Lectura sin bloqueo para las consultas de horas libres y de agenda (RF06, RF11). [It. 2] Con CITA y ATENCION (diagrama de CUS08): fin
-	 * ocupa al recurso con su limpieza y finServicio a la especialista sin ella (RN03, v5.1). Si la atención de la cita ya terminó, cuenta su
-	 * hora_fin: la especialista queda libre desde ahí y el recurso, después de su limpieza.
+	 * Lectura sin bloqueo para las consultas de horas libres y de agenda (RF06, RF11). [It. 2] Con CITA y ATENCION (diagrama de CUS08).
+	 * [It. 2.1 · v5.2] fin es la columna fin de V_AGENDA_BLOQUES, el fin del servicio, sin limpieza (RN03). Si la atención de la cita ya terminó,
+	 * cuenta su hora_fin: la especialista y el recurso quedan libres desde ahí.
 	 */
 	@Query(nativeQuery = true, value = """
 			SELECT b.origen AS "origen", b.id_origen AS "idOrigen", b.id_personal AS "idPersonal", b.id_recurso AS "idRecurso",
 				b.id_variante AS "idVariante", b.inicio AS "inicio",
-				CASE WHEN f.hora_fin IS NOT NULL
-					THEN f.hora_fin + (b.fin_con_limpieza - (c.fecha_hora_inicio + NUMTODSINTERVAL(c.duracion_min, 'MINUTE')))
-					ELSE b.fin_con_limpieza END AS "fin",
-				CASE WHEN f.hora_fin IS NOT NULL THEN f.hora_fin
-					WHEN b.origen = 'CITA' THEN c.fecha_hora_inicio + NUMTODSINTERVAL(c.duracion_min, 'MINUTE')
-					ELSE NVL(s.hora_fin, s.hora_inicio + NUMTODSINTERVAL(s.tiempo_declarado_min, 'MINUTE')) END AS "finServicio",
+				NVL(f.hora_fin, b.fin) AS "fin",
 				b.estado AS "estado", NVL(c.id_cliente, s.id_cliente) AS "idCliente", s.nombre_cliente_paso AS "nombreClientePaso"
 			FROM V_AGENDA_BLOQUES b
 			LEFT JOIN CITA c ON b.origen = 'CITA' AND c.id_cita = b.id_origen
