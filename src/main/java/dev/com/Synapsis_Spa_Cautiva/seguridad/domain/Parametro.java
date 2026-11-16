@@ -24,10 +24,6 @@ public class Parametro {
 
 	private static final String AGENDA_PASO_MIN = "AGENDA_PASO_MIN";
 
-	private static final String LIMPIEZA_MAX_MIN = "LIMPIEZA_MAX_MIN";
-
-	private static final BigDecimal LIMPIEZA_TOPE = BigDecimal.TEN;
-
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	@Column(name = "id_parametro")
@@ -73,15 +69,12 @@ public class Parametro {
 	}
 
 	/**
-	 * [It. 2 · CUS65] Los dos parámetros de la agenda con un rango del negocio: AGENDA_PASO_MIN es un entero mayor que 0 (RN51) y LIMPIEZA_MAX_MIN
-	 * un entero de 0 a 10, el tope de CK_RECURSO_MINUTOS_LIMPIEZA (RN03). No está en el diagrama (DF-129).
+	 * [It. 2 · CUS65] El parámetro de la agenda con un rango del negocio: AGENDA_PASO_MIN es un entero mayor que 0 (RN51). No está en el
+	 * diagrama (DF-129). [It. 2.1 · v5.2] LIMPIEZA_MAX_MIN se retiró con el tiempo de limpieza (RN03): ya no se valida.
 	 */
 	private void validarRango(BigDecimal valorNumero) {
 		if (AGENDA_PASO_MIN.equals(codigo) && (!esEntero(valorNumero) || valorNumero.signum() <= 0)) {
 			throw new ReglaNegocioException("RN51", "AGENDA_PASO_MIN es un número entero de minutos mayor que 0.");
-		}
-		if (LIMPIEZA_MAX_MIN.equals(codigo) && (!esEntero(valorNumero) || valorNumero.signum() < 0 || valorNumero.compareTo(LIMPIEZA_TOPE) > 0)) {
-			throw new ReglaNegocioException("RN03", "LIMPIEZA_MAX_MIN es un número entero de minutos entre 0 y 10.");
 		}
 	}
 

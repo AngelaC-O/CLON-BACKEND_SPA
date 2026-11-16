@@ -119,9 +119,9 @@ class InventarioFlujoTest extends OracleTestcontainer {
 	}
 
 	/**
-	 * CUS57, CUS61, CUS05 y CUS11: un servicio de Cuidado Facial con el insumo en su variante, una cabina propia sin limpieza, una cita de
-	 * especialista2 y la atención iniciada. Devuelve el id de la atención EN_CURSO. La cabina sin limpieza y especialista2 (ninguna otra
-	 * clase finaliza atenciones suyas) evitan que Oracle la tenga ocupada por la limpieza de una atención recién finalizada (D-14).
+	 * CUS57, CUS61, CUS05 y CUS11: un servicio de Cuidado Facial con el insumo en su variante, una cabina propia, una cita de especialista2 y
+	 * la atención iniciada. Devuelve el id de la atención EN_CURSO. La cabina propia y especialista2 (ninguna otra clase inicia atenciones
+	 * suyas ahora) evitan cruces con otras pruebas. [It. 2.1] Sin tiempo de limpieza (RN03 v5.2): la cabina ya no lo declara.
 	 */
 	private Long atencionEnCursoConInsumo(String servicio, Long idInsumo, String cantidadEstimada, int semana) throws Exception {
 		Long idArea = id("SELECT id_area FROM AREA WHERE nombre = 'Cuidado Facial'");
@@ -135,7 +135,7 @@ class InventarioFlujoTest extends OracleTestcontainer {
 		String clienta = "{\"nombres\":\"Con insumo\",\"apellidos\":\"De Prueba\",\"telefono\":\"" + TELEFONOS.incrementAndGet()
 				+ "\",\"aceptaComunicaciones\":true}";
 		Long idCliente = idDe(enviar("recepcion", post("/api/v1/clientes"), clienta).andExpect(status().isCreated()), "idCliente");
-		String recurso = "{\"idSede\":" + idSede() + ",\"nombre\":\"Cabina " + servicio + "\",\"tipo\":\"CABINA\",\"minutosLimpieza\":0}";
+		String recurso = "{\"idSede\":" + idSede() + ",\"nombre\":\"Cabina " + servicio + "\",\"tipo\":\"CABINA\"}";
 		Long idRecurso = idDe(enviar("admin", post("/api/v1/recursos"), recurso).andExpect(status().isCreated()), "idRecurso");
 		LocalDate dia = LocalDate.now().with(TemporalAdjusters.next(DayOfWeek.MONDAY)).plusWeeks(semana);
 		String cita = "{\"idCliente\":" + idCliente + ",\"idPersonal\":" + id("SELECT id_personal FROM USUARIO WHERE nombre_usuario = 'especialista2'")

@@ -84,7 +84,7 @@ abstract class VentasFlujoApoyo extends OracleTestcontainer {
 		comoDueno("INSERT INTO SERIE_COMPROBANTE (id_sede, tipo, serie) VALUES (" + idSede + ", 'BOLETA', 'B" + sufijo + "')");
 		comoDueno("INSERT INTO SERIE_COMPROBANTE (id_sede, tipo, serie) VALUES (" + idSede + ", 'FACTURA', 'F" + sufijo + "')");
 		for (int i = 1; i <= 3; i++) {
-			comoDueno("INSERT INTO RECURSO (id_sede, nombre, tipo, minutos_limpieza) VALUES (" + idSede + ", 'Sillón " + i + "', 'SILLON', 0)");
+			comoDueno("INSERT INTO RECURSO (id_sede, nombre, tipo) VALUES (" + idSede + ", 'Sillón " + i + "', 'SILLON')");
 		}
 		String dni = String.format("71%06d", numero);
 		String telefono = String.format("98720%04d", numero);

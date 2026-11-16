@@ -252,19 +252,21 @@ class CajaConfiguracionFlujoTest extends VentasFlujoApoyo {
 
 	@Test
 	void cus65CambiaParametrosConSuRangoYConfiguraTiposDeDocumento() throws Exception {
-		como("admin", get("/api/v1/parametros"), null).andExpect(status().isOk()).andExpect(jsonPath("$[*].codigo", hasItem("LIMPIEZA_MAX_MIN")));
-		BigDecimal limpieza = jdbc.queryForObject("SELECT valor_numero FROM PARAMETRO WHERE codigo = 'LIMPIEZA_MAX_MIN'", BigDecimal.class);
+		// [It. 2.1 · v5.2] LIMPIEZA_MAX_MIN se retiró con el tiempo de limpieza (RN03): ya no se lista y su PATCH es 404, como cualquier código
+		como("admin", get("/api/v1/parametros"), null).andExpect(status().isOk()).andExpect(jsonPath("$[*].codigo", hasItem("AGENDA_PASO_MIN")))
+			.andExpect(jsonPath("$[*].codigo", not(hasItem("LIMPIEZA_MAX_MIN"))));
+		BigDecimal paso = jdbc.queryForObject("SELECT valor_numero FROM PARAMETRO WHERE codigo = 'AGENDA_PASO_MIN'", BigDecimal.class);
 
-		como("admin", patch("/api/v1/parametros/LIMPIEZA_MAX_MIN"), "{\"valorNumero\":15}").andExpect(status().isUnprocessableContent())
-			.andExpect(jsonPath("$.regla").value("RN03"));
+		como("admin", patch("/api/v1/parametros/LIMPIEZA_MAX_MIN"), "{\"valorNumero\":10}").andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.regla").value("RF87"));
 		como("admin", patch("/api/v1/parametros/AGENDA_PASO_MIN"), "{\"valorNumero\":0}").andExpect(status().isUnprocessableContent())
 			.andExpect(jsonPath("$.regla").value("RN51"));
 		como("admin", patch("/api/v1/parametros/NO_EXISTE"), "{\"valorNumero\":1}").andExpect(status().isNotFound());
-		enviar(patch("/api/v1/parametros/LIMPIEZA_MAX_MIN"), "{\"valorNumero\":5}").andExpect(status().isForbidden());
+		enviar(patch("/api/v1/parametros/AGENDA_PASO_MIN"), "{\"valorNumero\":5}").andExpect(status().isForbidden());
 		// El mismo valor: queda auditado a nombre de la Administradora y no cambia nada para las demás pruebas
-		como("admin", patch("/api/v1/parametros/LIMPIEZA_MAX_MIN"), "{\"valorNumero\":" + limpieza.toPlainString() + "}").andExpect(status().isOk())
+		como("admin", patch("/api/v1/parametros/AGENDA_PASO_MIN"), "{\"valorNumero\":" + paso.toPlainString() + "}").andExpect(status().isOk())
 			.andExpect(jsonPath("$.idUsuario").value(id("SELECT id_usuario FROM USUARIO WHERE nombre_usuario = 'admin'")));
-		assertThat(jdbc.queryForObject("SELECT valor_numero FROM PARAMETRO WHERE codigo = 'LIMPIEZA_MAX_MIN'", BigDecimal.class)).isEqualByComparingTo(limpieza);
+		assertThat(jdbc.queryForObject("SELECT valor_numero FROM PARAMETRO WHERE codigo = 'AGENDA_PASO_MIN'", BigDecimal.class)).isEqualByComparingTo(paso);
 
 		// GET /tipos-documento lo lee cualquier usuario con sesión; solo DNI y RUC se consultan en APISPERU (RN45)
 		como("especialista1", get("/api/v1/tipos-documento"), null).andExpect(status().isOk()).andExpect(jsonPath("$[*].abreviatura", hasItem("DNI")));

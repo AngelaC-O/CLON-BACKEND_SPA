@@ -13,7 +13,8 @@ import org.testcontainers.utility.MountableFile;
 
 /**
  * Clase base de las pruebas de integración: un solo Oracle Free por ejecución, con database/
- * instalado como dice database/README.md (00, 14, 13, 15 y la migración v5.1 de 17).
+ * instalado como dice database/README.md (00, 14, 13, 15, la migración v5.1 de 17 y la v5.2 de 18). No instala 19: el horario de
+ * prueba es solo de la base local y de la e2e; las pruebas siguen con el horario de 15 y 17.
  * La aplicación se conecta como CAUTIVA_APP con
  * CURRENT_SCHEMA = dueño, igual que en los ambientes reales.
  */
@@ -55,6 +56,7 @@ public abstract class OracleTestcontainer {
 		sqlplus(dueno, "@/database/13_permisos.sql");
 		sqlplus(dueno, "@/database/15_datos_iteracion1.sql");
 		sqlplus(dueno, "@/database/17_datos_iteracion2.sql");
+		sqlplus(dueno, "@/database/18_ajustes_v52.sql");
 		sqlplus(system, "ALTER USER " + CUENTA_APP + " IDENTIFIED BY \"" + CLAVE_APP + "\" ACCOUNT UNLOCK;");
 	}
 

@@ -3,7 +3,6 @@ package dev.com.Synapsis_Spa_Cautiva.sedes.service;
 import java.time.LocalTime;
 import java.util.List;
 
-import dev.com.Synapsis_Spa_Cautiva.comun.api.ParametroApi;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.sedes.api.DatosRecurso;
 import dev.com.Synapsis_Spa_Cautiva.sedes.api.HorarioSede;
@@ -25,17 +24,12 @@ public class ServicioRecurso implements RecursoApi {
 
 	private final RepositorioRecurso repositorioRecurso;
 
-	private final ParametroApi parametroApi;
-
 	private final MapperRecurso mapperRecurso;
 
+	/** CUS61 (RF85, RN26). [It. 2.1 · v5.2] Sin tiempo de limpieza: ya no lee LIMPIEZA_MAX_MIN (RN03). */
 	@Transactional
 	public RecursoDTO registrarRecurso(RecursoDTO oRecursoDTO) {
-		int limpiezaMaxima = parametroApi.valorNumero("LIMPIEZA_MAX_MIN").intValue();
-		if (oRecursoDTO.minutosLimpieza() < 0 || oRecursoDTO.minutosLimpieza() > limpiezaMaxima) {
-			throw new ReglaNegocioException("RN03", "El tiempo de limpieza va de 0 a " + limpiezaMaxima + " minutos.");
-		}
-		Recurso oRecurso = new Recurso(oRecursoDTO.idSede(), oRecursoDTO.nombre(), oRecursoDTO.tipo(), oRecursoDTO.minutosLimpieza());
+		Recurso oRecurso = new Recurso(oRecursoDTO.idSede(), oRecursoDTO.nombre(), oRecursoDTO.tipo());
 		return mapperRecurso.aDTO(repositorioRecurso.save(oRecurso));
 	}
 
@@ -70,7 +64,7 @@ public class ServicioRecurso implements RecursoApi {
 
 	private DatosRecurso aDatos(Recurso oRecurso) {
 		return new DatosRecurso(oRecurso.getIdRecurso(), oRecurso.getIdSede(), oRecurso.getNombre(), oRecurso.getTipo().name(),
-				oRecurso.getMinutosLimpieza(), oRecurso.getEstado().name());
+				oRecurso.getEstado().name());
 	}
 
 }

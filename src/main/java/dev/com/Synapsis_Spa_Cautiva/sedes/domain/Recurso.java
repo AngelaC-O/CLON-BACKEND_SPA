@@ -9,20 +9,13 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
-
 import lombok.Getter;
 
+/** [It. 2.1 · v5.2] Sin tiempo de limpieza: el recurso queda libre en cuanto termina el servicio (RN03, RF85). */
 @Entity
 @Table(name = "RECURSO")
 @Getter
 public class Recurso {
-
-	/**
-	 * Tope de CK_RECURSO_MINUTOS_LIMPIEZA (0 a 10, modelo v5.1). El tope del negocio es LIMPIEZA_MAX_MIN de PARAMETRO, que
-	 * revisa ServicioRecurso; este solo evita mandar a Oracle un valor que el CHECK rechazaría.
-	 */
-	private static final int LIMPIEZA_MAXIMA_DEL_ESQUEMA = 10;
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -39,9 +32,6 @@ public class Recurso {
 	@Column(name = "tipo", nullable = false, length = 15)
 	private TipoRecurso tipo;
 
-	@Column(name = "minutos_limpieza", nullable = false)
-	private Integer minutosLimpieza;
-
 	@Enumerated(EnumType.STRING)
 	@Column(name = "estado", nullable = false, length = 15)
 	private EstadoRecurso estado;
@@ -49,15 +39,11 @@ public class Recurso {
 	protected Recurso() {
 	}
 
-	/** RN03: después de cada servicio el recurso queda bloqueado por su limpieza, de 0 a 10 minutos. */
-	public Recurso(Long idSede, String nombre, TipoRecurso tipo, Integer minutosLimpieza) {
-		if (minutosLimpieza == null || minutosLimpieza < 0 || minutosLimpieza > LIMPIEZA_MAXIMA_DEL_ESQUEMA) {
-			throw new ReglaNegocioException("RN03", "El tiempo de limpieza va de 0 a " + LIMPIEZA_MAXIMA_DEL_ESQUEMA + " minutos.");
-		}
+	/** RF85: el recurso se registra con su tipo y su sede, DISPONIBLE. */
+	public Recurso(Long idSede, String nombre, TipoRecurso tipo) {
 		this.idSede = idSede;
 		this.nombre = nombre;
 		this.tipo = tipo;
-		this.minutosLimpieza = minutosLimpieza;
 		this.estado = EstadoRecurso.DISPONIBLE;
 	}
 
