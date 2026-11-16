@@ -120,7 +120,7 @@ public class RepositorioReporte {
 			GROUP BY %s ORDER BY %s
 			""";
 
-	/** RF72: bloques y minutos ocupados (con la limpieza) por franja horaria o por recurso. */
+	/** RF72: bloques y minutos ocupados por franja horaria o por recurso. [It. 2.1 · v5.2] V_OCUPACION_RECURSO usa el fin del servicio, sin limpieza (RN03). */
 	private static final Map<String, String> OCUPACIONES = Map.of(
 			"HORA", OCUPACION.formatted(hora("hora"), FILTRO, hora("hora"), "1"),
 			"RECURSO", OCUPACION.formatted("recurso || ' (' || tipo || ')'", FILTRO, "recurso || ' (' || tipo || ')'", "3 DESC, 1"));
