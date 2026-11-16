@@ -16,6 +16,7 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.ParametroApi;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.UsuarioActual;
 import dev.com.Synapsis_Spa_Cautiva.inventario.api.ConsumoPendienteDTO;
+import dev.com.Synapsis_Spa_Cautiva.inventario.api.DatosProducto;
 import dev.com.Synapsis_Spa_Cautiva.inventario.api.InventarioApi;
 import dev.com.Synapsis_Spa_Cautiva.inventario.api.ProductoStockDTO;
 import dev.com.Synapsis_Spa_Cautiva.inventario.controller.AjusteDTO;
@@ -336,7 +337,21 @@ public class ServicioProducto implements InventarioApi, AvisoProvider {
 
 	private static MovimientoKardexDTO aDTO(FilaKardex fila) {
 		return new MovimientoKardexDTO(fila.getIdMovimiento(), fila.getFechaHora(), fila.getTipo(), fila.getMotivo(), fila.getCantidadConSigno(),
-				fila.getSaldo(), fila.getUsuario(), fila.getIdDetalleVenta(), fila.getIdDetalleCompra(), fila.getIdAtencion());
+				fila.getSaldo(), fila.getUsuario(), fila.getIdDetalleVenta(), fila.getIdDetalleCompra(), fila.getIdAtencion(), fila.getComprobante(),
+				fila.getDocumentoCompra());
+	}
+
+	/** [It. 2.1 · nombres, D-33] Una consulta por lista de ids. */
+	@Override
+	@Transactional(readOnly = true)
+	public List<DatosProducto> obtenerProductos(List<Long> idsProducto) {
+		List<Long> ids = idsProducto.stream().filter(java.util.Objects::nonNull).distinct().toList();
+		if (ids.isEmpty()) {
+			return List.of();
+		}
+		return repositorioProducto.findAllById(ids).stream()
+			.map(oProducto -> new DatosProducto(oProducto.getIdProducto(), oProducto.getNombre(), oProducto.getUnidad()))
+			.toList();
 	}
 
 }

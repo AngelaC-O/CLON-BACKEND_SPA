@@ -19,4 +19,10 @@ public interface InventarioApi {
 	 */
 	List<ConsumoPendienteDTO> registrarConsumoAtencion(Long idAtencion, Long idSede, List<InsumoEstimadoDTO> insumos);
 
+	/**
+	 * [It. 2.1 · nombres, D-33] El nombre y la unidad de cada producto, en una consulta por lista de ids (recomendaciones de CUS12, detalle de la
+	 * venta y la línea del CPE). Los que no existen no vienen.
+	 */
+	List<DatosProducto> obtenerProductos(List<Long> idsProducto);
+
 }

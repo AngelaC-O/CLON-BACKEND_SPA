@@ -5,6 +5,12 @@ import java.util.List;
 /** Lo que ventas usa de las atenciones (CUS13, CUS18). */
 public interface AtencionApi {
 
+	/**
+	 * [It. 2.1 · nombres] Las atenciones de una venta con sus nombres, en lote y sin revisar su estado: la descripción («Servicio · Variante») y
+	 * la especialista de cada línea de servicio (DetalleVentaDTO). No está en la página de nombres, que dice «AtencionApi» (DF-170).
+	 */
+	List<AtencionCobrable> obtenerAtenciones(List<Long> idsAtencion);
+
 	List<HoraLibre> libresAhora(Long idVariante, Long idSede);
 
 	Long registrarSinCita(Long idCliente, String nombreClientePaso, Long idPersonal, Long idRecurso, Long idVariante, Integer tiempoDeclaradoMin);

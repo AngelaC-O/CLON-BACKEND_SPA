@@ -82,6 +82,9 @@ public class ServicioVenta {
 	/** [It. 2.1 · D-22] CUS26 con un medio de la pasarela confirma la venta antes de cobrar (DF-162). */
 	private final TransactionTemplate transacciones;
 
+	/** [It. 2.1 · nombres] La clienta, la descripción y la especialista de cada línea y el medio de cada pago, en lote. */
+	private final NombresVenta nombresVenta;
+
 	private final ParametroApi parametroApi;
 
 	private final MapperVenta mapperVenta;
@@ -116,7 +119,7 @@ public class ServicioVenta {
 		Long idVenta = transacciones.execute(estado -> registrarVentaDeProductos(oVentaProductosDTO).getIdVenta());
 		TransaccionDTO oTransaccionDTO = pagosApi.cobrar(idVenta, idMedioPago, monto, oVentaProductosDTO.canal());
 		if (!oTransaccionDTO.aprobada()) {
-			return transacciones.execute(estado -> mapperVenta.aDTO(buscar(idVenta), pagosApi.cobrosPendientes(idVenta)));
+			return transacciones.execute(estado -> nombresVenta.conNombres(mapperVenta.aDTO(buscar(idVenta), pagosApi.cobrosPendientes(idVenta))));
 		}
 		return transacciones.execute(estado -> {
 			Venta oVenta = buscar(idVenta);
@@ -157,7 +160,7 @@ public class ServicioVenta {
 		repositorioVenta.saveAndFlush(oVenta);
 		Comprobante oComprobante = oVenta.getComprobantes().getFirst();
 		servicioFacturacionElectronica.emitirComprobante(oComprobante.getIdComprobante());
-		return mapperVenta.aDTO(oVenta);
+		return nombresVenta.conNombres(mapperVenta.aDTO(oVenta));
 	}
 
 	/**
@@ -182,7 +185,7 @@ public class ServicioVenta {
 		List<AtencionCobrable> atenciones = atencionApi.listarCobrables(idSede).stream()
 			.filter(oAtencion -> !enVenta.contains(oAtencion.idAtencion()))
 			.toList();
-		return new PorCobrarDTO(atenciones, abiertas.stream().map(mapperVenta::aDTO).toList());
+		return new PorCobrarDTO(atenciones, nombresVenta.conNombres(abiertas.stream().map(mapperVenta::aDTO).toList()));
 	}
 
 	/** [It. 2] CUS18: la venta con el estado actual de sus cobros digitales en la pasarela (RN42, RN52). */
@@ -193,9 +196,9 @@ public class ServicioVenta {
 		List<PagoVentaDTO> pagos = oVentaDTO.pagos().stream()
 			.map(oPago -> oPago.idTransaccion() == null ? oPago : oPago.conEstadoTransaccion(pagosApi.consultarTransaccion(oPago.idTransaccion()).estado()))
 			.toList();
-		return new VentaDTO(oVentaDTO.idVenta(), oVentaDTO.idSede(), oVentaDTO.idCaja(), oVentaDTO.idCliente(), oVentaDTO.estado(), oVentaDTO.detalles(),
-				oVentaDTO.subtotal(), oVentaDTO.igv(), oVentaDTO.descuento(), oVentaDTO.adelantoAplicado(), oVentaDTO.saldoFavorAplicado(), oVentaDTO.total(),
-				pagos, oVentaDTO.pagado(), oVentaDTO.pendiente(), oVentaDTO.cobrosPendientes(), oVentaDTO.comprobante());
+		return nombresVenta.conNombres(new VentaDTO(oVentaDTO.idVenta(), oVentaDTO.idSede(), oVentaDTO.idCaja(), oVentaDTO.idCliente(), oVentaDTO.estado(),
+				oVentaDTO.detalles(), oVentaDTO.subtotal(), oVentaDTO.igv(), oVentaDTO.descuento(), oVentaDTO.adelantoAplicado(), oVentaDTO.saldoFavorAplicado(),
+				oVentaDTO.total(), pagos, oVentaDTO.pagado(), oVentaDTO.pendiente(), oVentaDTO.cobrosPendientes(), oVentaDTO.comprobante(), null));
 	}
 
 	@Transactional
@@ -208,7 +211,7 @@ public class ServicioVenta {
 		BigDecimal precioUnitario = oAtencionCobrable.idClientePaquete() != null ? BigDecimal.ZERO
 				: catalogoApi.precioVigente(oAtencionCobrable.idVariante(), null, null);
 		oVenta.agregarServicio(idAtencion, precioUnitario, oAtencionCobrable.idPersonal());
-		return mapperVenta.aDTO(repositorioVenta.save(oVenta));
+		return nombresVenta.conNombres(mapperVenta.aDTO(repositorioVenta.save(oVenta)));
 	}
 
 	/** El flush hace que Oracle calcule el descuento de la promoción antes de leer los totales (DF-11). */
@@ -228,7 +231,7 @@ public class ServicioVenta {
 		if (total.compareTo(oVenta.getTotal()) != 0) {
 			throw new IllegalStateException("La venta " + idVenta + " calcula un total distinto del que guarda");
 		}
-		return mapperVenta.aDTO(repositorioVenta.saveAndFlush(oVenta));
+		return nombresVenta.conNombres(mapperVenta.aDTO(repositorioVenta.saveAndFlush(oVenta)));
 	}
 
 	/**
@@ -261,7 +264,7 @@ public class ServicioVenta {
 		// [It. 2.1 · D-22] Los cobros de este pedido que quedaron PENDIENTES, con su medio, monto, canal y enlace
 		List<CobroPendienteDTO> cobrosPendientes = idsPendientes.isEmpty() ? List.of()
 				: pagosApi.cobrosPendientes(idVenta).stream().filter(oCobro -> idsPendientes.contains(oCobro.idTransaccion())).toList();
-		return mapperVenta.aDTO(repositorioVenta.saveAndFlush(oVenta), cobrosPendientes);
+		return nombresVenta.conNombres(mapperVenta.aDTO(repositorioVenta.saveAndFlush(oVenta), cobrosPendientes));
 	}
 
 	public ResultadoConsulta consultarRuc(String ruc) {
@@ -282,11 +285,12 @@ public class ServicioVenta {
 		repositorioVenta.saveAndFlush(oVenta);
 		Comprobante oComprobante = oVenta.getComprobantes().getFirst();
 		servicioFacturacionElectronica.emitirComprobante(oComprobante.getIdComprobante());
-		return mapperVenta.aDTO(oVenta);
+		return nombresVenta.conNombres(mapperVenta.aDTO(oVenta));
 	}
 
 	public ProformaDTO armarProforma(ProformaDTO oProformaDTO) {
-		List<ProformaDTO.Item> items = oProformaDTO.items().stream().map(this::conPrecio).toList();
+		// [It. 2.1 · nombres] Cada ítem con su descripción («Servicio · Variante» o el paquete)
+		List<ProformaDTO.Item> items = nombresVenta.conDescripciones(oProformaDTO.items().stream().map(this::conPrecio).toList());
 		ProformaDTO conPrecios = new ProformaDTO(oProformaDTO.idCliente(), oProformaDTO.nombreCliente(), oProformaDTO.fechaValidez(), items, null);
 		return new ProformaDTO(oProformaDTO.idCliente(), oProformaDTO.nombreCliente(), oProformaDTO.fechaValidez(), items,
 				calculadoraVenta.calcularTotal(conPrecios));
@@ -334,7 +338,7 @@ public class ServicioVenta {
 		}
 		BigDecimal precioUnitario = catalogoApi.precioVigente(oItem.idVariante(), oItem.idPaquete(), oItem.idPromocion());
 		return new ProformaDTO.Item(oItem.tipoItem(), oItem.idVariante(), oItem.idPaquete(), oItem.idPromocion(), oItem.cantidad(), precioUnitario,
-				precioUnitario.multiply(BigDecimal.valueOf(oItem.cantidad())));
+				precioUnitario.multiply(BigDecimal.valueOf(oItem.cantidad())), null);
 	}
 
 	private Venta buscar(Long idVenta) {

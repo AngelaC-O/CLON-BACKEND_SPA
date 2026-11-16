@@ -14,7 +14,13 @@ import jakarta.validation.constraints.Positive;
 public record ProformaDTO(Long idCliente, String nombreCliente, LocalDate fechaValidez, @NotEmpty List<@Valid Item> items, BigDecimal total) {
 
 	public record Item(@NotNull TipoItemVentaDetalle tipoItem, Long idVariante, Long idPaquete, Long idPromocion, @NotNull @Positive Integer cantidad,
-			BigDecimal precioUnitario, BigDecimal subtotal) {
+			BigDecimal precioUnitario, BigDecimal subtotal, String descripcion) {
+
+		/** [It. 2.1 · nombres] «Servicio · Variante» o el nombre del paquete (en la petición se ignora). */
+		public Item conDescripcion(String descripcion) {
+			return new Item(tipoItem, idVariante, idPaquete, idPromocion, cantidad, precioUnitario, subtotal, descripcion);
+		}
+
 	}
 
 }

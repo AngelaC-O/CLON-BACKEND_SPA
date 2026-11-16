@@ -18,12 +18,20 @@ public record FichaClienteDTO(ClienteDTO cliente, BigDecimal saldoFavor, List<At
 		List<PaqueteFicha> paquetes, List<ProductoCompradoDTO> productosComprados) {
 
 	public record AtencionFicha(Long idAtencion, Long idCita, Long idPersonal, Long idRecurso, Long idVariante, Long idClientePaquete,
-			LocalDateTime horaInicio, LocalDateTime horaFin, String observaciones, EstadoAtencion estado, List<RecomendacionDTO> recomendaciones) {
+			LocalDateTime horaInicio, LocalDateTime horaFin, String observaciones, EstadoAtencion estado, List<RecomendacionDTO> recomendaciones,
+			String nombreServicio, String nombreEspecialista, String nombreRecurso) {
+
+		/** [It. 2.1 · nombres] Duda 9: el historial muestra servicio, especialista y recurso; las recomendaciones, el nombre del producto. */
+		public AtencionFicha conNombres(List<RecomendacionDTO> recomendaciones, String nombreServicio, String nombreEspecialista, String nombreRecurso) {
+			return new AtencionFicha(idAtencion, idCita, idPersonal, idRecurso, idVariante, idClientePaquete, horaInicio, horaFin, observaciones, estado,
+					recomendaciones, nombreServicio, nombreEspecialista, nombreRecurso);
+		}
+
 	}
 
 	/** Las sesiones usadas se cuentan en ATENCION.id_cliente_paquete, no se guardan (RN36, RN37). */
 	public record PaqueteFicha(Long idClientePaquete, Long idPaquete, Integer sesionesTotales, Integer sesionesUsadas, Integer sesionesRestantes,
-			LocalDate fechaCompra, LocalDate fechaVencimiento, EstadoClientePaquete estado) {
+			LocalDate fechaCompra, LocalDate fechaVencimiento, EstadoClientePaquete estado, String nombrePaquete) {
 	}
 
 }

@@ -34,7 +34,8 @@ public interface RepositorioProducto extends JpaRepository<Producto, Long> {
 			SELECT id_movimiento AS "idMovimiento", id_sede AS "idSede", id_producto AS "idProducto", codigo AS "codigo",
 				producto AS "producto", fecha_hora AS "fechaHora", tipo AS "tipo", motivo AS "motivo",
 				cantidad_con_signo AS "cantidadConSigno", saldo AS "saldo", usuario AS "usuario",
-				id_detalle_venta AS "idDetalleVenta", id_detalle_compra AS "idDetalleCompra", id_atencion AS "idAtencion"
+				id_detalle_venta AS "idDetalleVenta", id_detalle_compra AS "idDetalleCompra", id_atencion AS "idAtencion",
+				comprobante AS "comprobante", documento_compra AS "documentoCompra"
 			FROM V_KARDEX
 			WHERE id_producto = :idProducto AND id_sede = :idSede AND fecha_hora >= :desde AND fecha_hora < :hasta
 			ORDER BY fecha_hora, id_movimiento

@@ -24,10 +24,12 @@ public interface MapperCatalogo {
 
 	/** [It. 2] CUS59. */
 	@Mapping(target = "idsServicio", source = "servicios")
+	@Mapping(target = "servicios", ignore = true)
 	PaqueteDTO aDTO(Paquete oPaquete);
 
 	/** [It. 2] CUS60. */
 	@Mapping(target = "idsServicio", source = "servicios")
+	@Mapping(target = "servicios", ignore = true)
 	PromocionDTO aDTO(Promocion oPromocion);
 
 	default Long idServicioDePaquete(PaqueteServicio oPaqueteServicio) {

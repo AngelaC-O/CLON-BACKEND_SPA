@@ -13,10 +13,18 @@ import org.mapstruct.Mapping;
 public interface MapperCita {
 
 	@Mapping(target = "idEspera", ignore = true)
+	@Mapping(target = "nombreCliente", ignore = true)
+	@Mapping(target = "nombreEspecialista", ignore = true)
+	@Mapping(target = "nombreServicio", ignore = true)
+	@Mapping(target = "nombreRecurso", ignore = true)
 	CitaDTO aDTO(Cita oCita);
 
 	/** [It. 2] CUS05: la cita que salió de una espera (RF09). */
 	@Mapping(target = "idEspera", source = "idEspera")
+	@Mapping(target = "nombreCliente", ignore = true)
+	@Mapping(target = "nombreEspecialista", ignore = true)
+	@Mapping(target = "nombreServicio", ignore = true)
+	@Mapping(target = "nombreRecurso", ignore = true)
 	CitaDTO aDTO(Cita oCita, Long idEspera);
 
 	@Mapping(target = "nombreCliente", ignore = true)
