@@ -81,8 +81,8 @@ class ContratoOpenApi {
 	OpenApiCustomizer contratoDeLaIteracion() {
 		Map<String, Object> contrato = leerContrato();
 		return openApi -> {
-			openApi.info(new Info().title("Cautiva Spa · BackOffice · Iteración 2").version("2.0")
-				.description("Contrato del back-end de las Iteraciones 1 y 2 (CS-BO-01). Los errores salen como ProblemDetail, con la propiedad regla. "
+			openApi.info(new Info().title("Cautiva Spa · BackOffice · Iteración 2.1").version("2.1")
+				.description("Contrato del back-end de las Iteraciones 1, 2 y 2.1 (CS-BO-01). Los errores salen como ProblemDetail, con la propiedad regla. "
 						+ "x-permiso es el permiso MODULO:ACCION que exige cada operación (SESION: basta con iniciar sesión; PUBLICO: sin sesión)."));
 			openApi.servers(List.of(new Server().url("/")));
 			openApi.getComponents()

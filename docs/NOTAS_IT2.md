@@ -527,6 +527,10 @@ Nombres en las respuestas (16/11/2026, B18; página «02 Nombres en las respuest
 
 - **Nombres en todas las respuestas que muestra una pantalla:** programados según la página «02 Nombres en las respuestas · It. 2.1» (DF-167 a DF-176). Cierra **D-31** (quién pidió y resolvió la anulación) y **D-33** (nombre del producto en el CPE), y las dudas 1, 2, 7, 9, 14, 21, 22 y 25 del front-end.
 
+16/11/2026 (B19 · cierre):
+
+- **D-39 cerrada:** la tarea de cierre autorizó escribir `docs/openapi.yaml` y `docs/trazabilidad_it21.md`. Se exportó el contrato. Su título pasa a «Cautiva Spa · BackOffice · Iteración 2.1», versión 2.1 (`ContratoOpenApi.contratoDeLaIteracion`, que dice también «Iteraciones 1, 2 y 2.1»).
+
 ### Verificación de la Iteración 2.1
 
 Rama `tineo-feature/b16-v52-sin-limpieza`, JDK 26 con `--release 21` (15/11/2026).
@@ -558,3 +562,47 @@ Rama de trabajo sin confirmar sobre `main` (después del merge de B16), JDK 26 c
 Rama `tineo-feature/b18-nombres`, JDK 26 con `--release 21`. `./mvnw -q verify` (una corrida completa; no hubo ORA-03114 ni ORA-12516): 203 pruebas, 202 OK y 1 fallo, `ContratoOpenApiTest.docsOpenapiEsLaSalidaDelCodigo`, el mismo de D-39 (`docs/openapi.yaml` sigue sin exportarse). La otra prueba del contrato (los ejemplos de `contrato.yaml` coinciden con los esquemas) y `ModularidadTest` pasan, y la salida de springdoc ya trae `ItemConciliacion` en `ConciliacionDTO.items`.
 
 Antes de la corrida completa: la primera corrida de las clases tocadas dio 4 fallos por `Map.get(null)` en `NombresVenta` (clienta de paso sin id sobre un `Map.of()`; se corrigió con un acceso que devuelve null). Una segunda corrida se colgó al instalar la base en el contenedor (Docker no pudo detener ese contenedor) y se cortó; repetida, `AnulacionVentasFlujoTest` e `IntegracionesRealesFlujoTest` dieron 21 OK, incluida la prueba del CPE contra WireMock. El front-end no se tocó: no se corrió `npm run build` ni `npm test`.
+
+### Verificación del cierre
+
+Rama `tineo-chore/b19-contrato-it21`, JDK 26 con `--release 21` (16/11/2026).
+
+**Contrato.** `./mvnw test -Dtest=ContratoOpenApiTest -Dcautiva.openapi.exportar=true` exportó `docs/openapi.yaml` (3 de 3 pruebas OK). Se comprobó en el archivo:
+
+- Siguen 103 operaciones, cada una con su `x-permiso`.
+- Ya no aparecen `minutosLimpieza`, `finServicio` ni `LIMPIEZA_MAX_MIN`.
+- Está `CobroPendienteDTO` con `idTransaccion`, `idMedioPago`, `monto`, `canal`, `estado`, `enlacePago` y `fechaExpiracion`.
+- Está `ItemConciliacion`.
+- Están los campos de nombres de la página 02, por ejemplo `nombreCliente`, `nombreEspecialista`, `nombreServicio`, `nombreRecurso`, `nombreMedioPago`, `nombreUsuarioSolicita`, `nombreUsuarioResuelve`, `nombreSede`, los cuatro `nombreUsuario…` de `CajaDTO`, `especialistas` y `recursos` de `HoraLibre`, y `servicios` de paquetes y promociones.
+
+La trazabilidad de las 21 páginas «modificado It. 2.1» y el estado de cada DTO de la página de nombres están en `docs/trazabilidad_it21.md`.
+
+**Base de datos en un contenedor limpio.** Se usó `gvenzl/oracle-free:23.26.2`, en el orden 00 → 14 → 13 → 15 → 17 → 18 → `ALTER USER CAUTIVA_APP` → 16. La instalación (00 a 18) no dio ningún `ORA-`, `PLS-` ni `SP2-`. Resultado de 18:
+
+- 57 tablas y 106 índices IX_.
+- FUNCTION 2, PACKAGE 5, PACKAGE BODY 5, TRIGGER 129 y VIEW 27.
+- 0 objetos inválidos.
+- RECURSO sin `minutos_limpieza` y PARAMETRO sin `LIMPIEZA_MAX_MIN`.
+- 0 cobros llenados y 0 citas recalculadas, porque la base está vacía.
+
+| Script | Cuenta | OK | FALLO |
+| --- | --- | --- | --- |
+| `97_prueba_rapida_v5.sql` | dueño | 14 | 0 |
+| `20_pruebas_reglas_v5.sql` | dueño | 144 | 0 |
+| `21_pruebas_v51.sql` | dueño | 55 | 0 |
+| `22_pruebas_v52.sql` | dueño | 44 | 0 |
+| `16_verificar_cuenta_aplicacion.sql` | CAUTIVA_APP | 11 | 0 |
+
+Los `ORA-` que salen en 20, 21 y 22 son los errores esperados que imprime cada caso. Los cuatro scripts de prueba terminan en ROLLBACK.
+
+**`./mvnw verify`.** Se corrió dos veces, como pide el cierre ante un `ORA-12516`:
+
+- **Primera corrida:** 203 pruebas, 197 OK, 3 errores y 3 fallos, todos en `SeguridadCatalogoFlujoTest`.
+  - Los 3 errores son `ORA-12516`: el listener del contenedor se quedó sin procesos para la conexión directa como dueño (`comoDueno`). Fallaron `cus50LaClaveErradaSoloSumaIntentosYOracleBloquea`, `cus50UnaCuentaInactivaRecibe423YUnUsuarioDesconocido401` y `cus52ListaElPersonalSinUsuarioConSusNombres`.
+  - Los 3 fallos son una consecuencia: `cus50LaClaveErrada…` cortó antes de desbloquear la cuenta que había bloqueado. Por eso `conClaveTemporalSoloSePuedeCambiarLaClave`, `cus50LaSesionVigenteVuelveAlRecargarYSinSesionEs401` y `cus50ElIngresoEntregaPermisosSedeYVenceSegunElParametro` recibieron 423 en vez de 200.
+  - Ninguna es una aserción del código en rojo.
+- **Segunda corrida:** 203 pruebas, 203 OK, 0 fallos, 0 errores y 0 omitidas. `BUILD SUCCESS`.
+- Pasan `ContratoOpenApiTest` (ya sin el fallo de D-39), `ModularidadTest`, `InstalacionBaseDatosTest`, `MigracionV51Test`, `MigracionV52Test` y `AgendaSinLimpiezaFlujoTest`.
+- Ninguna prueba falla por el JDK 26.
+
+Este repositorio es solo el back-end: no se corrió `npm run build` ni `npm test` del front-end.
