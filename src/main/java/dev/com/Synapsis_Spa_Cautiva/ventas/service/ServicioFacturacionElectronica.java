@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 
 import dev.com.Synapsis_Spa_Cautiva.agenda.api.AtencionApi;
 import dev.com.Synapsis_Spa_Cautiva.catalogo.api.CatalogoApi;
@@ -13,6 +14,8 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.ParametroApi;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.SesionOracle;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.UsuarioActual;
+import dev.com.Synapsis_Spa_Cautiva.inventario.api.DatosProducto;
+import dev.com.Synapsis_Spa_Cautiva.inventario.api.InventarioApi;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.PersonaApi;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.ComprobanteDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.MapperVenta;
@@ -74,6 +77,9 @@ public class ServicioFacturacionElectronica {
 
 	private final MapperVenta mapperVenta;
 
+	/** [It. 2.1 · D-33] El nombre del producto en la línea del CPE y del PDF. */
+	private final InventarioApi inventarioApi;
+
 	private final String urlPublica;
 
 	private final long vigenciaHoras;
@@ -82,8 +88,9 @@ public class ServicioFacturacionElectronica {
 			FacturacionElectronicaPort facturacionElectronicaPort,
 			AlmacenArchivosPort almacenArchivosPort, GeneradorPdfComprobante generadorPdfComprobante, FirmaEnlaceComprobante firmaEnlaceComprobante,
 			PersonaApi personaApi, AtencionApi atencionApi, CatalogoApi catalogoApi, ParametroApi parametroApi, SesionOracle sesionOracle,
-			UsuarioActual usuarioActual, TransactionTemplate transacciones, MapperVenta mapperVenta, @Value("${cautiva.comprobantes.url-publica}") String urlPublica,
-			@Value("${cautiva.comprobantes.enlace-vigencia-horas}") long vigenciaHoras) {
+			UsuarioActual usuarioActual, TransactionTemplate transacciones, MapperVenta mapperVenta, InventarioApi inventarioApi,
+			@Value("${cautiva.comprobantes.url-publica}") String urlPublica, @Value("${cautiva.comprobantes.enlace-vigencia-horas}") long vigenciaHoras) {
+		this.inventarioApi = inventarioApi;
 		this.repositorioComprobante = repositorioComprobante;
 		this.repositorioNotaCredito = repositorioNotaCredito;
 		this.repositorioVenta = repositorioVenta;
@@ -225,7 +232,10 @@ public class ServicioFacturacionElectronica {
 	 */
 	private DocumentoElectronico aDocumento(Comprobante oComprobante) {
 		BigDecimal igvPorcentaje = parametroApi.valorNumero("IGV_PORCENTAJE");
-		List<DocumentoElectronico.Linea> lineas = oComprobante.getDetallesVenta().stream().map(this::aLinea).toList();
+		// [It. 2.1 · D-33] Los nombres de los productos de todas las líneas, en una consulta
+		Map<Long, String> productos = inventarioApi.obtenerProductos(oComprobante.getDetallesVenta().stream().map(VentaDetalle::getIdProducto)
+			.filter(java.util.Objects::nonNull).toList()).stream().collect(java.util.stream.Collectors.toMap(DatosProducto::idProducto, DatosProducto::nombre));
+		List<DocumentoElectronico.Linea> lineas = oComprobante.getDetallesVenta().stream().map(oDetalle -> aLinea(oDetalle, productos)).toList();
 		Comprobante oComprador = oComprobante;
 		DocumentoElectronico.NotaAfectada oNotaAfectada = null;
 		if (oComprobante instanceof NotaCredito oNotaCredito) {
@@ -238,9 +248,16 @@ public class ServicioFacturacionElectronica {
 				oComprador.getNroDocComprador(), oComprador.getNombreComprador(), oComprobante.getImporteVenta(), igvPorcentaje, lineas, oNotaAfectada);
 	}
 
-	private DocumentoElectronico.Linea aLinea(VentaDetalle oDetalle) {
-		String descripcion = oDetalle.getIdAtencion() == null ? oDetalle.getTipoItem().name()
-				: catalogoApi.obtenerVariante(atencionApi.obtenerIdVariante(oDetalle.getIdAtencion())).nombre();
+	/** [It. 2.1 · D-33] Un producto va con su nombre (antes, «PRODUCTO»); el servicio, con el del servicio, como antes. */
+	private DocumentoElectronico.Linea aLinea(VentaDetalle oDetalle, Map<Long, String> productos) {
+		String descripcion;
+		if (oDetalle.getIdProducto() != null && productos.containsKey(oDetalle.getIdProducto())) {
+			descripcion = productos.get(oDetalle.getIdProducto());
+		}
+		else {
+			descripcion = oDetalle.getIdAtencion() == null ? oDetalle.getTipoItem().name()
+					: catalogoApi.obtenerVariante(atencionApi.obtenerIdVariante(oDetalle.getIdAtencion())).nombre();
+		}
 		return new DocumentoElectronico.Linea(descripcion, oDetalle.getCantidad(), oDetalle.getSubtotal());
 	}
 

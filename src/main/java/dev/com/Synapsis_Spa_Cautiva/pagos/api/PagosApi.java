@@ -52,6 +52,12 @@ public interface PagosApi {
 	/** [It. 2 · CUS47, RF105] Las transacciones APROBADAS del mes con su comisión y su abono, para conciliar (RN31). */
 	List<TransaccionLiquidadaDTO> liquidacion(Integer anio, Integer mes);
 
+	/**
+	 * [It. 2.1 · nombres] idMedioPago → nombre (EFECTIVO, TARJETA, YAPE, PLIN), en lote, para los pagos de la venta (CUS18, CUS24). No está en la
+	 * lista de interfaces nuevas de la página de nombres, que dice «PagosApi (medios de pago)» (DF-170).
+	 */
+	Map<Long, String> nombresMediosPago(List<Long> idsMedioPago);
+
 	/** Cobros APROBADOS del día por idMedioPago (RF64, RN42). */
 	Map<Long, BigDecimal> aprobadosDelDia(Long idSede, LocalDateTime fecha);
 

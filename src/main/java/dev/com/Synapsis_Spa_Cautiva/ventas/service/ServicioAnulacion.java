@@ -50,6 +50,9 @@ public class ServicioAnulacion {
 
 	private final MapperVenta mapperVenta;
 
+	/** [It. 2.1 · nombres, D-31] La clienta y quién pidió y quién resolvió cada solicitud. */
+	private final NombresVenta nombresVenta;
+
 	/**
 	 * CUS22 (RF32, RN32, RF106): la solicitud nace PENDIENTE; quién y cuándo los pone Oracle. La venta no cambia. Una segunda PENDIENTE de la
 	 * misma venta es 409 (UQ_SOL_ANUL_PENDIENTE): saveAndFlush la detecta aquí y no al confirmar.
@@ -64,7 +67,7 @@ public class ServicioAnulacion {
 		SolicitudAnulacion oSolicitud = new SolicitudAnulacion(idVenta, oSolicitudAnulacionDTO.motivo(), oSolicitudAnulacionDTO.codigoMotivo(),
 				oSolicitudAnulacionDTO.formaDevolucion(), usuarioActual.idUsuario());
 		repositorioSolicitudAnulacion.saveAndFlush(oSolicitud);
-		return mapperVenta.aDTO(oSolicitud, oVenta);
+		return nombresVenta.conNombres(mapperVenta.aDTO(oSolicitud, oVenta));
 	}
 
 	/** RN12: solo se pide anular una venta CERRADA (Oracle lo repite con -20101). */
@@ -80,7 +83,8 @@ public class ServicioAnulacion {
 		List<SolicitudAnulacion> solicitudes = estado == null || estado == EstadoSolicitudAnulacion.PENDIENTE
 				? repositorioSolicitudAnulacion.findPendientes(idSede)
 				: repositorioSolicitudAnulacion.findPorEstado(idSede, estado);
-		return solicitudes.stream().map(oSolicitud -> mapperVenta.aDTO(oSolicitud, buscarVenta(oSolicitud.getIdVenta()))).toList();
+		return nombresVenta.conNombresDeSolicitudes(
+				solicitudes.stream().map(oSolicitud -> mapperVenta.aDTO(oSolicitud, buscarVenta(oSolicitud.getIdVenta()))).toList());
 	}
 
 	/**
@@ -101,7 +105,7 @@ public class ServicioAnulacion {
 		repositorioVenta.saveAndFlush(oVenta);
 		oSolicitud.aprobar(idUsuarioAutoriza, idNotaCredito);
 		repositorioSolicitudAnulacion.saveAndFlush(oSolicitud);
-		return mapperVenta.aDTO(oSolicitud, oVenta);
+		return nombresVenta.conNombres(mapperVenta.aDTO(oSolicitud, oVenta));
 	}
 
 	/** CUS23 (RN32): con su motivo (422 sin él); la venta sigue CERRADA. */
@@ -110,7 +114,7 @@ public class ServicioAnulacion {
 		SolicitudAnulacion oSolicitud = buscarSolicitud(idSolicitud);
 		oSolicitud.rechazar(usuarioActual.idUsuario(), motivoRechazo);
 		repositorioSolicitudAnulacion.saveAndFlush(oSolicitud);
-		return mapperVenta.aDTO(oSolicitud, buscarVenta(oSolicitud.getIdVenta()));
+		return nombresVenta.conNombres(mapperVenta.aDTO(oSolicitud, buscarVenta(oSolicitud.getIdVenta())));
 	}
 
 	/**

@@ -18,9 +18,12 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface MapperVenta {
 
+	@Mapping(target = "descripcion", ignore = true)
+	@Mapping(target = "nombreEspecialista", ignore = true)
 	DetalleVentaDTO aDTO(VentaDetalle oDetalle);
 
 	@Mapping(target = "estadoTransaccion", ignore = true)
+	@Mapping(target = "nombreMedioPago", ignore = true)
 	PagoVentaDTO aDTO(VentaPago oPago);
 
 	ComprobanteDTO aDTO(Comprobante oComprobante);
@@ -39,7 +42,7 @@ public interface MapperVenta {
 		return new SolicitudAnulacionDTO(oSolicitud.getIdSolicitud(), oSolicitud.getIdVenta(), oSolicitud.getMotivo(), oSolicitud.getCodigoMotivo(),
 				oSolicitud.getFormaDevolucion(), oSolicitud.getEstado(), oSolicitud.getIdUsuarioSolicita(), oSolicitud.getFechaSolicitud(),
 				oSolicitud.getIdUsuarioResuelve(), oSolicitud.getFechaResolucion(), oSolicitud.getMotivoRechazo(), oSolicitud.getIdNotaCredito(),
-				oVenta.getIdCliente(), oVenta.getTotal(), comprobante);
+				oVenta.getIdCliente(), oVenta.getTotal(), comprobante, null, null, null);
 	}
 
 	default VentaDTO aDTO(Venta oVenta) {
@@ -52,7 +55,7 @@ public interface MapperVenta {
 		return new VentaDTO(oVenta.getIdVenta(), oVenta.getIdSede(), oVenta.getIdCaja(), oVenta.getIdCliente(), oVenta.getEstado(),
 				detallesADTO(oVenta.getDetalles()), oVenta.getSubtotal(), oVenta.getIgv(), oVenta.getDescuento(), oVenta.getAdelantoAplicado(),
 				oVenta.getSaldoFavorAplicado(), oVenta.getTotal(), pagosADTO(oVenta.getPagos()), pagado, oVenta.getTotal().subtract(pagado), cobrosPendientes,
-				comprobante);
+				comprobante, null);
 	}
 
 }

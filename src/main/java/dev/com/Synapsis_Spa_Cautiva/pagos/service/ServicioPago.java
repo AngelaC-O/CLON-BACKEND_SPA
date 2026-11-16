@@ -97,6 +97,16 @@ public class ServicioPago implements PagosApi {
 
 	@Override
 	@Transactional(readOnly = true)
+	public Map<Long, String> nombresMediosPago(List<Long> idsMedioPago) {
+		List<Long> ids = idsMedioPago.stream().filter(java.util.Objects::nonNull).distinct().toList();
+		if (ids.isEmpty()) {
+			return Map.of();
+		}
+		return repositorioMedioPago.findAllById(ids).stream().collect(Collectors.toMap(MedioPago::getIdMedioPago, MedioPago::getNombre));
+	}
+
+	@Override
+	@Transactional(readOnly = true)
 	public List<CobroPendienteDTO> cobrosPendientes(Long idVenta) {
 		return repositorioTransaccionPasarela.findPendientesDeVenta(idVenta).stream()
 			.map(oTransaccion -> new CobroPendienteDTO(oTransaccion.getIdTransaccion(), oTransaccion.getIdMedioPago(), oTransaccion.getMonto(),
