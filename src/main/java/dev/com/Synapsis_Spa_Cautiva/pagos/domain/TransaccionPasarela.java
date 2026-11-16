@@ -49,6 +49,13 @@ public class TransaccionPasarela {
 	@Column(name = "id_cita")
 	private Long idCita;
 
+	/**
+	 * [It. 2.1 · v5.2 · D-22] Venta cuyo pago se cobra (FK_TRANS_PAS_VENTA). Nula en los adelantos de cita y en las devoluciones
+	 * (CK_TRANS_PAS_VENTA). No cambia: TRG_TRANS_PAS_REGLAS responde -20072.
+	 */
+	@Column(name = "id_venta", updatable = false)
+	private Long idVenta;
+
 	@Column(name = "id_transaccion_origen")
 	private Long idTransaccionOrigen;
 
@@ -134,6 +141,17 @@ public class TransaccionPasarela {
 		this.idUsuario = idUsuario;
 		this.estado = EstadoTransaccion.PENDIENTE;
 		this.fechaHora = LocalDateTime.now();
+	}
+
+	/**
+	 * [It. 2.1 · D-22, RN52] El cobro es del pago de esta venta: así GET /ventas/{idVenta} lista sus cobros PENDIENTES. Solo un COBRO sin cita y
+	 * antes de guardarlo (CK_TRANS_PAS_VENTA; Oracle además exige la venta ABIERTA de la misma sede, -20072). No está en el diagrama (DF-160).
+	 */
+	public void registrarVenta(Long idVenta) {
+		if (tipoOperacion != TipoOperacion.COBRO || idCita != null || this.idTransaccion != null) {
+			throw new ReglaNegocioException("RN52", "Solo un cobro nuevo que no es de una cita se registra para una venta.");
+		}
+		this.idVenta = idVenta;
 	}
 
 	public void registrarEnlace(String enlacePago, LocalDateTime fechaExpiracion) {

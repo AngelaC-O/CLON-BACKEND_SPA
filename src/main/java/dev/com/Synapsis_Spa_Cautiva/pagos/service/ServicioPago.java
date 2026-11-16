@@ -13,6 +13,7 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.SesionOracle;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.UsuarioActual;
 import dev.com.Synapsis_Spa_Cautiva.pagos.api.AdelantoAprobado;
+import dev.com.Synapsis_Spa_Cautiva.pagos.api.CobroPendienteDTO;
 import dev.com.Synapsis_Spa_Cautiva.pagos.api.EnlacePagoDTO;
 import dev.com.Synapsis_Spa_Cautiva.pagos.api.FilaLiquidacionDTO;
 import dev.com.Synapsis_Spa_Cautiva.pagos.api.PagosApi;
@@ -76,6 +77,7 @@ public class ServicioPago implements PagosApi {
 		EstadoTransaccion estado = EstadoTransaccion.valueOf(oRespuesta.estado());
 		TransaccionPasarela oTransaccion = new TransaccionPasarela(usuarioActual.idSede(), idMedioPago, TipoOperacion.COBRO, oCanal, monto, null,
 				usuarioActual.idUsuario());
+		oTransaccion.registrarVenta(idVenta);
 		if (estado == EstadoTransaccion.APROBADA) {
 			oTransaccion.aprobar(oRespuesta.codigoOperacion());
 		}
@@ -91,6 +93,15 @@ public class ServicioPago implements PagosApi {
 			throw new ReglaNegocioException("RF103", "La pasarela rechazó el cobro de S/ " + monto + ": " + oRespuesta.mensaje());
 		}
 		return aDTO(oTransaccion);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<CobroPendienteDTO> cobrosPendientes(Long idVenta) {
+		return repositorioTransaccionPasarela.findPendientesDeVenta(idVenta).stream()
+			.map(oTransaccion -> new CobroPendienteDTO(oTransaccion.getIdTransaccion(), oTransaccion.getIdMedioPago(), oTransaccion.getMonto(),
+					oTransaccion.getCanal().name(), oTransaccion.getEstado().name(), oTransaccion.getEnlacePago(), oTransaccion.getFechaExpiracion()))
+			.toList();
 	}
 
 	@Override

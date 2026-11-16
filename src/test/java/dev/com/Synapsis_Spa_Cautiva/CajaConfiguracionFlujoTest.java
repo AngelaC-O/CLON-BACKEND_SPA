@@ -1,6 +1,7 @@
 package dev.com.Synapsis_Spa_Cautiva;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
@@ -15,6 +16,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -104,9 +109,37 @@ class CajaConfiguracionFlujoTest extends VentasFlujoApoyo {
 			.andExpect(jsonPath("$.idUsuarioReapertura").isNumber())
 			.andExpect(jsonPath("$.fechaRevision").value(nullValue()))
 			.andExpect(jsonPath("$.fechaCierre").value(nullValue()));
+		// [It. 2.1 · D-15] La reapertura queda en la auditoría: quién la hizo y su motivo (TRG_AUD_CAJA de v5.2)
+		assertThat(id("SELECT COUNT(*) FROM V_AUDITORIA WHERE entidad = 'CAJA' AND id_entidad = ? AND usuario = 'admin'"
+				+ " AND detalle LIKE '%motivo_reapertura:%Venta registrada después del cierre%'"
+				+ " AND detalle LIKE '%id_usuario_reapertura:%' AND detalle LIKE '%estado: CERRADA -> ABIERTA%'", idCaja)).isEqualTo(1);
 
 		// La recepcionista vuelve a arquear y cerrar (CUS45, sin cambios)
 		cerrarCaja(idCaja, "100").andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("CERRADA"));
+	}
+
+	@Test
+	void cus46LaCajaDeAyerNoSeReabreNiEnJavaNiEnOracle() throws Exception {
+		Long idCaja = cajaAbierta();
+		cerrarCaja(idCaja, "100").andExpect(status().isOk());
+		// La caja pasa a ser de ayer (el dueño, en mantenimiento; TRG_CAJA_REGLAS no protege la fecha de apertura de una caja cerrada)
+		comoDueno("UPDATE CAJA SET fecha_apertura = fecha_apertura - INTERVAL '1' DAY WHERE id_caja = " + idCaja);
+
+		// Java: Caja.reabrir responde 422 (RN30)
+		como("admin", patch("/api/v1/cajas/" + idCaja + "/reapertura"), "{\"motivoReapertura\":\"Venta de ayer\"}").andExpect(status().isUnprocessableContent())
+			.andExpect(jsonPath("$.regla").value("RN30"));
+
+		// [It. 2.1 · D-16] Oracle también: aunque se fuerce por SQL con la sesión de la Administradora, TRG_CAJA_REGLAS responde -20060
+		Long idAdmin = id("SELECT id_usuario FROM USUARIO WHERE nombre_usuario = 'admin'");
+		try (Connection dueno = DriverManager.getConnection(ORACLE.getJdbcUrl(), DUENO, CLAVE_DUENO); Statement sentencia = dueno.createStatement()) {
+			sentencia.execute("BEGIN PKG_SESION.iniciar(" + idAdmin + "); END;");
+			assertThatThrownBy(() -> sentencia.executeUpdate("UPDATE CAJA SET estado = 'ABIERTA', motivo_reapertura = 'Venta de ayer' WHERE id_caja = " + idCaja))
+				.isInstanceOf(SQLException.class)
+				.hasMessageContaining("ORA-20060")
+				.hasMessageContaining("Solo se reabre la caja del d");
+			sentencia.execute("BEGIN PKG_SESION.terminar; END;");
+		}
+		assertThat(estadoCaja(idCaja)).isEqualTo("CERRADA");
 	}
 
 	@Test

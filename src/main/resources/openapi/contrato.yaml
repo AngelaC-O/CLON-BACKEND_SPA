@@ -313,8 +313,8 @@
   cus: CUS18
   respuestas:
     "200":
-      descripcion: La venta; cada pago digital trae el estado actual de su transacción en la pasarela (RN42, RN52)
-      ejemplo: { idVenta: 8812, idSede: 1, idCaja: 214, idCliente: 407, estado: ABIERTA, total: 60.00, pagos: [ { idPago: 9901, idMedioPago: 2, monto: 40.00, idTransaccion: 5510, estadoTransaccion: APROBADA } ], pagado: 40.00, pendiente: 20.00, cobrosPendientes: [ ] }
+      descripcion: "La venta; cada pago digital trae el estado actual de su transacción en la pasarela (RN42, RN52) y cobrosPendientes, todos los cobros PENDIENTES de la venta, también los iniciados en otro equipo (D-22)"
+      ejemplo: { idVenta: 8812, idSede: 1, idCaja: 214, idCliente: 407, estado: ABIERTA, total: 60.00, pagos: [ { idPago: 9901, idMedioPago: 2, monto: 40.00, idTransaccion: 5510, estadoTransaccion: APROBADA } ], pagado: 40.00, pendiente: 20.00, cobrosPendientes: [ { idTransaccion: 5511, idMedioPago: 3, monto: 20.00, canal: QR, estado: PENDIENTE, enlacePago: "https://enlace-de-izipay.example/def", fechaExpiracion: "2026-11-17T10:00:00" } ] }
     "404": { descripcion: La venta no existe, regla: RF21 }
 
 "POST /api/v1/ventas":
@@ -350,9 +350,9 @@
       ejemplo: { idVenta: 8812, estado: ABIERTA, total: 60.00, pagos: [ { idPago: 9901, idMedioPago: 2, monto: 40.00, idTransaccion: 5510, referencia: "IZ-000184322" }, { idPago: 9902, idMedioPago: 1, monto: 20.00 } ], pagado: 60.00, pendiente: 0.00, cobrosPendientes: [ ] }
     "202":
       descripcion: "Un cobro quedó PENDIENTE en Izipay y no suma: la venta sigue ABIERTA (RN52); con el webhook aprobado se reenvía con idTransaccion (RN42) y se cierra"
-      ejemplo: { idVenta: 8812, estado: ABIERTA, total: 60.00, pagos: [ ], pagado: 0, pendiente: 60.00, cobrosPendientes: [ { idTransaccion: 5510, enlacePago: "https://enlace-de-izipay.example/abc" } ] }
+      ejemplo: { idVenta: 8812, estado: ABIERTA, total: 60.00, pagos: [ ], pagado: 0, pendiente: 60.00, cobrosPendientes: [ { idTransaccion: 5510, idMedioPago: 3, monto: 60.00, canal: QR, estado: PENDIENTE, enlacePago: "https://enlace-de-izipay.example/abc", fechaExpiracion: "2026-11-17T10:00:00" } ] }
     "404": { descripcion: La venta no existe, regla: RF21 }
-    "422": { descripcion: "La pasarela rechazó el cobro (la transacción RECHAZADA queda guardada, RN52) o la transacción aún no está APROBADA", regla: RF103 }
+    "422": { descripcion: "La pasarela rechazó el cobro (la transacción RECHAZADA queda guardada, RN52), la transacción aún no está APROBADA o cobró otra venta (-20107, RN42)", regla: RF103 }
 
 "GET /api/v1/ventas/consulta-ruc/{ruc}":
   resumen: Consultar el RUC del comprador
@@ -441,7 +441,7 @@
       ejemplo: { idVenta: 8813, idSede: 1, idCaja: 214, estado: CERRADA, total: 35.00, pagado: 35.00, pendiente: 0.00, comprobante: { idComprobante: 7121, tipo: BOLETA, serie: B001, numero: "00000420", fechaEmision: "2026-10-22", estadoSunat: PENDIENTE } }
     "202":
       descripcion: El cobro digital quedó PENDIENTE en la pasarela; la atención y la venta ABIERTA quedan guardadas y se cierra después con POST /ventas/{idVenta}/cierre (RN52)
-      ejemplo: { idVenta: 8814, idSede: 1, idCaja: 214, estado: ABIERTA, total: 35.00, pagos: [ ], pagado: 0, pendiente: 35.00, cobrosPendientes: [ { idTransaccion: 5512, enlacePago: "https://enlace-de-izipay.example/xyz" } ] }
+      ejemplo: { idVenta: 8814, idSede: 1, idCaja: 214, estado: ABIERTA, total: 35.00, pagos: [ ], pagado: 0, pendiente: 35.00, cobrosPendientes: [ { idTransaccion: 5512, idMedioPago: 3, monto: 35.00, canal: QR, estado: PENDIENTE, enlacePago: "https://enlace-de-izipay.example/xyz", fechaExpiracion: "2026-11-17T10:00:00" } ] }
     "409": { descripcion: La especialista o el recurso están ocupados, regla: RN34 }
     "422": { descripcion: El monto no coincide con el total; no queda atención huérfana, regla: RN11 }
 
@@ -767,7 +767,7 @@
       ejemplo: { idVenta: 620, idSede: 1, idCaja: 12, idCliente: 407, estado: CERRADA, detalles: [ { idDetalle: 900, tipoItem: PRODUCTO, cantidad: 2, precioUnitario: 45.00, descuento: 0.00, subtotal: 90.00, idPersonal: 4, idProducto: 40 } ], subtotal: 90.00, igv: 0.00, descuento: 0.00, adelantoAplicado: 0.00, saldoFavorAplicado: 0.00, total: 90.00, pagos: [ { idMedioPago: 1, monto: 90.00 } ], pagado: 90.00, pendiente: 0.00, cobrosPendientes: [ ], comprobante: { idComprobante: 700, tipo: BOLETA, serie: B001, numero: "00000125", estadoSunat: PENDIENTE } }
     "202":
       descripcion: "El cobro digital quedó PENDIENTE: la venta queda ABIERTA y se cierra con POST /ventas/{idVenta}/cierre cuando la pasarela lo aprueba (RN52)"
-      ejemplo: { idVenta: 621, idSede: 1, idCaja: 12, estado: ABIERTA, total: 45.00, pagos: [ ], pagado: 0.00, pendiente: 45.00, cobrosPendientes: [ { idTransaccion: 77, enlacePago: "https://pasarela.example/qr/77" } ] }
+      ejemplo: { idVenta: 621, idSede: 1, idCaja: 12, estado: ABIERTA, total: 45.00, pagos: [ ], pagado: 0.00, pendiente: 45.00, cobrosPendientes: [ { idTransaccion: 77, idMedioPago: 3, monto: 45.00, canal: QR, estado: PENDIENTE, enlacePago: "https://pasarela.example/qr/77", fechaExpiracion: "2026-11-17T10:00:00" } ] }
     "400": { descripcion: Faltan las líneas, el medio de pago, el monto o el tipo de comprobante, regla: VALIDACION }
     "409": { descripcion: No hay stock suficiente en la sede, regla: RN15 }
     "422": { descripcion: "Sin caja abierta (RN30), el monto no es el total (RN11), un insumo no se vende (RN13) o la pasarela rechazó el cobro (RF103)", regla: RN11 }

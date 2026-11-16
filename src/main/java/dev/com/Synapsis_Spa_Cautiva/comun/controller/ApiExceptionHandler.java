@@ -49,6 +49,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 	private static final int SOLICITUD_RESUELTA = 20102;
 	private static final int COMPROBANTE_SIN_ACEPTAR = 20076;
 	private static final int PAQUETE_CONSUMIDO = 20059;
+	/**
+	 * [It. 2.1 · D-22] -20072: el cobro es de una venta ABIERTA de la misma sede e id_venta no cambia; -20107: un pago con la transacción cobrada
+	 * para otra venta (RN42). Los dos son datos inválidos: 422 con el mensaje de Oracle (D-40).
+	 */
+	private static final int COBRO_DE_OTRA_VENTA = 20072;
+	private static final int PAGO_DE_OTRA_VENTA = 20107;
 	private static final int UNICA = 1;
 	private static final int CHECK = 2290;
 	private static final int PADRE_NO_EXISTE = 2291;
@@ -76,7 +82,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 			Map.entry("UQ_SERIE_COMPROBANTE_SERIE", "Esa serie ya está registrada (RN47)."),
 			Map.entry("UQ_CONCILIACION_ANIO_MES", "Ya existe la conciliación de ese mes (RF75)."),
 			Map.entry("CK_MEDIO_PAGO_EFECTIVO", "El efectivo no se cobra por la pasarela (RN42)."),
-			Map.entry("CK_PARAMETRO_VALOR", "El parámetro lleva un valor numérico o de texto (RF87)."));
+			Map.entry("CK_PARAMETRO_VALOR", "El parámetro lleva un valor numérico o de texto (RF87)."),
+			Map.entry("CK_TRANS_PAS_VENTA", "Un cobro de una venta no es el adelanto de una cita ni una devolución (RN52)."));
 
 	/** [It. 2] CHECK que responden 409 y no 422: el dato es válido, pero el estado actual no lo admite. */
 	private static final Set<String> CHECK_CONFLICTO = Set.of("CK_MOV_KARDEX_SALDO");
@@ -131,6 +138,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 			case SOLO_ADMINISTRADORA, SOLO_ALMACEN, SOLO_ALMACEN_CONSUMO -> HttpStatus.FORBIDDEN;
 			case CRUCE_CITA, CRUCE_ATENCION, STOCK_INSUFICIENTE, STOCK_INSUFICIENTE_VENTA, CONSUMO_RESUELTO, CONSUMO_SIN_SALIDA, SOLICITUD_RESUELTA,
 					COMPROBANTE_SIN_ACEPTAR, PAQUETE_CONSUMIDO -> HttpStatus.CONFLICT;
+			case COBRO_DE_OTRA_VENTA, PAGO_DE_OTRA_VENTA -> HttpStatus.UNPROCESSABLE_CONTENT;
 			default -> HttpStatus.UNPROCESSABLE_CONTENT;
 		};
 		String detalle = extraer(MENSAJE_APLICACION, mensaje);

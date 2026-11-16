@@ -61,8 +61,9 @@ public class RepositorioReporte {
 
 	/**
 	 * RF69: rotación (unidades vendidas en el rango y la sede), stock y margen de cada producto. V_MARGEN_PRODUCTO da el costo, el precio sin IGV
-	 * y el stock consolidado, pero no tiene fecha ni sede: las unidades y el ingreso del rango salen de V_VENTA_LINEA, que no tiene id_producto y
-	 * se une por el nombre del producto (DF-133). El stock es el de todas las sedes.
+	 * y el stock consolidado, pero no tiene fecha ni sede: las unidades y el ingreso del rango salen de V_VENTA_LINEA. [It. 2.1 · D-37] Se une por
+	 * id_producto (columna nueva de V_VENTA_LINEA en v5.2), no por el nombre: dos productos con el mismo nombre ya no se mezclan. El stock es el
+	 * de todas las sedes.
 	 */
 	private static final String PRODUCTOS = """
 			SELECT m.codigo || ' - ' || m.producto AS grupo, NVL(SUM(l.cantidad), 0) AS cantidad, NVL(SUM(l.subtotal), 0) AS importe,
@@ -70,15 +71,16 @@ public class RepositorioReporte {
 				ROUND(NVL(SUM(l.subtotal), 0) * m.precio_sin_igv / NULLIF(m.precio_venta, 0), 2) - NVL(SUM(l.cantidad), 0) * NVL(m.costo, 0) AS margen,
 				m.stock_actual AS stock
 			FROM V_MARGEN_PRODUCTO m
-			LEFT JOIN V_VENTA_LINEA l ON l.tipo_item = 'PRODUCTO' AND l.producto = m.producto
+			LEFT JOIN V_VENTA_LINEA l ON l.tipo_item = 'PRODUCTO' AND l.id_producto = m.id_producto
 				AND l.fecha >= :fechaInicio AND l.fecha < :fechaFin AND (:idSede IS NULL OR l.id_sede = :idSede)
-			GROUP BY m.codigo, m.producto, m.costo, m.precio_sin_igv, m.precio_venta, m.stock_actual
+			GROUP BY m.id_producto, m.codigo, m.producto, m.costo, m.precio_sin_igv, m.precio_venta, m.stock_actual
 			ORDER BY 2 DESC, 1
 			""";
 
 	/**
 	 * RF70: margen por servicio (variante) o por línea. V_COSTO_SERVICIO da el precio sin IGV y el costo de insumos de cada variante; las
-	 * atenciones cobradas del rango y la sede salen de V_VENTA_LINEA (unida por servicio y variante). Margen = ingreso sin IGV - costo.
+	 * atenciones cobradas del rango y la sede salen de V_VENTA_LINEA, [It. 2.1 · D-37] unida por id_variante (antes por los nombres del servicio y
+	 * la variante). Margen = ingreso sin IGV - costo.
 	 */
 	private static final String MARGEN = """
 			SELECT %s AS grupo, SUM(x.cantidad) AS cantidad, SUM(x.importe) AS importe, SUM(x.costo) AS costo, SUM(x.margen) AS margen
@@ -86,9 +88,9 @@ public class RepositorioReporte {
 					NVL(SUM(l.subtotal), 0) AS importe, COUNT(l.id_detalle) * c.costo_insumos AS costo,
 					NVL(ROUND(NVL(SUM(l.subtotal), 0) * c.precio_sin_igv / NULLIF(c.precio, 0), 2), 0) - COUNT(l.id_detalle) * c.costo_insumos AS margen
 				FROM V_COSTO_SERVICIO c
-				LEFT JOIN V_VENTA_LINEA l ON l.tipo_item = 'SERVICIO' AND l.servicio = c.servicio AND l.variante = c.variante
+				LEFT JOIN V_VENTA_LINEA l ON l.tipo_item = 'SERVICIO' AND l.id_variante = c.id_variante
 					AND l.fecha >= :fechaInicio AND l.fecha < :fechaFin AND (:idSede IS NULL OR l.id_sede = :idSede)
-				GROUP BY c.linea, c.servicio, c.variante, c.costo_insumos, c.precio_sin_igv, c.precio) x
+				GROUP BY c.id_variante, c.linea, c.servicio, c.variante, c.costo_insumos, c.precio_sin_igv, c.precio) x
 			GROUP BY %s ORDER BY 5 DESC, 1
 			""";
 

@@ -170,6 +170,24 @@ class ReportesFlujoTest extends VentasFlujoApoyo {
 	}
 
 	@Test
+	void d37DosProductosConElMismoNombreNoSeMezclan() throws Exception {
+		// Otro producto con el mismo nombre y otro código, sin ventas: antes se unía por el nombre y tomaba las 2 unidades del primero
+		String nombre = "Crema de reportes " + sedeDeLaClase();
+		String codigo = "REP2-" + sedeDeLaClase();
+		if (id("SELECT COUNT(*) FROM PRODUCTO WHERE codigo = ?", codigo) == 0) {
+			Long idCategoria = id("SELECT id_categoria FROM PRODUCTO WHERE id_producto = ?", idProducto);
+			como("almacen", post("/api/v1/productos"), "{\"codigo\":\"" + codigo + "\",\"nombre\":\"" + nombre + "\",\"idCategoria\":" + idCategoria
+					+ ",\"unidad\":\"UND\",\"tipoUso\":\"VENTA\",\"costo\":10.00,\"stockMinimo\":0}").andExpect(status().isCreated());
+		}
+
+		// [It. 2.1 · D-37] V_VENTA_LINEA se une por id_producto: cada producto con lo suyo
+		reporte("productos", null).andExpect(status().isOk())
+			.andExpect(jsonPath("$.filas[?(@.grupo == 'REP-" + sedeDeLaClase() + " - " + nombre + "')].cantidad", hasItem(2)))
+			.andExpect(jsonPath("$.filas[?(@.grupo == '" + codigo + " - " + nombre + "')].cantidad", hasItem(0)))
+			.andExpect(jsonPath("$.filas[?(@.grupo == '" + codigo + " - " + nombre + "')].importe", hasItem(0)));
+	}
+
+	@Test
 	void margenPorServicioYLineaSinLaAnulada() throws Exception {
 		reporte("margen", "SERVICIO").andExpect(status().isOk())
 			.andExpect(jsonPath("$.agrupacion").value("SERVICIO"))
