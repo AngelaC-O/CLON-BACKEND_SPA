@@ -77,7 +77,10 @@ class CajaConfiguracionFlujoTest extends VentasFlujoApoyo {
 	@Test
 	void cus46LaAdministradoraApruebaElCierreConDiferenciaYReabreLaCajaDelDia() throws Exception {
 		Long idCaja = cajaAbierta();
-		cerrarCaja(idCaja, "1").andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("CERRADA"));
+		cerrarCaja(idCaja, "1").andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("CERRADA"))
+			// [It. 2.1 · nombres] CajaDTO: quién abrió y quién cerró (USUARIO → PERSONA, Duda 25)
+			.andExpect(jsonPath("$.nombreUsuarioApertura").value(jdbc.queryForObject("SELECT TRIM(p.nombres || ' ' || p.apellidos) FROM USUARIO u JOIN PERSONA p ON p.id_persona = u.id_personal WHERE u.nombre_usuario = ?", String.class, "recepcion")))
+			.andExpect(jsonPath("$.nombreUsuarioCierre").value(jdbc.queryForObject("SELECT TRIM(p.nombres || ' ' || p.apellidos) FROM USUARIO u JOIN PERSONA p ON p.id_persona = u.id_personal WHERE u.nombre_usuario = ?", String.class, "recepcion")));
 
 		// La recepcionista cierra su caja (CAJA:EDITAR) pero no la aprueba ni la reabre
 		enviar(get("/api/v1/cajas/con-diferencia"), null).andExpect(status().isForbidden());
@@ -93,7 +96,8 @@ class CajaConfiguracionFlujoTest extends VentasFlujoApoyo {
 		como("admin", patch("/api/v1/cajas/" + idCaja + "/revision"), null).andExpect(status().isOk())
 			.andExpect(jsonPath("$.estado").value("CERRADA"))
 			.andExpect(jsonPath("$.idUsuarioRevisa").value(id("SELECT id_usuario FROM USUARIO WHERE nombre_usuario = 'admin'")))
-			.andExpect(jsonPath("$.fechaRevision").exists());
+			.andExpect(jsonPath("$.fechaRevision").exists())
+			.andExpect(jsonPath("$.nombreUsuarioRevisa").value(jdbc.queryForObject("SELECT TRIM(p.nombres || ' ' || p.apellidos) FROM USUARIO u JOIN PERSONA p ON p.id_persona = u.id_personal WHERE u.nombre_usuario = ?", String.class, "admin")));
 		como("admin", patch("/api/v1/cajas/" + idCaja + "/revision"), null).andExpect(status().isUnprocessableContent());
 		como("admin", get("/api/v1/cajas/con-diferencia"), null).andExpect(status().isOk())
 			.andExpect(jsonPath("$[*].idCaja", not(hasItem(idCaja.intValue()))));
@@ -107,6 +111,7 @@ class CajaConfiguracionFlujoTest extends VentasFlujoApoyo {
 			.andExpect(jsonPath("$.estado").value("ABIERTA"))
 			.andExpect(jsonPath("$.motivoReapertura").value("Venta registrada después del cierre"))
 			.andExpect(jsonPath("$.idUsuarioReapertura").isNumber())
+			.andExpect(jsonPath("$.nombreUsuarioReapertura").value(jdbc.queryForObject("SELECT TRIM(p.nombres || ' ' || p.apellidos) FROM USUARIO u JOIN PERSONA p ON p.id_persona = u.id_personal WHERE u.nombre_usuario = ?", String.class, "admin")))
 			.andExpect(jsonPath("$.fechaRevision").value(nullValue()))
 			.andExpect(jsonPath("$.fechaCierre").value(nullValue()));
 		// [It. 2.1 · D-15] La reapertura queda en la auditoría: quién la hizo y su motivo (TRG_AUD_CAJA de v5.2)

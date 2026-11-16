@@ -9,7 +9,7 @@
   respuestas:
     "200":
       descripcion: Sesión creada, con las cookies de sesión y XSRF-TOKEN
-      ejemplo: { idUsuario: 2, nombreUsuario: recepcion, idSede: 1, debeCambiarClave: false, permisos: [ "AGENDA:VER", "CLIENTAS:CREAR", "VENTAS:CREAR" ], idPersonal: 3, nombres: "Rosa", apellidos: "Quispe", rol: RECEPCIONISTA }
+      ejemplo: { idUsuario: 2, nombreUsuario: recepcion, idSede: 1, debeCambiarClave: false, permisos: [ "AGENDA:VER", "CLIENTAS:CREAR", "VENTAS:CREAR" ], idPersonal: 3, nombres: "Rosa", apellidos: "Quispe", rol: RECEPCIONISTA, nombreSede: "Pichanaki Centro" }
     "400": { descripcion: Faltan el usuario o la clave, regla: VALIDACION }
     "401": { descripcion: Usuario o clave incorrectos, regla: RF77 }
     "423": { descripcion: La cuenta está bloqueada por intentos fallidos o inactiva, regla: RF77 }
@@ -20,7 +20,7 @@
   respuestas:
     "200":
       descripcion: La sesión del servidor, con el personal, sus nombres, el rol y los permisos; el navegador no la guarda
-      ejemplo: { idUsuario: 2, nombreUsuario: recepcion, idSede: 1, debeCambiarClave: false, permisos: [ "AGENDA:VER", "VENTAS:CREAR" ], idPersonal: 3, nombres: "Rosa", apellidos: "Quispe", rol: RECEPCIONISTA }
+      ejemplo: { idUsuario: 2, nombreUsuario: recepcion, idSede: 1, debeCambiarClave: false, permisos: [ "AGENDA:VER", "VENTAS:CREAR" ], idPersonal: 3, nombres: "Rosa", apellidos: "Quispe", rol: RECEPCIONISTA, nombreSede: "Pichanaki Centro" }
 
 "GET /api/v1/avisos":
   resumen: Panel de avisos de Inicio
@@ -67,7 +67,7 @@
   respuestas:
     "200":
       descripcion: Usuarios con su rol y estado
-      ejemplo: [ { idUsuario: 5, idPersonal: 3, idRol: 2, nombreUsuario: recepcion2, estado: ACTIVO, debeCambiarClave: false } ]
+      ejemplo: [ { idUsuario: 5, idPersonal: 3, idRol: 2, nombreUsuario: recepcion2, estado: ACTIVO, debeCambiarClave: false, nombres: "Rosa", apellidos: "Quispe", nombreRol: RECEPCIONISTA, ultimoAcceso: "2026-11-16T08:55:00" } ]
 
 "GET /api/v1/permisos":
   resumen: Listar los permisos (módulo y acción)
@@ -84,7 +84,7 @@
   respuestas:
     "201":
       descripcion: Usuario creado; debe cambiar su clave al entrar
-      ejemplo: { idUsuario: 5, idPersonal: 3, idRol: 2, nombreUsuario: recepcion2, estado: ACTIVO, debeCambiarClave: true }
+      ejemplo: { idUsuario: 5, idPersonal: 3, idRol: 2, nombreUsuario: recepcion2, estado: ACTIVO, debeCambiarClave: true, nombres: "Rosa", apellidos: "Quispe", nombreRol: RECEPCIONISTA }
     "400": { descripcion: Datos incompletos, regla: VALIDACION }
     "409": { descripcion: Ese nombre de usuario ya existe, regla: UQ_USUARIO_NOMBRE_USUARIO }
 
@@ -95,7 +95,7 @@
   respuestas:
     "200":
       descripcion: Rol asignado
-      ejemplo: { idUsuario: 5, idPersonal: 3, idRol: 3, nombreUsuario: recepcion2, estado: ACTIVO, debeCambiarClave: false }
+      ejemplo: { idUsuario: 5, idPersonal: 3, idRol: 3, nombreUsuario: recepcion2, estado: ACTIVO, debeCambiarClave: false, nombres: "Rosa", apellidos: "Quispe", nombreRol: ESPECIALISTA_TECNICA, ultimoAcceso: "2026-11-16T08:55:00" }
     "404": { descripcion: El usuario o el rol no existen, regla: RF53 }
     "422": { descripcion: Es la última administradora activa o el rol no existe, regla: RN48 }
 
@@ -193,7 +193,7 @@
   respuestas:
     "200":
       descripcion: Horas cada AGENDA_PASO_MIN minutos (RN51) con las especialistas y recursos libres; quedan libres al terminar el servicio, sin limpieza (RN03)
-      ejemplo: [ { inicio: "2026-11-09T09:00:00", duracionMin: 30, idsPersonal: [ 4 ], idsRecurso: [ 1, 2, 3 ] } ]
+      ejemplo: [ { inicio: "2026-11-09T09:00:00", duracionMin: 30, idsPersonal: [ 4 ], idsRecurso: [ 1, 2, 3 ], especialistas: [ { idPersonal: 4, nombre: "Lucía Ramos" } ], recursos: [ { idRecurso: 1, nombre: "Sillón 1" }, { idRecurso: 2, nombre: "Sillón 2" }, { idRecurso: 3, nombre: "Sillón 3" } ] } ]
     "404": { descripcion: La variante no existe, regla: RN40 }
 
 "POST /api/v1/citas":
@@ -203,7 +203,7 @@
   respuestas:
     "201":
       descripcion: "Cita creada; Oracle calcula el fin del servicio (inicio + duración, RN03). Con idEspera, la espera queda ASIGNADA con esta cita (RF09)"
-      ejemplo: { idCita: 950, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-09T10:40:00", estado: PENDIENTE, idUsuario: 2, adelantoMonto: 0.00, idEspera: 31 }
+      ejemplo: { idCita: 950, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-09T10:30:00", estado: PENDIENTE, idUsuario: 2, adelantoMonto: 0.00, idEspera: 31, nombreCliente: "Rosaura Quispe", nombreEspecialista: "Lucía Ramos", nombreServicio: "Corte de Cabello Caballero · Estándar", nombreRecurso: "Sillón 1" }
     "404": { descripcion: La espera no existe, regla: RF09 }
     "409": { descripcion: "Cruce de horario de la especialista o del recurso (RN02), o la espera ya no está PENDIENTE (RF09)", regla: RN02 }
     "422": { descripcion: "La fecha y hora ya pasaron (RN49), la especialista no tiene el área del servicio (-20012) o la clienta no existe", regla: RN49 }
@@ -215,7 +215,7 @@
   respuestas:
     "201":
       descripcion: Anotada; trae otras horas libres para ofrecer antes de dejarla en espera
-      ejemplo: { idEspera: 31, idCliente: 407, idSede: 1, idVariante: 2, fechaDeseada: "2026-11-09", horaDesde: "15:00", horaHasta: "18:00", estado: PENDIENTE, idUsuario: 2, horasLibres: [ { inicio: "2026-11-09T09:00:00", duracionMin: 30, idsPersonal: [ 4 ], idsRecurso: [ 1 ] } ] }
+      ejemplo: { idEspera: 31, idCliente: 407, idSede: 1, idVariante: 2, fechaDeseada: "2026-11-09", horaDesde: "15:00", horaHasta: "18:00", estado: PENDIENTE, idUsuario: 2, horasLibres: [ { inicio: "2026-11-09T09:00:00", duracionMin: 30, idsPersonal: [ 4 ], idsRecurso: [ 1 ], especialistas: [ { idPersonal: 4, nombre: "Lucía Ramos" } ], recursos: [ { idRecurso: 1, nombre: "Sillón 1" } ] } ] }
     "400": { descripcion: Una hora no tiene el formato HH:MM, regla: VALIDACION }
     "422": { descripcion: La clienta no existe, regla: FK_LISTA_ESPERA_CLIENTE }
 
@@ -226,7 +226,7 @@
   respuestas:
     "200":
       descripcion: Adelanto registrado en la caja abierta
-      ejemplo: { idCita: 950, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, estado: PENDIENTE, adelantoMonto: 50.00, idMedioPago: 1, fechaAdelanto: "2026-10-22T10:20:00", idCaja: 214 }
+      ejemplo: { idCita: 950, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, estado: PENDIENTE, adelantoMonto: 50.00, idMedioPago: 1, fechaAdelanto: "2026-10-22T10:20:00", idCaja: 214, nombreCliente: "Rosaura Quispe", nombreEspecialista: "Lucía Ramos", nombreServicio: "Corte de Cabello Caballero · Estándar", nombreRecurso: "Sillón 1" }
     "404": { descripcion: La cita no existe, regla: RF10 }
     "422": { descripcion: El medio es digital, no hay caja abierta o la cita no está PENDIENTE, regla: RN42 }
 
@@ -256,7 +256,7 @@
   respuestas:
     "200":
       descripcion: "Franjas ocupadas (fin del servicio: libera a la especialista y al recurso, RN03) y libres; LIBRE es de una especialista o de un recurso. Cada franja trae los nombres de la clienta, la especialista y el servicio"
-      ejemplo: [ { franja: OCUPADA, origen: CITA, idOrigen: 950, idPersonal: 4, idRecurso: 1, idVariante: 2, inicio: "2026-11-09T10:00:00", fin: "2026-11-09T10:30:00", estado: PENDIENTE, idCliente: 407, nombreCliente: "Marisol Quispe", nombreEspecialista: "Lucía Ramos", nombreServicio: "Corte de Cabello Caballero" }, { franja: LIBRE, idPersonal: 4, inicio: "2026-11-09T10:30:00", fin: "2026-11-09T19:00:00", nombreEspecialista: "Lucía Ramos" } ]
+      ejemplo: [ { franja: OCUPADA, origen: CITA, idOrigen: 950, idPersonal: 4, idRecurso: 1, idVariante: 2, inicio: "2026-11-09T10:00:00", fin: "2026-11-09T10:30:00", estado: PENDIENTE, idCliente: 407, nombreCliente: "Marisol Quispe", nombreEspecialista: "Lucía Ramos", nombreServicio: "Corte de Cabello Caballero", nombreRecurso: "Sillón 1" }, { franja: LIBRE, idPersonal: 4, inicio: "2026-11-09T10:30:00", fin: "2026-11-09T19:00:00", nombreEspecialista: "Lucía Ramos" } ]
     "400": { descripcion: Falta la fecha, regla: VALIDACION }
 
 "GET /api/v1/atenciones/mi-agenda":
@@ -265,7 +265,7 @@
   respuestas:
     "200":
       descripcion: Citas del día de la especialista de la sesión, con su atención EN_CURSO si la tiene; sin fecha, la de hoy
-      ejemplo: [ { idCita: 950, idCliente: 407, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-09T10:40:00", estado: EN_ATENCION, idAtencion: 1532, estadoAtencion: EN_CURSO } ]
+      ejemplo: [ { idCita: 950, idCliente: 407, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-09T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-09T10:30:00", estado: EN_ATENCION, idAtencion: 1532, estadoAtencion: EN_CURSO, nombreCliente: "Rosaura Quispe", nombreServicio: "Corte de Cabello Caballero · Estándar", nombreRecurso: "Sillón 1" } ]
 
 "GET /api/v1/atenciones/en-curso":
   resumen: Retomar la atención en curso de una cita
@@ -273,7 +273,7 @@
   respuestas:
     "200":
       descripcion: La atención EN_CURSO de la cita, para retomarla desde otro equipo
-      ejemplo: { idAtencion: 1532, idCita: 950, idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, horaInicio: "2026-11-09T10:02:00", tiempoDeclaradoMin: 45, estado: EN_CURSO }
+      ejemplo: { idAtencion: 1532, idCita: 950, idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, horaInicio: "2026-11-09T10:02:00", tiempoDeclaradoMin: 45, estado: EN_CURSO, nombreCliente: "Rosaura Quispe", nombreEspecialista: "Lucía Ramos", nombreServicio: "Corte de Cabello Caballero · Estándar", nombreRecurso: "Sillón 1" }
     "400": { descripcion: Falta la cita, regla: VALIDACION }
     "404": { descripcion: La cita no tiene una atención EN_CURSO, regla: RF13 }
 
@@ -284,7 +284,7 @@
   respuestas:
     "201":
       descripcion: Atención EN_CURSO y cita EN_ATENCION; solo la especialista asignada o la administradora (si no, 403 por RN50)
-      ejemplo: { idAtencion: 1532, idCita: 950, idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, horaInicio: "2026-11-09T10:02:00", tiempoDeclaradoMin: 45, estado: EN_CURSO }
+      ejemplo: { idAtencion: 1532, idCita: 950, idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, horaInicio: "2026-11-09T10:02:00", tiempoDeclaradoMin: 45, estado: EN_CURSO, nombreCliente: "Rosaura Quispe", nombreEspecialista: "Lucía Ramos", nombreServicio: "Corte de Cabello Caballero · Estándar", nombreRecurso: "Sillón 1" }
     "404": { descripcion: La cita no existe, regla: RF13 }
     "409": { descripcion: El tiempo declarado choca con otra cita, regla: RN02 }
     "422": { descripcion: Solo se atiende una cita PENDIENTE, regla: RF13 }
@@ -296,7 +296,7 @@
   respuestas:
     "200":
       descripcion: Atención y cita FINALIZADAS; con un paquete activo, la sesión se descuenta; solo la especialista asignada o la administradora (si no, 403 por RN50). Descuenta el consumo estimado de los insumos de la variante (RN53, RN54) y, si el stock no alcanza, trae los consumos pendientes creados
-      ejemplo: { idAtencion: 1532, idCita: 950, idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, horaInicio: "2026-11-09T10:02:00", horaFin: "2026-11-09T10:45:00", tiempoDeclaradoMin: 45, observaciones: "Sin novedad", estado: FINALIZADA, consumosPendientes: [ { idConsumo: 12, idAtencion: 1532, idProducto: 40, codigo: "INS-007", producto: "Keratina", unidad: ML, idSede: 1, cantidadEstimada: 30, cantidadDescontada: 10, cantidadPendiente: 20, estado: PENDIENTE, fechaRegistro: "2026-11-09T10:45:00" } ] }
+      ejemplo: { idAtencion: 1532, idCita: 950, idCliente: 407, idPersonal: 4, idRecurso: 1, idVariante: 2, horaInicio: "2026-11-09T10:02:00", horaFin: "2026-11-09T10:45:00", tiempoDeclaradoMin: 45, observaciones: "Sin novedad", estado: FINALIZADA, consumosPendientes: [ { idConsumo: 12, idAtencion: 1532, idProducto: 40, codigo: "INS-007", producto: "Keratina", unidad: ML, idSede: 1, cantidadEstimada: 30, cantidadDescontada: 10, cantidadPendiente: 20, estado: PENDIENTE, fechaRegistro: "2026-11-09T10:45:00" } ], nombreCliente: "Rosaura Quispe", nombreEspecialista: "Lucía Ramos", nombreServicio: "Corte de Cabello Caballero · Estándar", nombreRecurso: "Sillón 1" }
     "404": { descripcion: La atención no existe, regla: RF13 }
     "422": { descripcion: Solo se finaliza una atención EN_CURSO, regla: RF13 }
 
@@ -306,7 +306,7 @@
   respuestas:
     "200":
       descripcion: Atenciones FINALIZADAS que aún no están en una venta y ventas ABIERTAS para retomarlas (RN52)
-      ejemplo: { atenciones: [ { idAtencion: 1532, idCliente: 407, idPersonal: 4, idVariante: 2, adelantoMonto: 10.00 } ], ventasAbiertas: [ { idVenta: 8812, idSede: 1, idCaja: 214, idCliente: 407, estado: ABIERTA, total: 60.00, pagado: 0, pendiente: 60.00, cobrosPendientes: [ ] } ] }
+      ejemplo: { atenciones: [ { idAtencion: 1532, idCliente: 407, idPersonal: 4, idVariante: 2, adelantoMonto: 10.00, nombreCliente: "Rosaura Quispe", nombreServicio: "Corte de Cabello Caballero · Estándar", nombreEspecialista: "Lucía Ramos" } ], ventasAbiertas: [ { idVenta: 8812, idSede: 1, idCaja: 214, idCliente: 407, estado: ABIERTA, total: 60.00, pagado: 0, pendiente: 60.00, cobrosPendientes: [ ], nombreCliente: "Rosaura Quispe" } ] }
 
 "GET /api/v1/ventas/{idVenta}":
   resumen: Consultar una venta con sus cobros digitales
@@ -314,7 +314,7 @@
   respuestas:
     "200":
       descripcion: "La venta; cada pago digital trae el estado actual de su transacción en la pasarela (RN42, RN52) y cobrosPendientes, todos los cobros PENDIENTES de la venta, también los iniciados en otro equipo (D-22)"
-      ejemplo: { idVenta: 8812, idSede: 1, idCaja: 214, idCliente: 407, estado: ABIERTA, total: 60.00, pagos: [ { idPago: 9901, idMedioPago: 2, monto: 40.00, idTransaccion: 5510, estadoTransaccion: APROBADA } ], pagado: 40.00, pendiente: 20.00, cobrosPendientes: [ { idTransaccion: 5511, idMedioPago: 3, monto: 20.00, canal: QR, estado: PENDIENTE, enlacePago: "https://enlace-de-izipay.example/def", fechaExpiracion: "2026-11-17T10:00:00" } ] }
+      ejemplo: { idVenta: 8812, idSede: 1, idCaja: 214, idCliente: 407, estado: ABIERTA, total: 60.00, pagos: [ { idPago: 9901, idMedioPago: 2, monto: 40.00, idTransaccion: 5510, estadoTransaccion: APROBADA, nombreMedioPago: TARJETA } ], pagado: 40.00, pendiente: 20.00, cobrosPendientes: [ { idTransaccion: 5511, idMedioPago: 3, monto: 20.00, canal: QR, estado: PENDIENTE, enlacePago: "https://enlace-de-izipay.example/def", fechaExpiracion: "2026-11-17T10:00:00" } ], nombreCliente: "Rosaura Quispe" }
     "404": { descripcion: La venta no existe, regla: RF21 }
 
 "POST /api/v1/ventas":
@@ -324,7 +324,7 @@
   respuestas:
     "201":
       descripcion: Venta ABIERTA en la caja abierta
-      ejemplo: { idVenta: 8812, idSede: 1, idCaja: 214, idCliente: 407, estado: ABIERTA, detalles: [ { idDetalle: 20311, tipoItem: SERVICIO, idAtencion: 1532, cantidad: 1, precioUnitario: 60.00, descuento: 0.00, subtotal: 60.00, idPersonal: 9 } ], subtotal: 60.00, igv: 0.00, descuento: 0.00, adelantoAplicado: 0.00, saldoFavorAplicado: 0.00, total: 60.00, pagos: [ ], pagado: 0, pendiente: 60.00, cobrosPendientes: [ ] }
+      ejemplo: { idVenta: 8812, idSede: 1, idCaja: 214, idCliente: 407, estado: ABIERTA, detalles: [ { idDetalle: 20311, tipoItem: SERVICIO, idAtencion: 1532, cantidad: 1, precioUnitario: 60.00, descuento: 0.00, subtotal: 60.00, idPersonal: 9, descripcion: "Corte de Cabello Caballero · Estándar", nombreEspecialista: "Lucía Ramos" } ], subtotal: 60.00, igv: 0.00, descuento: 0.00, adelantoAplicado: 0.00, saldoFavorAplicado: 0.00, total: 60.00, pagos: [ ], pagado: 0, pendiente: 60.00, cobrosPendientes: [ ], nombreCliente: "Rosaura Quispe" }
     "404": { descripcion: La atención no existe, regla: RF13 }
     "409": { descripcion: La atención ya está COBRADA, regla: RF21 }
     "422": { descripcion: No hay caja abierta o la atención no está FINALIZADA, regla: RN30 }
@@ -336,7 +336,7 @@
   respuestas:
     "200":
       descripcion: Totales recalculados
-      ejemplo: { idVenta: 8812, idSede: 1, idCaja: 214, idCliente: 407, estado: ABIERTA, subtotal: 60.00, igv: 0.00, descuento: 0.00, adelantoAplicado: 10.00, saldoFavorAplicado: 5.00, total: 45.00, pagos: [ ], pagado: 0, pendiente: 45.00, cobrosPendientes: [ ] }
+      ejemplo: { idVenta: 8812, idSede: 1, idCaja: 214, idCliente: 407, estado: ABIERTA, subtotal: 60.00, igv: 0.00, descuento: 0.00, adelantoAplicado: 10.00, saldoFavorAplicado: 5.00, total: 45.00, pagos: [ ], pagado: 0, pendiente: 45.00, cobrosPendientes: [ ], nombreCliente: "Rosaura Quispe" }
     "404": { descripcion: La venta no existe, regla: RF21 }
     "422": { descripcion: La promoción no aplica (-20047) o el saldo no alcanza (-20064), regla: ORA-20064 }
 
@@ -347,7 +347,7 @@
   respuestas:
     "200":
       descripcion: Pagos registrados
-      ejemplo: { idVenta: 8812, estado: ABIERTA, total: 60.00, pagos: [ { idPago: 9901, idMedioPago: 2, monto: 40.00, idTransaccion: 5510, referencia: "IZ-000184322" }, { idPago: 9902, idMedioPago: 1, monto: 20.00 } ], pagado: 60.00, pendiente: 0.00, cobrosPendientes: [ ] }
+      ejemplo: { idVenta: 8812, estado: ABIERTA, total: 60.00, pagos: [ { idPago: 9901, idMedioPago: 2, monto: 40.00, idTransaccion: 5510, referencia: "IZ-000184322", nombreMedioPago: TARJETA }, { idPago: 9902, idMedioPago: 1, monto: 20.00, nombreMedioPago: EFECTIVO } ], pagado: 60.00, pendiente: 0.00, cobrosPendientes: [ ] }
     "202":
       descripcion: "Un cobro quedó PENDIENTE en Izipay y no suma: la venta sigue ABIERTA (RN52); con el webhook aprobado se reenvía con idTransaccion (RN42) y se cierra"
       ejemplo: { idVenta: 8812, estado: ABIERTA, total: 60.00, pagos: [ ], pagado: 0, pendiente: 60.00, cobrosPendientes: [ { idTransaccion: 5510, idMedioPago: 3, monto: 60.00, canal: QR, estado: PENDIENTE, enlacePago: "https://enlace-de-izipay.example/abc", fechaExpiracion: "2026-11-17T10:00:00" } ] }
@@ -418,7 +418,7 @@
   respuestas:
     "200":
       descripcion: Cotización sin valor tributario (RN09)
-      ejemplo: { nombreCliente: "Novia", fechaValidez: "2026-11-30", items: [ { tipoItem: SERVICIO, idVariante: 2, cantidad: 2, precioUnitario: 35.00, subtotal: 70.00 } ], total: 70.00 }
+      ejemplo: { nombreCliente: "Novia", fechaValidez: "2026-11-30", items: [ { tipoItem: SERVICIO, idVariante: 2, cantidad: 2, precioUnitario: 35.00, subtotal: 70.00, descripcion: "Corte de Cabello Caballero · Estándar" } ], total: 70.00 }
     "400": { descripcion: No trae ítems, regla: VALIDACION }
     "404": { descripcion: La variante no existe, regla: RN40 }
 
@@ -428,7 +428,7 @@
   respuestas:
     "200":
       descripcion: Vacía si no hay especialista o recurso libres
-      ejemplo: [ { inicio: "2026-10-22T10:15:00", duracionMin: 30, idsPersonal: [ 4 ], idsRecurso: [ 1, 2 ] } ]
+      ejemplo: [ { inicio: "2026-10-22T10:15:00", duracionMin: 30, idsPersonal: [ 4 ], idsRecurso: [ 1, 2 ], especialistas: [ { idPersonal: 4, nombre: "Lucía Ramos" } ], recursos: [ { idRecurso: 1, nombre: "Sillón 1" }, { idRecurso: 2, nombre: "Sillón 2" } ] } ]
     "400": { descripcion: Falta la variante, regla: VALIDACION }
 
 "POST /api/v1/ventas/rapidas":
@@ -451,7 +451,7 @@
   respuestas:
     "200":
       descripcion: La caja ABIERTA de la sede de la sesión
-      ejemplo: { idCaja: 214, idSede: 1, idUsuarioApertura: 2, fechaApertura: "2026-10-22T08:55:00", montoInicial: 100.00, estado: ABIERTA, arqueos: [ ] }
+      ejemplo: { idCaja: 214, idSede: 1, idUsuarioApertura: 2, fechaApertura: "2026-10-22T08:55:00", montoInicial: 100.00, estado: ABIERTA, arqueos: [ ], nombreUsuarioApertura: "Rosa Quispe" }
     "204": { descripcion: La sede no tiene caja abierta }
 
 "POST /api/v1/cajas":
@@ -461,7 +461,7 @@
   respuestas:
     "201":
       descripcion: Caja ABIERTA
-      ejemplo: { idCaja: 214, idSede: 1, idUsuarioApertura: 2, fechaApertura: "2026-10-22T08:55:00", montoInicial: 100.00, estado: ABIERTA, arqueos: [ ] }
+      ejemplo: { idCaja: 214, idSede: 1, idUsuarioApertura: 2, fechaApertura: "2026-10-22T08:55:00", montoInicial: 100.00, estado: ABIERTA, arqueos: [ ], nombreUsuarioApertura: "Rosa Quispe" }
     "409": { descripcion: La sede ya tiene una caja abierta, regla: RN30 }
 
 "GET /api/v1/cajas/{idCaja}/esperado":
@@ -480,7 +480,7 @@
   respuestas:
     "200":
       descripcion: Caja CERRADA; Oracle calcula lo esperado y la diferencia
-      ejemplo: { idCaja: 214, idSede: 1, idUsuarioApertura: 2, montoInicial: 100.00, idUsuarioCierre: 2, fechaCierre: "2026-10-22T20:05:00", estado: CERRADA, arqueos: [ { idMedioPago: 1, montoEsperado: 150.00, montoContado: 145.00, diferencia: -5.00, observacion: "Faltan cinco soles" } ] }
+      ejemplo: { idCaja: 214, idSede: 1, idUsuarioApertura: 2, montoInicial: 100.00, idUsuarioCierre: 2, fechaCierre: "2026-10-22T20:05:00", estado: CERRADA, arqueos: [ { idMedioPago: 1, montoEsperado: 150.00, montoContado: 145.00, diferencia: -5.00, observacion: "Faltan cinco soles" } ], nombreUsuarioApertura: "Rosa Quispe", nombreUsuarioCierre: "Rosa Quispe" }
     "404": { descripcion: La caja no existe, regla: RN30 }
     "422": { descripcion: Diferencia sin observación, medio sin arqueo (RF64) o ventas abiertas, regla: RN30 }
 
@@ -563,7 +563,7 @@
   respuestas:
     "200":
       descripcion: "Movimientos de V_KARDEX en la sede (por defecto la de la sesión) entre las fechas (por defecto los últimos 30 días)"
-      ejemplo: [ { idMovimiento: 311, fechaHora: "2026-11-09T11:05:00", tipo: SALIDA, motivo: "Consumo estimado de la atención N° 1532", cantidad: -3, saldo: 7, usuario: "especialista1", idAtencion: 1532 } ]
+      ejemplo: [ { idMovimiento: 311, fechaHora: "2026-11-09T11:05:00", tipo: SALIDA, motivo: "Consumo estimado de la atención N° 1532", cantidad: -3, saldo: 7, usuario: "especialista1", idAtencion: 1532 }, { idMovimiento: 312, fechaHora: "2026-11-09T12:10:00", tipo: SALIDA, motivo: "Venta", cantidad: -1, saldo: 6, usuario: "recepcion", idDetalleVenta: 900, comprobante: "B001-00000125" } ]
     "404": { descripcion: El producto no existe, regla: RF44 }
     "422": { descripcion: La fecha de inicio es posterior a la de fin, regla: RF50 }
 
@@ -603,7 +603,7 @@
   respuestas:
     "200":
       descripcion: "Datos de PERSONA y CLIENTE, saldo a favor (RN05), atenciones con sus recomendaciones, citas pendientes, paquetes con sesiones (RN36) y productos comprados"
-      ejemplo: { cliente: { idCliente: 407, nombres: "Rosaura", apellidos: "Quispe", telefono: "987610001", origenDatos: MANUAL, aceptaComunicaciones: true, estado: ACTIVO }, saldoFavor: 20.00, atenciones: [ { idAtencion: 1532, idPersonal: 4, idVariante: 2, horaInicio: "2026-11-02T10:00:00", horaFin: "2026-11-02T10:30:00", estado: COBRADA, recomendaciones: [ { idRecomendacion: 8, idAtencion: 1532, idProducto: 40, observacion: "Para mantener el color", fecha: "2026-11-02T10:31:00" } ] } ], citasPendientes: [ { idCita: 951, idCliente: 407, fechaHoraInicio: "2026-11-16T10:00:00", duracionMin: 30, estado: PENDIENTE } ], paquetes: [ { idClientePaquete: 5, idPaquete: 3, sesionesTotales: 3, sesionesUsadas: 1, sesionesRestantes: 2, fechaCompra: "2026-11-02", fechaVencimiento: "2027-01-31", estado: ACTIVO } ], productosComprados: [ { idVenta: 610, fecha: "2026-11-02", idProducto: 40, producto: "Shampoo reparador", cantidad: 1, precioUnitario: 45.00, subtotal: 45.00 } ] }
+      ejemplo: { cliente: { idCliente: 407, nombres: "Rosaura", apellidos: "Quispe", telefono: "987610001", origenDatos: MANUAL, aceptaComunicaciones: true, estado: ACTIVO }, saldoFavor: 20.00, atenciones: [ { idAtencion: 1532, idPersonal: 4, idVariante: 2, horaInicio: "2026-11-02T10:00:00", horaFin: "2026-11-02T10:30:00", estado: COBRADA, recomendaciones: [ { idRecomendacion: 8, idAtencion: 1532, idProducto: 40, observacion: "Para mantener el color", fecha: "2026-11-02T10:31:00", nombreProducto: "Shampoo reparador" } ], nombreServicio: "Corte de Cabello Caballero · Estándar", nombreEspecialista: "Lucía Ramos", nombreRecurso: "Sillón 1" } ], citasPendientes: [ { idCita: 951, idCliente: 407, fechaHoraInicio: "2026-11-16T10:00:00", duracionMin: 30, estado: PENDIENTE, nombreCliente: "Rosaura Quispe", nombreEspecialista: "Lucía Ramos", nombreServicio: "Corte de Cabello Caballero · Estándar", nombreRecurso: "Sillón 1" } ], paquetes: [ { idClientePaquete: 5, idPaquete: 3, sesionesTotales: 3, sesionesUsadas: 1, sesionesRestantes: 2, fechaCompra: "2026-11-02", fechaVencimiento: "2027-01-31", estado: ACTIVO, nombrePaquete: "Tres cortes" } ], productosComprados: [ { idVenta: 610, fecha: "2026-11-02", idProducto: 40, producto: "Shampoo reparador", cantidad: 1, precioUnitario: 45.00, subtotal: 45.00 } ] }
     "404": { descripcion: La clienta no existe, regla: RF02 }
 
 "PUT /api/v1/clientes/{idCliente}":
@@ -644,7 +644,7 @@
   respuestas:
     "201":
       descripcion: "La cita origen queda REPROGRAMADA; la nueva hereda el adelanto y guarda id_cita_origen (RN05)"
-      ejemplo: { idCita: 952, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 2, idVariante: 2, fechaHoraInicio: "2026-11-16T15:00:00", duracionMin: 30, fechaHoraFin: "2026-11-16T15:40:00", estado: PENDIENTE, idUsuario: 2, adelantoMonto: 20.00, idMedioPago: 1, idCaja: 12, idCitaOrigen: 951 }
+      ejemplo: { idCita: 952, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 2, idVariante: 2, fechaHoraInicio: "2026-11-16T15:00:00", duracionMin: 30, fechaHoraFin: "2026-11-16T15:30:00", estado: PENDIENTE, idUsuario: 2, adelantoMonto: 20.00, idMedioPago: 1, idCaja: 12, idCitaOrigen: 951, nombreCliente: "Rosaura Quispe", nombreEspecialista: "Lucía Ramos", nombreServicio: "Corte de Cabello Caballero · Estándar", nombreRecurso: "Sillón 2" }
     "404": { descripcion: La cita no existe, regla: RF10 }
     "409": { descripcion: Cruce de horario de la especialista o del recurso, regla: RN02 }
     "422": { descripcion: "La fecha y hora ya pasaron (RN49) o la cita no está PENDIENTE", regla: RN49 }
@@ -656,7 +656,7 @@
   respuestas:
     "200":
       descripcion: "Cita CANCELADA; si tenía adelanto, pasa a saldo a favor de la clienta (RN05). La inasistencia es una cancelación con el motivo «No se presentó»"
-      ejemplo: { idCita: 951, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-16T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-16T10:40:00", estado: CANCELADA, idUsuario: 2, adelantoMonto: 20.00, motivoCancelacion: "No se presentó" }
+      ejemplo: { idCita: 951, idCliente: 407, idSede: 1, idPersonal: 4, idRecurso: 1, idVariante: 2, fechaHoraInicio: "2026-11-16T10:00:00", duracionMin: 30, fechaHoraFin: "2026-11-16T10:30:00", estado: CANCELADA, idUsuario: 2, adelantoMonto: 20.00, motivoCancelacion: "No se presentó", nombreCliente: "Rosaura Quispe", nombreEspecialista: "Lucía Ramos", nombreServicio: "Corte de Cabello Caballero · Estándar", nombreRecurso: "Sillón 1" }
     "404": { descripcion: La cita no existe, regla: RF10 }
     "422": { descripcion: "Falta el motivo o la cita no está PENDIENTE", regla: RF12 }
 
@@ -675,7 +675,7 @@
   respuestas:
     "201":
       descripcion: La recomendación queda ligada a la atención y aparece en la ficha de la clienta
-      ejemplo: { idRecomendacion: 8, idAtencion: 1532, idProducto: 40, observacion: "Para mantener el color", fecha: "2026-11-09T10:31:00" }
+      ejemplo: { idRecomendacion: 8, idAtencion: 1532, idProducto: 40, observacion: "Para mantener el color", fecha: "2026-11-09T10:31:00", nombreProducto: "Shampoo reparador" }
     "403": { descripcion: Solo la especialista de la atención o la Administradora, regla: RN50 }
     "404": { descripcion: La atención no existe, regla: RF13 }
     "409": { descripcion: El producto ya se recomendó en esta atención, regla: RF16 }
@@ -717,7 +717,7 @@
   respuestas:
     "200":
       descripcion: Paquetes o membresías con sus servicios (sin tipo, todos)
-      ejemplo: [ { idPaquete: 3, nombre: "Tres cortes", tipo: PAQUETE, numSesiones: 3, precio: 90.00, vigenciaDias: 90, estado: ACTIVO, idsServicio: [ 1 ] } ]
+      ejemplo: [ { idPaquete: 3, nombre: "Tres cortes", tipo: PAQUETE, numSesiones: 3, precio: 90.00, vigenciaDias: 90, estado: ACTIVO, idsServicio: [ 1 ], servicios: [ { idServicio: 1, nombre: "Corte de Cabello Caballero" } ] } ]
 
 "POST /api/v1/paquetes":
   resumen: Registrar un paquete o membresía
@@ -726,7 +726,7 @@
   respuestas:
     "201":
       descripcion: "Paquete con sus servicios en PAQUETE_SERVICIO; CUS11 descuenta de él las sesiones (RN36)"
-      ejemplo: { idPaquete: 3, nombre: "Tres cortes", tipo: PAQUETE, numSesiones: 3, precio: 90.00, vigenciaDias: 90, estado: ACTIVO, idsServicio: [ 1 ] }
+      ejemplo: { idPaquete: 3, nombre: "Tres cortes", tipo: PAQUETE, numSesiones: 3, precio: 90.00, vigenciaDias: 90, estado: ACTIVO, idsServicio: [ 1 ], servicios: [ { idServicio: 1, nombre: "Corte de Cabello Caballero" } ] }
     "400": { descripcion: Faltan el nombre o el tipo, regla: VALIDACION }
     "422": { descripcion: "Al menos una sesión, precio mayor o igual a 0 y vigencia de al menos un día", regla: RF84 }
 
@@ -736,7 +736,7 @@
   respuestas:
     "200":
       descripcion: Con vigentes=true, solo las ACTIVAS cuya vigencia incluye hoy; si no, todas
-      ejemplo: [ { idPromocion: 7, nombre: "Noviembre feliz", tipoDescuento: PORCENTAJE, valor: 10.00, fechaInicio: "2026-11-01", fechaFin: "2026-11-30", estado: ACTIVA, idsServicio: [ 1, 2 ] } ]
+      ejemplo: [ { idPromocion: 7, nombre: "Noviembre feliz", tipoDescuento: PORCENTAJE, valor: 10.00, fechaInicio: "2026-11-01", fechaFin: "2026-11-30", estado: ACTIVA, idsServicio: [ 1, 2 ], servicios: [ { idServicio: 1, nombre: "Corte de Cabello Caballero" }, { idServicio: 2, nombre: "Corte de Cabello Dama" } ] } ]
 
 "POST /api/v1/promociones":
   resumen: Registrar una promoción
@@ -745,7 +745,7 @@
   respuestas:
     "201":
       descripcion: Promoción ACTIVA con sus servicios en PROMOCION_SERVICIO
-      ejemplo: { idPromocion: 7, nombre: "Noviembre feliz", tipoDescuento: PORCENTAJE, valor: 10.00, fechaInicio: "2026-11-01", fechaFin: "2026-11-30", estado: ACTIVA, idsServicio: [ 1, 2 ] }
+      ejemplo: { idPromocion: 7, nombre: "Noviembre feliz", tipoDescuento: PORCENTAJE, valor: 10.00, fechaInicio: "2026-11-01", fechaFin: "2026-11-30", estado: ACTIVA, idsServicio: [ 1, 2 ], servicios: [ { idServicio: 1, nombre: "Corte de Cabello Caballero" }, { idServicio: 2, nombre: "Corte de Cabello Dama" } ] }
     "400": { descripcion: Faltan el nombre o el tipo de descuento, regla: VALIDACION }
     "422": { descripcion: "El descuento es mayor que 0 (hasta 100 si es porcentaje) y la vigencia termina el mismo día o después", regla: RF84 }
 
@@ -764,7 +764,7 @@
   respuestas:
     "201":
       descripcion: "Venta CERRADA con su boleta o factura; Oracle registra la salida de kardex al cerrar (TRG_VENTA_EFECTOS)"
-      ejemplo: { idVenta: 620, idSede: 1, idCaja: 12, idCliente: 407, estado: CERRADA, detalles: [ { idDetalle: 900, tipoItem: PRODUCTO, cantidad: 2, precioUnitario: 45.00, descuento: 0.00, subtotal: 90.00, idPersonal: 4, idProducto: 40 } ], subtotal: 90.00, igv: 0.00, descuento: 0.00, adelantoAplicado: 0.00, saldoFavorAplicado: 0.00, total: 90.00, pagos: [ { idMedioPago: 1, monto: 90.00 } ], pagado: 90.00, pendiente: 0.00, cobrosPendientes: [ ], comprobante: { idComprobante: 700, tipo: BOLETA, serie: B001, numero: "00000125", estadoSunat: PENDIENTE } }
+      ejemplo: { idVenta: 620, idSede: 1, idCaja: 12, idCliente: 407, estado: CERRADA, detalles: [ { idDetalle: 900, tipoItem: PRODUCTO, cantidad: 2, precioUnitario: 45.00, descuento: 0.00, subtotal: 90.00, idPersonal: 4, idProducto: 40, descripcion: "Shampoo reparador", nombreEspecialista: "Lucía Ramos" } ], subtotal: 90.00, igv: 0.00, descuento: 0.00, adelantoAplicado: 0.00, saldoFavorAplicado: 0.00, total: 90.00, pagos: [ { idMedioPago: 1, monto: 90.00, nombreMedioPago: EFECTIVO } ], pagado: 90.00, pendiente: 0.00, cobrosPendientes: [ ], comprobante: { idComprobante: 700, tipo: BOLETA, serie: B001, numero: "00000125", estadoSunat: PENDIENTE }, nombreCliente: "Rosaura Quispe" }
     "202":
       descripcion: "El cobro digital quedó PENDIENTE: la venta queda ABIERTA y se cierra con POST /ventas/{idVenta}/cierre cuando la pasarela lo aprueba (RN52)"
       ejemplo: { idVenta: 621, idSede: 1, idCaja: 12, estado: ABIERTA, total: 45.00, pagos: [ ], pagado: 0.00, pendiente: 45.00, cobrosPendientes: [ { idTransaccion: 77, idMedioPago: 3, monto: 45.00, canal: QR, estado: PENDIENTE, enlacePago: "https://pasarela.example/qr/77", fechaExpiracion: "2026-11-17T10:00:00" } ] }
@@ -779,7 +779,7 @@
   respuestas:
     "201":
       descripcion: Solicitud PENDIENTE en la bandeja de la Administradora; la venta no cambia
-      ejemplo: { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: SALDO_FAVOR, estado: PENDIENTE, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125" }
+      ejemplo: { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: SALDO_FAVOR, estado: PENDIENTE, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125", nombreCliente: "Rosaura Quispe", nombreUsuarioSolicita: "Rosa Quispe" }
     "404": { descripcion: La venta no existe, regla: RF32 }
     "409": { descripcion: La venta ya tiene una solicitud de anulación PENDIENTE, regla: UQ_SOL_ANUL_PENDIENTE }
     "422": { descripcion: "La venta no está CERRADA (RN12), falta el motivo o el código no es 01, 02 o 06 (RN32), o un cliente de paso eligió saldo a favor (RN44)", regla: RN12 }
@@ -790,7 +790,7 @@
   respuestas:
     "200":
       descripcion: "Solicitudes de la sede con su venta, total, motivo, quién la pidió y cuándo; sin estado, las PENDIENTES"
-      ejemplo: [ { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: SALDO_FAVOR, estado: PENDIENTE, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125" } ]
+      ejemplo: [ { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: SALDO_FAVOR, estado: PENDIENTE, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125", nombreCliente: "Rosaura Quispe", nombreUsuarioSolicita: "Rosa Quispe" } ]
 
 "POST /api/v1/solicitudes-anulacion/{idSolicitud}/aprobacion":
   resumen: Aprobar una solicitud de anulación
@@ -798,7 +798,7 @@
   respuestas:
     "200":
       descripcion: "En una transacción: nota de crédito enviada a SUNAT (PENDIENTE si no responde), venta ANULADA (Oracle devuelve la atención, anula el paquete, abona el saldo y reingresa los productos) y solicitud APROBADA"
-      ejemplo: { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: SALDO_FAVOR, estado: APROBADA, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idUsuarioResuelve: 1, fechaResolucion: "2026-11-09T11:30:00", idNotaCredito: 701, idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125" }
+      ejemplo: { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: SALDO_FAVOR, estado: APROBADA, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idUsuarioResuelve: 1, fechaResolucion: "2026-11-09T11:30:00", idNotaCredito: 701, idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125", nombreCliente: "Rosaura Quispe", nombreUsuarioSolicita: "Rosa Quispe", nombreUsuarioResuelve: "Administradora Cautiva Spa" }
     "404": { descripcion: La solicitud no existe, regla: RN32 }
     "409": { descripcion: "La solicitud ya está resuelta (RN32) o SUNAT aún no acepta el comprobante (RN46)", regla: RN32 }
 
@@ -809,7 +809,7 @@
   respuestas:
     "200":
       descripcion: Solicitud RECHAZADA con su motivo; la venta sigue CERRADA
-      ejemplo: { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: MEDIO_ORIGINAL, estado: RECHAZADA, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idUsuarioResuelve: 1, fechaResolucion: "2026-11-09T11:30:00", motivoRechazo: "La venta es correcta", idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125" }
+      ejemplo: { idSolicitud: 15, idVenta: 620, motivo: "La clienta desistió", codigoMotivo: "06", formaDevolucion: MEDIO_ORIGINAL, estado: RECHAZADA, idUsuarioSolicita: 2, fechaSolicitud: "2026-11-09T11:00:00", idUsuarioResuelve: 1, fechaResolucion: "2026-11-09T11:30:00", motivoRechazo: "La venta es correcta", idCliente: 407, totalVenta: 90.00, comprobante: "B001-00000125", nombreCliente: "Rosaura Quispe", nombreUsuarioSolicita: "Rosa Quispe", nombreUsuarioResuelve: "Administradora Cautiva Spa" }
     "404": { descripcion: La solicitud no existe, regla: RN32 }
     "409": { descripcion: La solicitud ya está resuelta, regla: RN32 }
     "422": { descripcion: Falta el motivo del rechazo, regla: RN32 }
@@ -844,7 +844,7 @@
   respuestas:
     "200":
       descripcion: Cajas CERRADAS de la sede con diferencia en algún medio y su observación, aún sin aprobar (RN30)
-      ejemplo: [ { idCaja: 12, idSede: 1, idUsuarioApertura: 2, fechaApertura: "2026-11-09T08:55:00", montoInicial: 100.00, idUsuarioCierre: 2, fechaCierre: "2026-11-09T20:05:00", estado: CERRADA, arqueos: [ { idMedioPago: 1, montoEsperado: 450.00, montoContado: 440.00, diferencia: -10.00, observacion: "Faltó vuelto" } ] } ]
+      ejemplo: [ { idCaja: 12, idSede: 1, idUsuarioApertura: 2, fechaApertura: "2026-11-09T08:55:00", montoInicial: 100.00, idUsuarioCierre: 2, fechaCierre: "2026-11-09T20:05:00", estado: CERRADA, arqueos: [ { idMedioPago: 1, montoEsperado: 450.00, montoContado: 440.00, diferencia: -10.00, observacion: "Faltó vuelto" } ], nombreUsuarioApertura: "Rosa Quispe", nombreUsuarioCierre: "Rosa Quispe" } ]
 
 "PATCH /api/v1/cajas/{idCaja}/revision":
   resumen: Aprobar un cierre con diferencia
@@ -852,7 +852,7 @@
   respuestas:
     "200":
       descripcion: La caja sigue CERRADA y queda revisada (RF67)
-      ejemplo: { idCaja: 12, idSede: 1, estado: CERRADA, idUsuarioRevisa: 1, fechaRevision: "2026-11-10T09:00:00" }
+      ejemplo: { idCaja: 12, idSede: 1, estado: CERRADA, idUsuarioRevisa: 1, fechaRevision: "2026-11-10T09:00:00", nombreUsuarioRevisa: "Administradora Cautiva Spa" }
     "404": { descripcion: La caja no existe, regla: RN30 }
     "422": { descripcion: "La caja no está CERRADA, ya se aprobó o no tiene diferencias", regla: RF67 }
 
@@ -862,7 +862,7 @@
   respuestas:
     "200":
       descripcion: Cajas abiertas hoy en la sede, de la última a la primera, para reabrir la CERRADA (RF66)
-      ejemplo: [ { idCaja: 12, idSede: 1, fechaApertura: "2026-11-09T08:55:00", montoInicial: 100.00, fechaCierre: "2026-11-09T20:05:00", estado: CERRADA } ]
+      ejemplo: [ { idCaja: 12, idSede: 1, fechaApertura: "2026-11-09T08:55:00", montoInicial: 100.00, fechaCierre: "2026-11-09T20:05:00", estado: CERRADA, nombreUsuarioApertura: "Rosa Quispe", nombreUsuarioCierre: "Rosa Quispe" } ]
 
 "PATCH /api/v1/cajas/{idCaja}/reapertura":
   resumen: Reabrir la caja del día
@@ -871,7 +871,7 @@
   respuestas:
     "200":
       descripcion: "La caja vuelve a ABIERTA; Oracle guarda quién y cuándo y limpia el cierre y la revisión. Luego se vuelve a arquear y cerrar (CUS45)"
-      ejemplo: { idCaja: 12, idSede: 1, estado: ABIERTA, idUsuarioReapertura: 1, fechaReapertura: "2026-11-09T20:30:00", motivoReapertura: "Venta registrada después del cierre" }
+      ejemplo: { idCaja: 12, idSede: 1, estado: ABIERTA, idUsuarioReapertura: 1, fechaReapertura: "2026-11-09T20:30:00", motivoReapertura: "Venta registrada después del cierre", nombreUsuarioReapertura: "Administradora Cautiva Spa" }
     "404": { descripcion: La caja no existe, regla: RN30 }
     "409": { descripcion: La sede ya tiene otra caja ABIERTA (UQ_CAJA_ABIERTA_SEDE), regla: RN30 }
     "422": { descripcion: "Falta el motivo, la caja no está CERRADA o no es la del día", regla: RN30 }
@@ -926,7 +926,7 @@
   respuestas:
     "200":
       descripcion: "Clave temporal guardada como BCrypt, debe cambiarla en su siguiente ingreso, sin intentos fallidos y desbloqueada; la clave no vuelve"
-      ejemplo: { idUsuario: 3, idPersonal: 4, idRol: 3, nombreUsuario: especialista1, estado: ACTIVO, debeCambiarClave: true }
+      ejemplo: { idUsuario: 3, idPersonal: 4, idRol: 3, nombreUsuario: especialista1, estado: ACTIVO, debeCambiarClave: true, nombres: "Especialista", apellidos: "Salón", nombreRol: ESPECIALISTA_TECNICA }
     "400": { descripcion: La clave tiene de 8 a 72 caracteres, regla: VALIDACION }
     "404": { descripcion: El usuario no existe, regla: RF82 }
 

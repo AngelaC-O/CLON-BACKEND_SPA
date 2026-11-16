@@ -317,6 +317,25 @@ class SeguridadCatalogoFlujoTest extends OracleTestcontainer {
 			.andExpect(jsonPath("$.rol").value("ESPECIALISTA_TECNICA"));
 	}
 
+	/** [It. 2.1 · nombres] SesionDTO.nombreSede (SEDE, Duda 7) y UsuarioDTO con nombres, apellidos y rol (PERSONA y ROL, Duda 2). */
+	@Test
+	void nombresEnLaSesionYEnLaListaDeUsuarios() throws Exception {
+		String sede = jdbc.queryForObject("SELECT s.nombre FROM SEDE s JOIN PERSONAL p ON p.id_sede = s.id_sede JOIN USUARIO u ON u.id_personal = p.id_personal"
+				+ " WHERE u.nombre_usuario = 'admin'", String.class);
+		enviar(admin(), get("/api/v1/auth/sesion"), null).andExpect(status().isOk()).andExpect(jsonPath("$.nombreSede").value(sede));
+
+		String nombres = jdbc.queryForObject("SELECT p.nombres FROM USUARIO u JOIN PERSONA p ON p.id_persona = u.id_personal WHERE u.nombre_usuario = 'recepcion'",
+				String.class);
+		String apellidos = jdbc.queryForObject("SELECT p.apellidos FROM USUARIO u JOIN PERSONA p ON p.id_persona = u.id_personal WHERE u.nombre_usuario = 'recepcion'",
+				String.class);
+		String rol = jdbc.queryForObject("SELECT r.nombre FROM USUARIO u JOIN ROL r ON r.id_rol = u.id_rol WHERE u.nombre_usuario = 'recepcion'", String.class);
+		enviar(admin(), get("/api/v1/usuarios"), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$[?(@.nombreUsuario == 'recepcion')].nombres", hasItem(nombres)))
+			.andExpect(jsonPath("$[?(@.nombreUsuario == 'recepcion')].apellidos", hasItem(apellidos)))
+			.andExpect(jsonPath("$[?(@.nombreUsuario == 'recepcion')].nombreRol", hasItem(rol)))
+			.andExpect(jsonPath("$[0].clave").doesNotExist());
+	}
+
 	@Test
 	void cus50ElPanelDeAvisosSoloMuestraLoQueElRolPuedeVer() throws Exception {
 		mvc.perform(get("/api/v1/avisos")).andExpect(status().isUnauthorized());

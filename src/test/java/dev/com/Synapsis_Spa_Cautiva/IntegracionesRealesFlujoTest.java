@@ -185,6 +185,28 @@ class IntegracionesRealesFlujoTest extends VentasFlujoApoyo {
 		assertThat(texto(pdf)).contains("HASHREAL123", "20601234567", "ACEPTADO");
 	}
 
+	/** [It. 2.1 · D-33] La línea de un producto del CPE que va a APISPERU lleva el nombre del producto (PRODUCTO), no «PRODUCTO». */
+	@Test
+	void elCpeDeUnProductoLlevaSuNombre() throws Exception {
+		sunatAcepta();
+		cajaAbierta();
+		Long idCategoria = id("SELECT MIN(id_categoria) FROM CATEGORIA_PRODUCTO WHERE nombre <> 'Insumos de servicio'");
+		String nombre = "Crema del CPE " + sedeDeLaClase();
+		Long idProducto = idDe(enviarEnSede("almacen", sedeDeLaClase(), post("/api/v1/productos"), "{\"codigo\":\"CPE-" + sedeDeLaClase() + "\",\"nombre\":\""
+				+ nombre + "\",\"idCategoria\":" + idCategoria + ",\"unidad\":\"UND\",\"tipoUso\":\"VENTA\",\"costo\":10.00,\"stockMinimo\":0}")
+			.andExpect(status().isCreated()), "idProducto");
+		enviarEnSede("almacen", sedeDeLaClase(), post("/api/v1/productos/" + idProducto + "/ajustes"), "{\"cantidad\":3,\"motivo\":\"Conteo inicial\"}")
+			.andExpect(status().isOk());
+		java.math.BigDecimal precio = jdbc.queryForObject("SELECT precio_venta FROM PRODUCTO WHERE id_producto = ?", java.math.BigDecimal.class, idProducto);
+
+		enviar(post("/api/v1/ventas/productos"), "{\"lineas\":[{\"idProducto\":" + idProducto + ",\"cantidad\":1}],\"idMedioPago\":" + medio("EFECTIVO")
+				+ ",\"monto\":" + precio.toPlainString() + ",\"tipo\":\"BOLETA\"}").andExpect(status().isCreated())
+			.andExpect(jsonPath("$.comprobante.estadoSunat").value("ACEPTADO"));
+
+		SERVIDOR.verify(WireMock.postRequestedFor(urlPathEqualTo(RUTA_ENVIO))
+			.withRequestBody(WireMock.matchingJsonPath("$.details[0].descripcion", WireMock.equalTo(nombre))));
+	}
+
 	@Test
 	void siElProveedorNoRespondeLaVentaSeCierraYElJobLaReenvia() throws Exception {
 		SERVIDOR.stubFor(WireMock.post(urlPathEqualTo(RUTA_ENVIO)).willReturn(serverError()));

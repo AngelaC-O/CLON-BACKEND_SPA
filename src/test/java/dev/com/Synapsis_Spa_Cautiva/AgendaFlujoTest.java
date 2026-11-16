@@ -611,4 +611,96 @@ class AgendaFlujoTest extends OracleTestcontainer {
 		assertThatThrownBy(() -> atencionApi.obtenerAtencionCobrable(999_999L)).isInstanceOf(ReglaNegocioException.class);
 	}
 
+	// ------------------------------------------------------------------ [It. 2.1] Nombres en las respuestas (página «02 Nombres»)
+
+	private String texto(String sql, Object... parametros) {
+		return jdbc.queryForObject(sql, String.class, parametros);
+	}
+
+	/** PERSONA: «nombres apellidos». */
+	private String persona(Long idPersona) {
+		return texto("SELECT TRIM(nombres || ' ' || apellidos) FROM PERSONA WHERE id_persona = ?", idPersona);
+	}
+
+	/** SERVICIO y VARIANTE_SERVICIO: «Servicio · Variante». */
+	private String servicioVariante(Long idVariante) {
+		return texto("SELECT s.nombre || ' · ' || v.nombre FROM VARIANTE_SERVICIO v JOIN SERVICIO s ON s.id_servicio = v.id_servicio WHERE v.id_variante = ?",
+				idVariante);
+	}
+
+	private String nombreRecurso(Long idRecurso) {
+		return texto("SELECT nombre FROM RECURSO WHERE id_recurso = ?", idRecurso);
+	}
+
+	@Test
+	void nombresEnHorasLibresCitaAgendaMiAgendaAtencionRecomendacionYFicha() throws Exception {
+		Long idCliente = registrarClienta("Con nombres");
+		Long idEspecialista = idPersonal("especialista1");
+		Long idRecurso = recurso("SILLON", 5);
+		Long idVariante = idVariante(CORTE);
+		LocalDate dia = lunes(25);
+
+		// HoraLibre: cada especialista y cada recurso libre con su nombre (se conservan idsPersonal e idsRecurso)
+		String horas = enviar("recepcion", get("/api/v1/citas/disponibilidad").param("idVariante", idVariante.toString()).param("fecha", dia.toString()), null)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].idsPersonal", hasItem(idEspecialista.intValue())))
+			.andExpect(jsonPath("$[0].especialistas[?(@.idPersonal == " + idEspecialista + ")].nombre", hasItem(persona(idEspecialista))))
+			.andReturn().getResponse().getContentAsString();
+		Number idRecursoLibre = JsonPath.read(horas, "$[0].recursos[0].idRecurso");
+		assertThat(JsonPath.<String>read(horas, "$[0].recursos[0].nombre")).isEqualTo(nombreRecurso(idRecursoLibre.longValue()));
+
+		// CitaDTO: clienta, especialista, «Servicio · Variante» y recurso
+		Long idCita = idDe(agendar(idCliente, idEspecialista, idRecurso, idVariante, dia.atTime(10, 0), 30).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.nombreCliente").value(persona(idCliente)))
+			.andExpect(jsonPath("$.nombreEspecialista").value(persona(idEspecialista)))
+			.andExpect(jsonPath("$.nombreServicio").value(servicioVariante(idVariante)))
+			.andExpect(jsonPath("$.nombreRecurso").value(nombreRecurso(idRecurso))), "idCita");
+
+		// FranjaAgendaDTO: el nombre del recurso
+		enviar("recepcion", get("/api/v1/citas/agenda").param("fecha", dia.toString()).param("idRecurso", idRecurso.toString()), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$[?(@.idOrigen == " + idCita + ")].nombreRecurso", hasItem(nombreRecurso(idRecurso))));
+
+		// CitaAtencionDTO: «Mi agenda» de especialista1 (Duda 1)
+		enviar("especialista1", get("/api/v1/atenciones/mi-agenda").param("fecha", dia.toString()), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$[?(@.idCita == " + idCita + ")].nombreCliente", hasItem(persona(idCliente))))
+			.andExpect(jsonPath("$[?(@.idCita == " + idCita + ")].nombreServicio", hasItem(servicioVariante(idVariante))))
+			.andExpect(jsonPath("$[?(@.idCita == " + idCita + ")].nombreRecurso", hasItem(nombreRecurso(idRecurso))));
+
+		// AtencionDTO al iniciar
+		Long idAtencion = idDe(enviar("especialista1", post("/api/v1/atenciones"), "{\"idCita\":" + idCita + ",\"tiempoDeclaradoMin\":30}")
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.nombreCliente").value(persona(idCliente)))
+			.andExpect(jsonPath("$.nombreEspecialista").value(persona(idEspecialista)))
+			.andExpect(jsonPath("$.nombreServicio").value(servicioVariante(idVariante)))
+			.andExpect(jsonPath("$.nombreRecurso").value(nombreRecurso(idRecurso))), "idAtencion");
+
+		// RecomendacionDTO: el nombre del producto (PRODUCTO)
+		Long idProducto = id("SELECT MIN(id_producto) FROM PRODUCTO WHERE tipo_uso = 'VENTA'");
+		String nombreProducto = texto("SELECT nombre FROM PRODUCTO WHERE id_producto = ?", idProducto);
+		enviar("especialista1", post("/api/v1/atenciones/" + idAtencion + "/recomendaciones"), "{\"idProducto\":" + idProducto + ",\"observacion\":\"De noche\"}")
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.nombreProducto").value(nombreProducto));
+
+		// AtencionDTO al finalizar, y AtencionCobrable (por cobrar, CUS18)
+		enviar("especialista1", patch("/api/v1/atenciones/" + idAtencion + "/fin"), "{\"observaciones\":\"Sin novedad\"}").andExpect(status().isOk())
+			.andExpect(jsonPath("$.nombreCliente").value(persona(idCliente)))
+			.andExpect(jsonPath("$.nombreRecurso").value(nombreRecurso(idRecurso)));
+		SecurityContextHolder.getContext().setAuthentication(sesion("recepcion"));
+		AtencionCobrable oCobrable = atencionApi.obtenerAtencionCobrable(idAtencion);
+		assertThat(oCobrable.nombreCliente()).isEqualTo(persona(idCliente));
+		assertThat(oCobrable.nombreEspecialista()).isEqualTo(persona(idEspecialista));
+		assertThat(oCobrable.nombreServicio()).isEqualTo(servicioVariante(idVariante));
+
+		// FichaClienteDTO: el historial (servicio, especialista, recurso y producto recomendado) y las citas pendientes con sus nombres
+		agendar(idCliente, idEspecialista, idRecurso, idVariante, lunes(26).atTime(11, 0), 30).andExpect(status().isCreated());
+		enviar("recepcion", get("/api/v1/clientes/" + idCliente), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$.atenciones[?(@.idAtencion == " + idAtencion + ")].nombreServicio", hasItem(servicioVariante(idVariante))))
+			.andExpect(jsonPath("$.atenciones[?(@.idAtencion == " + idAtencion + ")].nombreEspecialista", hasItem(persona(idEspecialista))))
+			.andExpect(jsonPath("$.atenciones[?(@.idAtencion == " + idAtencion + ")].nombreRecurso", hasItem(nombreRecurso(idRecurso))))
+			.andExpect(jsonPath("$.atenciones[?(@.idAtencion == " + idAtencion + ")].recomendaciones[0].nombreProducto", hasItem(nombreProducto)))
+			.andExpect(jsonPath("$.citasPendientes[0].nombreCliente").value(persona(idCliente)))
+			.andExpect(jsonPath("$.citasPendientes[0].nombreServicio").value(servicioVariante(idVariante)))
+			.andExpect(jsonPath("$.citasPendientes[0].nombreRecurso").value(nombreRecurso(idRecurso)));
+	}
+
 }
