@@ -271,7 +271,7 @@ class SeguridadCatalogoFlujoTest extends OracleTestcontainer {
 		// [v5.1] RECEPCIONISTA tiene CATALOGO:VER (script 17), pero no CATALOGO:CREAR
 		enviar(sesion, get("/api/v1/areas"), null).andExpect(status().isOk());
 		enviar(sesion, post("/api/v1/areas"), "{\"linea\":\"SALON\",\"nombreArea\":\"Intrusa\"}").andExpect(status().isForbidden());
-		enviar(sesion, post("/api/v1/recursos"), "{\"idSede\":1,\"nombre\":\"Intruso\",\"tipo\":\"CABINA\",\"minutosLimpieza\":5}")
+		enviar(sesion, post("/api/v1/recursos"), "{\"idSede\":1,\"nombre\":\"Intruso\",\"tipo\":\"CABINA\"}")
 			.andExpect(status().isForbidden());
 	}
 
@@ -382,19 +382,22 @@ class SeguridadCatalogoFlujoTest extends OracleTestcontainer {
 	}
 
 	@Test
-	void cus61ListaLosRecursosDeLaSedeYRechazaQuinceMinutosDeLimpieza() throws Exception {
+	void cus61ListaLosRecursosDeLaSedeSinTiempoDeLimpieza() throws Exception {
 		Sesion sesion = admin();
 		Long recursos = id("SELECT COUNT(*) FROM RECURSO WHERE id_sede = " + idSede());
 		enviar(sesion, get("/api/v1/recursos").param("idSede", idSede().toString()), null).andExpect(status().isOk())
 			.andExpect(jsonPath("$", hasSize(recursos.intValue())))
-			.andExpect(jsonPath("$[0].minutosLimpieza").isNumber())
+			.andExpect(jsonPath("$[0].minutosLimpieza").doesNotExist())
 			.andExpect(jsonPath("$[0].estado").exists());
 		enviar(sesion, get("/api/v1/recursos"), null).andExpect(status().isBadRequest());
 
+		// [It. 2.1 · v5.2] Un cliente que todavía envía minutosLimpieza: Jackson ignora la propiedad desconocida (Spring Boot no falla por
+		// ellas) y el recurso se registra sin tiempo de limpieza (RN03)
 		enviar(sesion, post("/api/v1/recursos"), "{\"idSede\":" + idSede() + ",\"nombre\":\"Con quince\",\"tipo\":\"CABINA\",\"minutosLimpieza\":15}")
-			.andExpect(status().isUnprocessableContent())
-			.andExpect(jsonPath("$.regla").value("RN03"));
-		assertThat(id("SELECT COUNT(*) FROM RECURSO WHERE nombre = 'Con quince'")).isZero();
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.estado").value("DISPONIBLE"))
+			.andExpect(jsonPath("$.minutosLimpieza").doesNotExist());
+		assertThat(id("SELECT COUNT(*) FROM RECURSO WHERE nombre = 'Con quince' AND tipo = 'CABINA'")).isEqualTo(1);
 	}
 
 	// ------------------------------------------------------------------ CUS57
@@ -429,15 +432,13 @@ class SeguridadCatalogoFlujoTest extends OracleTestcontainer {
 	// ------------------------------------------------------------------ CUS61 y sesión Oracle
 
 	@Test
-	void cus61RegistraRecursoConLaLimpiezaDelParametro() throws Exception {
+	void cus61RegistraRecursoConSuTipoYSuSede() throws Exception {
 		Sesion sesion = admin();
-		// LIMPIEZA_MAX_MIN = 10 desde v5.1 (RN03)
-		String recurso = "{\"idSede\":" + idSede() + ",\"nombre\":\"Camilla de prueba\",\"tipo\":\"CAMILLA\",\"minutosLimpieza\":10}";
-		enviar(sesion, post("/api/v1/recursos"), recurso).andExpect(status().isCreated()).andExpect(jsonPath("$.estado").value("DISPONIBLE"));
+		// [It. 2.1 · v5.2] RF85: el recurso se registra con su tipo y su sede; ya no lleva tiempo de limpieza (RN03)
+		String recurso = "{\"idSede\":" + idSede() + ",\"nombre\":\"Camilla de prueba\",\"tipo\":\"CAMILLA\"}";
+		enviar(sesion, post("/api/v1/recursos"), recurso).andExpect(status().isCreated()).andExpect(jsonPath("$.estado").value("DISPONIBLE"))
+			.andExpect(jsonPath("$.tipo").value("CAMILLA"));
 		enviar(sesion, post("/api/v1/recursos"), recurso).andExpect(status().isConflict());
-		enviar(sesion, post("/api/v1/recursos"), recurso.replace("Camilla de prueba", "Otra").replace("\"minutosLimpieza\":10", "\"minutosLimpieza\":11"))
-			.andExpect(status().isUnprocessableContent())
-			.andExpect(jsonPath("$.regla").value("RN03"));
 	}
 
 	@Test
@@ -449,7 +450,7 @@ class SeguridadCatalogoFlujoTest extends OracleTestcontainer {
 	@Test
 	void conSesionOracleLaAuditoriaLlevaElIdDelUsuario() throws Exception {
 		Sesion sesion = admin();
-		String recurso = "{\"idSede\":" + idSede() + ",\"nombre\":\"Recurso auditado\",\"tipo\":\"CABINA\",\"minutosLimpieza\":10}";
+		String recurso = "{\"idSede\":" + idSede() + ",\"nombre\":\"Recurso auditado\",\"tipo\":\"CABINA\"}";
 		Number idRecurso = JsonPath.read(enviar(sesion, post("/api/v1/recursos"), recurso).andExpect(status().isCreated())
 			.andReturn().getResponse().getContentAsString(), "$.idRecurso");
 

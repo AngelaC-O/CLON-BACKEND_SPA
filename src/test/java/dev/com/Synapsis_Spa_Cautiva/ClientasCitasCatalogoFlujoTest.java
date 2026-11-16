@@ -25,7 +25,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 /**
  * [It. 2] CUS03, CUS04, CUS05 y CUS06 con lista de espera, CUS09, CUS10, CUS12, CUS58, CUS59 y CUS60, y la rama de paquete de CUS11 que en
- * la Iteración 1 no se pudo probar (D-04). La clase trabaja en su propia sede (VentasFlujoApoyo): caja, especialista y sillones con limpieza 0.
+ * la Iteración 1 no se pudo probar (D-04). La clase trabaja en su propia sede (VentasFlujoApoyo): caja, especialista y sillones.
  * CUS12 usa a especialista1 y especialista2 del script 15 sobre una atención FINALIZADA en un día pasado, para no ocupar a nadie ahora.
  */
 @SpringBootTest
