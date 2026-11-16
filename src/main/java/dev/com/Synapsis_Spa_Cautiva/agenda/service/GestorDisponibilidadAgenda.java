@@ -56,6 +56,9 @@ public class GestorDisponibilidadAgenda {
 
 	private final ParametroApi parametroApi;
 
+	/** [It. 2.1 · nombres] El nombre de las especialistas de cada hora libre, en una búsqueda (diferencia 11 del front-end). */
+	private final NombresAgenda nombresAgenda;
+
 	/** [It. 2 · RN51] Desde la apertura de la sede, cada AGENDA_PASO_MIN minutos de PARAMETRO (antes, la duración de referencia: D-08). */
 	public List<HoraLibre> calcularHorasLibres(Long idVariante, Long idSede, LocalDate fecha) {
 		DatosVariante oVariante = catalogoApi.obtenerVariante(idVariante);
@@ -76,7 +79,7 @@ public class GestorDisponibilidadAgenda {
 				evaluarHora(inicio, duracion, especialistas, recursos, bloques).ifPresent(horasLibres::add);
 			}
 		}
-		return horasLibres;
+		return conEspecialistas(horasLibres);
 	}
 
 	public boolean validarSinCruce(Long idPersonal, Long idRecurso, LocalDateTime fechaHoraInicio, Integer duracionMin) {
@@ -117,7 +120,7 @@ public class GestorDisponibilidadAgenda {
 					&& (idRecurso == null || idRecurso.equals(oBloque.getIdRecurso())))
 			.map(oBloque -> new FranjaAgendaDTO(OCUPADA, oBloque.getOrigen(), oBloque.getIdOrigen(), oBloque.getIdPersonal(), oBloque.getIdRecurso(),
 					oBloque.getIdVariante(), oBloque.getInicio(), oBloque.getFin(), oBloque.getEstado(), oBloque.getIdCliente(),
-					oBloque.getNombreClientePaso(), null, null))
+					oBloque.getNombreClientePaso(), null, null, null))
 			.forEach(agenda::add);
 		if (idRecurso == null) {
 			agregarFranjasDeEspecialistas(agenda, idSede, fecha, idPersonal, bloques);
@@ -132,8 +135,19 @@ public class GestorDisponibilidadAgenda {
 	public List<HoraLibre> especialistasYRecursosLibres(Long idVariante, Long idSede, LocalDateTime fechaHora) {
 		DatosVariante oVariante = catalogoApi.obtenerVariante(idVariante);
 		LocalDate fecha = fechaHora.toLocalDate();
-		return evaluarHora(fechaHora, oVariante.duracionRefMin(), personalApi.listarEspecialistas(idSede, oVariante.idArea(), fecha),
-				recursosDelTipo(idSede, oVariante), bloquesDelDia(idSede, fecha)).stream().toList();
+		return conEspecialistas(evaluarHora(fechaHora, oVariante.duracionRefMin(), personalApi.listarEspecialistas(idSede, oVariante.idArea(), fecha),
+				recursosDelTipo(idSede, oVariante), bloquesDelDia(idSede, fecha)).stream().toList());
+	}
+
+	/** [It. 2.1 · nombres] Las especialistas de todas las horas con su nombre, en una sola búsqueda de personas. */
+	private List<HoraLibre> conEspecialistas(List<HoraLibre> horasLibres) {
+		NombresAgenda.Nombres nombres = nombresAgenda.buscar(horasLibres.stream().flatMap(oHora -> oHora.idsPersonal().stream()).toList(), List.of(),
+				List.of(), List.of(), List.of());
+		return horasLibres.stream()
+			.map(oHora -> oHora.conEspecialistas(oHora.idsPersonal().stream()
+				.map(idPersonal -> new HoraLibre.EspecialistaLibre(idPersonal, nombres.persona(idPersonal)))
+				.toList()))
+			.toList();
 	}
 
 	private List<DatosRecurso> recursosDelTipo(Long idSede, DatosVariante oVariante) {
@@ -167,7 +181,8 @@ public class GestorDisponibilidadAgenda {
 		if (idsPersonal.isEmpty()) {
 			return Optional.empty();
 		}
-		return Optional.of(new HoraLibre(inicio, duracion, idsPersonal, recursosLibres.stream().map(DatosRecurso::idRecurso).toList()));
+		return Optional.of(new HoraLibre(inicio, duracion, idsPersonal, recursosLibres.stream().map(DatosRecurso::idRecurso).toList(), List.of(),
+				recursosLibres.stream().map(oRecurso -> new HoraLibre.RecursoLibre(oRecurso.idRecurso(), oRecurso.nombre())).toList()));
 	}
 
 	private void agregarFranjasDeEspecialistas(List<FranjaAgendaDTO> agenda, Long idSede, LocalDate fecha, Long idPersonal,
@@ -211,7 +226,7 @@ public class GestorDisponibilidadAgenda {
 	}
 
 	private FranjaAgendaDTO franjaLibre(LocalDateTime inicio, LocalDateTime fin, Long idPersonal, Long idRecurso) {
-		return new FranjaAgendaDTO(LIBRE, null, null, idPersonal, idRecurso, null, inicio, fin, null, null, null, null, null);
+		return new FranjaAgendaDTO(LIBRE, null, null, idPersonal, idRecurso, null, inicio, fin, null, null, null, null, null, null);
 	}
 
 	/** Hasta cuándo la atención ocupa a la especialista y al recurso: hora_fin si terminó, o el tiempo declarado (RN03, v5.2). */

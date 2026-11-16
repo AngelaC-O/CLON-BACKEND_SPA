@@ -56,17 +56,23 @@ public class ServicioAtencion implements AtencionApi {
 
 	private final MapperAtencion mapperAtencion;
 
+	/** [It. 2.1 · nombres] Clienta, especialista, servicio, recurso y producto de cada respuesta, en lote. */
+	private final NombresAgenda nombresAgenda;
+
 	/** [It. 2 · RF13] «Mi agenda» de la especialista de la sesión (UsuarioActual.idPersonal), no de un selector. Sin fecha, la de hoy. */
 	@Transactional(readOnly = true)
 	public List<CitaAtencionDTO> listarMiAgenda(LocalDate fecha) {
 		LocalDate dia = fecha == null ? LocalDate.now() : fecha;
-		return repositorioCita.findDelDiaPorPersonal(usuarioActual.idPersonal(), dia).stream().map(this::conAtencion).toList();
+		List<Cita> citas = repositorioCita.findDelDiaPorPersonal(usuarioActual.idPersonal(), dia);
+		NombresAgenda.Nombres nombres = nombresAgenda.buscar(citas.stream().map(Cita::getIdCliente).toList(),
+				citas.stream().map(Cita::getIdVariante).toList(), citas.stream().map(Cita::getIdRecurso).toList(), List.of(), List.of());
+		return citas.stream().map(oCita -> conAtencion(oCita, nombres)).toList();
 	}
 
 	/** [It. 2] Retoma la atención EN_CURSO de una cita desde otro equipo (Dudas 6 y 7 del front-end); 404 si no hay. */
 	@Transactional(readOnly = true)
 	public AtencionDTO obtenerEnCurso(Long idCita) {
-		return repositorioAtencion.findEnCursoPorCita(idCita).map(mapperAtencion::aDTO)
+		return repositorioAtencion.findEnCursoPorCita(idCita).map(this::aDTO)
 			.orElseThrow(() -> new ReglaNegocioException("RF13", "La cita " + idCita + " no tiene una atención EN_CURSO.", HttpStatus.NOT_FOUND));
 	}
 
@@ -80,7 +86,7 @@ public class ServicioAtencion implements AtencionApi {
 		repositorioCita.saveAndFlush(oCita);
 		Atencion oAtencion = new Atencion(idCita, oCita.getIdCliente(), oCita.getIdPersonal(), oCita.getIdRecurso(), oCita.getIdVariante(),
 				tiempoDeclaradoMin);
-		return mapperAtencion.aDTO(repositorioAtencion.save(oAtencion));
+		return aDTO(repositorioAtencion.save(oAtencion));
 	}
 
 	/**
@@ -103,7 +109,7 @@ public class ServicioAtencion implements AtencionApi {
 		}
 		List<ConsumoPendienteDTO> pendientes = inventarioApi.registrarConsumoAtencion(idAtencion, usuarioActual.idSede(),
 				catalogoApi.insumosDeVariante(oAtencion.getIdVariante()));
-		return mapperAtencion.aDTO(oAtencion).conConsumosPendientes(pendientes);
+		return aDTO(oAtencion).conConsumosPendientes(pendientes);
 	}
 
 	/** [It. 2 · CUS12, RF16] Productos de VENTA de la sede de la sesión para recomendar (InventarioApi.buscar, sin marca ni categoría). */
@@ -126,6 +132,8 @@ public class ServicioAtencion implements AtencionApi {
 			.filter(recomendacion -> recomendacion.getIdProducto().equals(idProducto))
 			.findFirst()
 			.map(mapperAtencion::aDTO)
+			.map(oRecomendacionDTO -> oRecomendacionDTO.conNombreProducto(
+					nombresAgenda.buscar(List.of(), List.of(), List.of(), List.of(idProducto), List.of()).producto(idProducto)))
 			.orElseThrow();
 	}
 
@@ -154,7 +162,15 @@ public class ServicioAtencion implements AtencionApi {
 		if (oAtencion.getEstado() != EstadoAtencion.FINALIZADA) {
 			throw new ReglaNegocioException("RF21", "Solo se cobra una atención FINALIZADA; esta está " + oAtencion.getEstado() + ".");
 		}
-		return aCobrable(oAtencion);
+		return aCobrables(List.of(oAtencion)).getFirst();
+	}
+
+	/** [It. 2.1 · nombres] Las atenciones de una venta, con sus nombres y sin revisar su estado (descripción del detalle de la venta, DF-170). */
+	@Override
+	@Transactional(readOnly = true)
+	public List<AtencionCobrable> obtenerAtenciones(List<Long> idsAtencion) {
+		List<Long> ids = idsAtencion.stream().filter(java.util.Objects::nonNull).distinct().toList();
+		return ids.isEmpty() ? List.of() : aCobrables(repositorioAtencion.findAllById(ids));
 	}
 
 	@Override
@@ -164,7 +180,7 @@ public class ServicioAtencion implements AtencionApi {
 		if (idsRecurso.isEmpty()) {
 			return List.of();
 		}
-		return repositorioAtencion.findFinalizadasEnRecursos(idsRecurso).stream().map(this::aCobrable).toList();
+		return aCobrables(repositorioAtencion.findFinalizadasEnRecursos(idsRecurso));
 	}
 
 	@Override
@@ -193,18 +209,35 @@ public class ServicioAtencion implements AtencionApi {
 			.ifPresent(oClientePaquete -> oAtencion.usarSesion(oClientePaquete.getIdClientePaquete()));
 	}
 
-	private AtencionCobrable aCobrable(Atencion oAtencion) {
-		BigDecimal adelantoMonto = oAtencion.getIdCita() == null ? BigDecimal.ZERO : buscarCita(oAtencion.getIdCita()).getAdelantoMonto();
-		return new AtencionCobrable(oAtencion.getIdAtencion(), oAtencion.getIdCliente(), oAtencion.getNombreClientePaso(), oAtencion.getIdPersonal(),
-				oAtencion.getIdVariante(), oAtencion.getIdClientePaquete(), adelantoMonto);
+	/** [It. 2.1 · nombres] Clienta (o la de paso), servicio y especialista de todas las atenciones con una búsqueda por tipo. */
+	private List<AtencionCobrable> aCobrables(List<Atencion> atenciones) {
+		NombresAgenda.Nombres nombres = nombresAgenda.buscar(
+				atenciones.stream().flatMap(oAtencion -> java.util.stream.Stream.of(oAtencion.getIdCliente(), oAtencion.getIdPersonal())).toList(),
+				atenciones.stream().map(Atencion::getIdVariante).toList(), List.of(), List.of(), List.of());
+		return atenciones.stream().map(oAtencion -> {
+			BigDecimal adelantoMonto = oAtencion.getIdCita() == null ? BigDecimal.ZERO : buscarCita(oAtencion.getIdCita()).getAdelantoMonto();
+			return new AtencionCobrable(oAtencion.getIdAtencion(), oAtencion.getIdCliente(), oAtencion.getNombreClientePaso(), oAtencion.getIdPersonal(),
+					oAtencion.getIdVariante(), oAtencion.getIdClientePaquete(), adelantoMonto,
+					nombres.cliente(oAtencion.getIdCliente(), oAtencion.getNombreClientePaso()), nombres.servicio(oAtencion.getIdVariante()),
+					nombres.persona(oAtencion.getIdPersonal()));
+		}).toList();
 	}
 
-	/** La atención EN_CURSO de la cita, para que la especialista la retome y la finalice. */
-	private CitaAtencionDTO conAtencion(Cita oCita) {
+	/** [It. 2.1 · nombres] La atención con el nombre de la clienta (o de la de paso), la especialista, el servicio y el recurso. */
+	private AtencionDTO aDTO(Atencion oAtencion) {
+		NombresAgenda.Nombres nombres = nombresAgenda.buscar(java.util.Arrays.asList(oAtencion.getIdCliente(), oAtencion.getIdPersonal()),
+				List.of(oAtencion.getIdVariante()), List.of(oAtencion.getIdRecurso()), List.of(), List.of());
+		return mapperAtencion.aDTO(oAtencion).conNombres(nombres.cliente(oAtencion.getIdCliente(), oAtencion.getNombreClientePaso()),
+				nombres.persona(oAtencion.getIdPersonal()), nombres.servicio(oAtencion.getIdVariante()), nombres.recurso(oAtencion.getIdRecurso()));
+	}
+
+	/** La atención EN_CURSO de la cita, para que la especialista la retome y la finalice. [It. 2.1] Con clienta, servicio y recurso (Duda 1). */
+	private CitaAtencionDTO conAtencion(Cita oCita, NombresAgenda.Nombres nombres) {
 		Atencion oAtencion = oCita.getEstado() == EstadoCita.EN_ATENCION ? repositorioAtencion.findEnCursoPorCita(oCita.getIdCita()).orElse(null) : null;
 		return new CitaAtencionDTO(oCita.getIdCita(), oCita.getIdCliente(), oCita.getIdRecurso(), oCita.getIdVariante(), oCita.getFechaHoraInicio(),
 				oCita.getDuracionMin(), oCita.getFechaHoraFin(), oCita.getEstado(), oAtencion == null ? null : oAtencion.getIdAtencion(),
-				oAtencion == null ? null : oAtencion.getEstado());
+				oAtencion == null ? null : oAtencion.getEstado(), nombres.persona(oCita.getIdCliente()), nombres.servicio(oCita.getIdVariante()),
+				nombres.recurso(oCita.getIdRecurso()));
 	}
 
 	private Cita buscarCita(Long idCita) {

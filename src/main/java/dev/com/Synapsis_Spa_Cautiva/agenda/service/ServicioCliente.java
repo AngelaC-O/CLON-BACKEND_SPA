@@ -6,12 +6,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import dev.com.Synapsis_Spa_Cautiva.agenda.api.SaldoFavorApi;
+import dev.com.Synapsis_Spa_Cautiva.agenda.controller.CitaDTO;
 import dev.com.Synapsis_Spa_Cautiva.agenda.controller.ClienteDTO;
 import dev.com.Synapsis_Spa_Cautiva.agenda.controller.FichaClienteDTO;
 import dev.com.Synapsis_Spa_Cautiva.agenda.controller.MapperCita;
 import dev.com.Synapsis_Spa_Cautiva.agenda.controller.MapperCliente;
+import dev.com.Synapsis_Spa_Cautiva.agenda.controller.RecomendacionDTO;
 import dev.com.Synapsis_Spa_Cautiva.agenda.domain.Atencion;
 import dev.com.Synapsis_Spa_Cautiva.agenda.domain.Cita;
 import dev.com.Synapsis_Spa_Cautiva.agenda.domain.Cliente;
@@ -54,6 +57,9 @@ public class ServicioCliente implements SaldoFavorApi {
 
 	private final MapperCita mapperCita;
 
+	/** [It. 2.1 · nombres] Duda 9: los nombres del historial, de las citas y de los paquetes de la ficha, en lote. */
+	private final NombresAgenda nombresAgenda;
+
 	@Transactional(readOnly = true)
 	public List<ClienteDTO> buscar(String nombres, String telefono) {
 		List<PersonaDTO> personas = personaApi.buscarPersonas(nombres, telefono);
@@ -78,8 +84,27 @@ public class ServicioCliente implements SaldoFavorApi {
 		List<Cita> citas = repositorioCita.findPendientesPorCliente(idCliente);
 		List<ClientePaquete> paquetes = repositorioClientePaquete.findActivosPorCliente(idCliente);
 		List<ProductoCompradoDTO> productos = historialComprasProvider.productosComprados(idCliente);
-		return new FichaClienteDTO(mapperCliente.aDTO(oCliente, oPersonaDTO), saldoDisponible, atenciones.stream().map(mapperCliente::aFicha).toList(),
-				citas.stream().map(mapperCita::aDTO).toList(), paquetes.stream().map(this::aFicha).toList(), productos);
+		List<FichaClienteDTO.AtencionFicha> historial = atenciones.stream().map(mapperCliente::aFicha).toList();
+		// [It. 2.1 · nombres] Una búsqueda por tipo de nombre para toda la ficha (Duda 9)
+		NombresAgenda.Nombres nombres = nombresAgenda.buscar(
+				Stream.concat(atenciones.stream().map(Atencion::getIdPersonal), citas.stream().flatMap(oCita -> Stream.of(oCita.getIdCliente(),
+						oCita.getIdPersonal()))).toList(),
+				Stream.concat(atenciones.stream().map(Atencion::getIdVariante), citas.stream().map(Cita::getIdVariante)).toList(),
+				Stream.concat(atenciones.stream().map(Atencion::getIdRecurso), citas.stream().map(Cita::getIdRecurso)).toList(),
+				historial.stream().flatMap(oFicha -> oFicha.recomendaciones().stream()).map(RecomendacionDTO::idProducto).toList(),
+				paquetes.stream().map(ClientePaquete::getIdPaquete).toList());
+		List<FichaClienteDTO.AtencionFicha> historialConNombres = historial.stream()
+			.map(oFicha -> oFicha.conNombres(
+					oFicha.recomendaciones().stream().map(oRecomendacion -> oRecomendacion.conNombreProducto(nombres.producto(oRecomendacion.idProducto())))
+						.toList(),
+					nombres.servicio(oFicha.idVariante()), nombres.persona(oFicha.idPersonal()), nombres.recurso(oFicha.idRecurso())))
+			.toList();
+		List<CitaDTO> citasConNombres = citas.stream().map(mapperCita::aDTO)
+			.map(oCitaDTO -> oCitaDTO.conNombres(nombres.persona(oCitaDTO.idCliente()), nombres.persona(oCitaDTO.idPersonal()),
+					nombres.servicio(oCitaDTO.idVariante()), nombres.recurso(oCitaDTO.idRecurso())))
+			.toList();
+		return new FichaClienteDTO(mapperCliente.aDTO(oCliente, oPersonaDTO), saldoDisponible, historialConNombres, citasConNombres,
+				paquetes.stream().map(oClientePaquete -> aFicha(oClientePaquete, nombres.paquete(oClientePaquete.getIdPaquete()))).toList(), productos);
 	}
 
 	/** Sin transacción, igual que PersonaApi: la llamada externa no debe retener una conexión de la base. */
@@ -131,12 +156,12 @@ public class ServicioCliente implements SaldoFavorApi {
 	}
 
 	/** RN36: las sesiones usadas se cuentan en V_SESIONES_PAQUETE. */
-	private FichaClienteDTO.PaqueteFicha aFicha(ClientePaquete oClientePaquete) {
+	private FichaClienteDTO.PaqueteFicha aFicha(ClientePaquete oClientePaquete, String nombrePaquete) {
 		Integer usadas = repositorioClientePaquete.contarSesionesUsadas(oClientePaquete.getIdClientePaquete());
 		int sesionesUsadas = usadas == null ? 0 : usadas;
 		return new FichaClienteDTO.PaqueteFicha(oClientePaquete.getIdClientePaquete(), oClientePaquete.getIdPaquete(),
 				oClientePaquete.getSesionesTotales(), sesionesUsadas, oClientePaquete.getSesionesTotales() - sesionesUsadas,
-				oClientePaquete.getFechaCompra(), oClientePaquete.getFechaVencimiento(), oClientePaquete.getEstado());
+				oClientePaquete.getFechaCompra(), oClientePaquete.getFechaVencimiento(), oClientePaquete.getEstado(), nombrePaquete);
 	}
 
 	private Cliente buscarCliente(Long idCliente) {
