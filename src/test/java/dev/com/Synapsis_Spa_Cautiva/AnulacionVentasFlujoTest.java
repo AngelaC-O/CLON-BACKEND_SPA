@@ -164,6 +164,11 @@ class AnulacionVentasFlujoTest extends VentasFlujoApoyo {
 
 		assertThat(estadoVenta(idVenta)).isEqualTo("ABIERTA");
 		assertThat(stock(idProducto)).isEqualTo(3);
+		// [It. 2.1 · D-22] La venta se confirmó antes de cobrar: el cobro guarda id_venta y la venta lo lista al retomarla
+		assertThat(id("SELECT id_venta FROM TRANSACCION_PASARELA WHERE codigo_operacion = ?", "PEND-PROD-" + idProducto)).isEqualTo(idVenta);
+		enviar(get("/api/v1/ventas/" + idVenta), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$.cobrosPendientes", hasSize(1)))
+			.andExpect(jsonPath("$.cobrosPendientes[0].enlacePago").value("https://pasarela-falsa.invalid/qr"));
 	}
 
 	@Test
@@ -243,6 +248,10 @@ class AnulacionVentasFlujoTest extends VentasFlujoApoyo {
 			.isEqualTo("SALDO_FAVOR");
 		assertThat(id("SELECT id_usuario_autoriza FROM NOTA_CREDITO WHERE id_nota_credito = ?", idNotaCredito))
 			.isEqualTo(id("SELECT id_usuario FROM USUARIO WHERE nombre_usuario = 'admin'"));
+		// [It. 2.1 · D-21] TRG_NOTA_CREDITO_REGLAS toma de la solicitud a quien pidió la anulación: la recepcionista, no la Administradora
+		assertThat(id("SELECT id_usuario_solicita FROM NOTA_CREDITO WHERE id_nota_credito = ?", idNotaCredito))
+			.isEqualTo(id("SELECT id_usuario FROM USUARIO WHERE nombre_usuario = 'recepcion'"))
+			.isEqualTo(id("SELECT id_usuario_solicita FROM SOLICITUD_ANULACION WHERE id_solicitud = ?", idSolicitud));
 		assertThat(id("SELECT id_nota_credito FROM SOLICITUD_ANULACION WHERE id_solicitud = ?", idSolicitud)).isEqualTo(idNotaCredito);
 		// PKG_VENTA.al_anular: el ABONO del total y el reingreso del producto los hace Oracle
 		assertThat(jdbc.queryForObject("SELECT SUM(monto) FROM SALDO_FAVOR_MOV WHERE id_venta = ? AND tipo = 'ABONO'", BigDecimal.class, idVenta))

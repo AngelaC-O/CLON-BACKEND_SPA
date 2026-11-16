@@ -423,6 +423,11 @@ Nuevas (15/11/2026):
 - **D-39. `docs/openapi.yaml` vuelve a quedar desactualizado.** Sin `minutosLimpieza` (`RecursoDTO`) ni `finServicio` (`FranjaAgendaDTO`), y con los ejemplos nuevos de `openapi/contrato.yaml`, la salida de springdoc ya no es igual a `docs/openapi.yaml`, y `ContratoOpenApiTest.docsOpenapiEsLaSalidaDelCodigo` falla (ver «Verificación de la Iteración 2.1»). `docs/` sigue cerrado salvo este archivo, así que no se volvió a exportar. Se exporta con `./mvnw test -Dtest=ContratoOpenApiTest -Dcautiva.openapi.exportar=true`. ¿Se autoriza, como en B15 (D-24)?
 - **D-40. Código HTTP de `-20107`.** `ApiExceptionHandler` lo traduce con la regla por defecto: 422 con la regla `RN42` que trae el mensaje. Java todavía no guarda `id_venta` en la transacción (B17), así que hoy no se puede dar. ¿Es 422 (dato inválido) o 409 (la transacción ya es de otra venta)?
 
+Nuevas (16/11/2026, B17):
+
+- **D-39 (sigue abierta).** B17 vuelve a cambiar el contrato (`CobroPendienteDTO` con medio, monto, canal, estado y vencimiento), así que `docs/openapi.yaml` sigue sin ser la salida de springdoc y `docsOpenapiEsLaSalidaDelCodigo` sigue en rojo.
+- **D-41. La fecha de apertura de una caja cerrada se puede cambiar.** `TRG_CAJA_REGLAS` (17 y 18) revisa, con la caja CERRADA, el monto inicial, el cierre y la reapertura, pero no `fecha_apertura`: cualquier sesión que actualice CAJA podría mover la caja de ayer a hoy y saltarse D-16. Java nunca la cambia (la prueba de D-16 la mueve como dueño, en mantenimiento, para tener una caja de ayer). ¿Se agrega `fecha_apertura` a los datos que no cambian en la próxima migración?
+
 Siguen abiertas, con su destino:
 
 - **D-05, D-32, D-34 y DF-49** → Izipay real, cuando la dueña consiga las claves TEST (código de operación del enlace, `uuid` del reembolso, formato del reporte de liquidación y columnas que se importan).
@@ -472,6 +477,16 @@ Valores esperados de las pruebas Java que cambian con v5.2:
 | `InventarioFlujoTest`, `VentasFlujoApoyo` | recursos con `minutosLimpieza` 0 | recursos sin la columna | La columna ya no existe |
 | `InstalacionBaseDatosTest` | 131 FK | 132 FK y RECURSO sin `minutos_limpieza` | `FK_TRANS_PAS_VENTA` |
 
+Lado Java de D-22, D-37, D-21, D-16 y D-15 (16/11/2026, B17; páginas «modificado It. 2.1» de CUS13, CUS18, CUS23, CUS26, CUS46 y CUS48). La tarea pedía numerar «desde DF-144», pero DF-144 a DF-159 ya los usó B16: se sigue en DF-160.
+
+- **DF-160. Métodos que no están en el diagrama.** `TransaccionPasarela.registrarVenta(idVenta)` (solo un COBRO nuevo sin cita; así no choca con el constructor de la devolución, que tiene los mismos tipos) y `RepositorioTransaccionPasarela.findPendientesDeVenta(idVenta)` (los COBRO PENDIENTES de la venta, por `IX_TRANS_PAS_VENTA`). `PagosApi.cobrosPendientes(idVenta)` sí está en la secuencia y en la clase de CUS18. La entidad mapea `id_venta` con `updatable = false`.
+- **DF-161. `CobroPendienteDTO` pasa a `pagos.api`.** El diagrama dice que `cobrosPendientes` devuelve `List`, sin el tipo. El DTO estaba en `ventas.controller` con `idTransaccion` y `enlacePago`; ahora lo arma `PagosApi` y lo usa `ventas`: `CobroPendienteDTO(idTransaccion, idMedioPago, monto, canal, estado, enlacePago, fechaExpiracion)`. `canal` y `estado` son texto, como en `TransaccionDTO`. El JSON de `VentaDTO.cobrosPendientes` solo crece.
+- **DF-162. CUS13 y CUS26 confirman la venta antes de cobrar (decisión del 16/11/2026).** `PagosApi.cobrar` guarda la transacción en su propia transacción (REQUIRES_NEW, RN52), y con `id_venta` Oracle busca la venta ABIERTA y de la misma sede desde esa otra transacción (`TRG_TRANS_PAS_REGLAS`, y la FK esperaría a la transacción de afuera). En CUS18 la venta ya existe; en CUS13 y CUS26 se creaba en la misma operación y no se veía. Con un medio de la pasarela, `ServicioVentaRapida.registrarYCobrar` y `ServicioVenta.venderProductos` (ya sin `@Transactional`, con `TransactionTemplate`) guardan y confirman primero la atención y la venta (revisando RN11 y, en CUS26, el stock y la caja); después cobran, y si la pasarela aprueba registran el pago y cierran en otra transacción. Si la pasarela rechaza, la venta queda ABIERTA sin pago y la respuesta es 422 (antes se deshacía todo): se retoma o se descarta en CUS18. En efectivo no cambia nada: todo en una transacción. Los diagramas de CUS13 y CUS26 dibujan una sola operación.
+- **DF-163. Los cobros PENDIENTES en el 202 y en el GET.** `GET /ventas/{idVenta}` trae todos los cobros PENDIENTES de la venta (`PagosApi.cobrosPendientes`), también los iniciados en otro equipo. El 202 de `POST /ventas/{idVenta}/pagos` trae solo los de ese pedido (filtrados de la misma lista), para que un cobro viejo no convierta un pago en efectivo en un 202. Un cobro que la pasarela aprueba deja de estar PENDIENTE y desaparece de la lista; el pago se registra con su `idTransaccion` (RN42).
+- **DF-164. `ApiExceptionHandler`.** `-20072` (cobro de una venta CERRADA o de otra sede, o cambiar `id_venta`) y `-20107` (pago con la transacción de otra venta) quedan nombrados y responden 422 con el mensaje de Oracle (la regla es la RN que trae el mensaje: RN52 o RN42); `CK_TRANS_PAS_VENTA` responde 422 con su mensaje. Cierra D-40.
+- **DF-165. Reportes por id (D-37).** `RepositorioReporte` une V_VENTA_LINEA con V_MARGEN_PRODUCTO por `id_producto` y con V_COSTO_SERVICIO por `id_variante` (columnas nuevas de v5.2). Reemplaza la unión por nombre de DF-133. El grupo del reporte de productos sigue siendo «código - nombre», así que dos productos con el mismo nombre salen en filas separadas.
+- **DF-166. Pruebas.** El webhook que aprueba un cobro PENDIENTE se simula con un UPDATE del dueño (la pasarela de `PasarelaYFacturacionFlujoTest` es un mock y el webhook firmado ya lo prueba `CajaVentasFlujoTest`). La caja de ayer se arma cerrando una caja de hoy y moviendo su `fecha_apertura` como dueño (D-41); el `-20060` se fuerza con `PKG_SESION.iniciar` de la Administradora en una conexión del dueño. D-21 y D-15 se comprueban en las pruebas de CUS23 y CUS46 que ya existían.
+
 ### Decisiones tomadas
 
 15/11/2026:
@@ -482,6 +497,13 @@ Valores esperados de las pruebas Java que cambian con v5.2:
 - **D-18 cerrada:** el script 17 ya está en `oracle-local`.
 - **Horario de los datos de prueba** (`database/19_datos_prueba_horario.sql`): la sede abre todos los días de 09:00 a 20:00 y cada persona descansa un día; agrega `especialista3` (70000007, áreas de especialista1) y `especialista4` (70000008, áreas de especialista2). Solo en la base local y en la de la e2e: `OracleTestcontainer` no instala 19 y las pruebas Java siguen con los datos de 15 y 17.
 - **D-23** (`AvisoProvider.avisos(idSede)`), **D-25** (rutas de los avisos de almacén) y **D-38** (nombres de los tipos de reporte) se aceptan como están.
+
+16/11/2026 (B17):
+
+- **D-22 en Java:** `TRANSACCION_PASARELA.id_venta` se guarda en todo cobro de una venta (CUS13, CUS18 y CUS26) y `GET /ventas/{idVenta}` lista los cobros PENDIENTES (`PagosApi.cobrosPendientes`), con la venta confirmada antes de cobrar en CUS13 y CUS26 (DF-162, decisión del 16/11/2026). Cierra la duda 4 del front-end.
+- **D-37 en Java:** los reportes de productos y de margen se unen por `id_producto` e `id_variante` (DF-165).
+- **D-21, D-16 y D-15 comprobados desde Java:** la nota de crédito guarda a la recepcionista que pidió la anulación y a la Administradora que la autorizó; la caja de ayer no se reabre en Java (422) ni en Oracle (`-20060`); la reapertura queda en V_AUDITORIA con su motivo y quién reabrió.
+- **D-40 cerrada:** `-20107` es 422 (la tarea lo fijó así, DF-164).
 
 ### Verificación de la Iteración 2.1
 
@@ -504,3 +526,7 @@ En otro contenedor limpio, 00 → 14 → 13 → 15 → 17 → 18 → 19 y 19 otr
 Back-end, `./mvnw verify` (una corrida; no hubo ORA-03114 ni ORA-12516): 195 pruebas, 194 OK y 1 fallo, `ContratoOpenApiTest.docsOpenapiEsLaSalidaDelCodigo`, porque `docs/openapi.yaml` ya no es la salida de springdoc (sin `minutosLimpieza` ni `finServicio`; D-39). Pasan `ModularidadTest`, `InstalacionBaseDatosTest` (132 FK, RECURSO sin la columna), `MigracionV51Test`, `MigracionV52Test`, `AgendaSinLimpiezaFlujoTest` y las demás. Una primera corrida cayó entera por un YAML mal escrito en `openapi/contrato.yaml` (un texto con «: » sin comillas); se corrigió antes de la corrida que vale.
 
 El front-end no se tocó en esta tarea (no se corrió `npm run build` ni `npm test`): retirar `finServicio` y el bloque «Limpieza» es de F12.
+
+### Verificación de B17 (16/11/2026)
+
+Rama de trabajo sin confirmar sobre `main` (después del merge de B16), JDK 26 con `--release 21`. `./mvnw -q verify` (una corrida; no hubo ORA-03114 ni ORA-12516): 199 pruebas, 198 OK y 1 fallo, `ContratoOpenApiTest.docsOpenapiEsLaSalidaDelCodigo`, el mismo de D-39 (`docs/openapi.yaml` sigue sin exportarse). Antes se corrieron solas las 59 pruebas de `PasarelaYFacturacionFlujoTest`, `AnulacionVentasFlujoTest`, `ReportesFlujoTest`, `CajaConfiguracionFlujoTest`, `CajaVentasFlujoTest` y `ModularidadTest`: todas OK. Pruebas nuevas o ampliadas: `d22UnCobroPendienteApareceEnLaVentaDesdeOtraSesionYAlAprobarseSeRegistraElPago`, `d22ElPagoConLaTransaccionDeOtraVentaEs422`, la venta rápida y la venta de productos con cobro PENDIENTE (id_venta y GET), `d37DosProductosConElMismoNombreNoSeMezclan`, la nota de crédito de CUS23 (D-21), `cus46LaCajaDeAyerNoSeReabreNiEnJavaNiEnOracle` (D-16) y la auditoría de la reapertura en `cus46…` (D-15). `database/` no cambió. El front-end no se tocó: no se corrió `npm run build` ni `npm test`.
