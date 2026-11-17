@@ -25,7 +25,7 @@ public class ControladorRecurso {
 
 	private final MapperRecurso mapperRecurso;
 
-	/** [It. 2] CUS61: los recursos de la sede con su tipo, estado y limpieza (diferencia 18 del front-end). */
+	/** [It. 2] CUS61: los recursos de la sede con su tipo y estado (diferencia 18 del front-end). [It. 2.1] Sin limpieza (RN03). */
 	@GetMapping
 	@PreAuthorize("hasAuthority('SEDES:VER')")
 	public ResponseEntity<List<RecursoDTO>> listarRecursos(@RequestParam Long idSede) {

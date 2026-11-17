@@ -89,9 +89,67 @@ class PasarelaYFacturacionFlujoTest extends VentasFlujoApoyo {
 		assertThat(id("SELECT COUNT(*) FROM ATENCION")).isEqualTo(atencionesAntes + 1);
 		assertThat(jdbc.queryForObject("SELECT estado FROM VENTA WHERE id_venta = ?", String.class, idVenta)).isEqualTo("ABIERTA");
 		assertThat(id("SELECT COUNT(*) FROM TRANSACCION_PASARELA WHERE codigo_operacion = ? AND estado = 'PENDIENTE'", codigo)).isEqualTo(1);
-		enviar(get("/api/v1/ventas/" + idVenta), null).andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("ABIERTA"));
+		// [It. 2.1 · D-22] La venta se confirmó antes de cobrar: el cobro guarda id_venta y GET /ventas/{idVenta} lo lista
+		assertThat(id("SELECT id_venta FROM TRANSACCION_PASARELA WHERE codigo_operacion = ?", codigo)).isEqualTo(idVenta);
+		enviar(get("/api/v1/ventas/" + idVenta), null).andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("ABIERTA"))
+			.andExpect(jsonPath("$.cobrosPendientes", hasSize(1)))
+			.andExpect(jsonPath("$.cobrosPendientes[0].idMedioPago").value(medio("YAPE")))
+			.andExpect(jsonPath("$.cobrosPendientes[0].canal").value("QR"));
 		enviar(get("/api/v1/ventas/por-cobrar"), null).andExpect(status().isOk())
 			.andExpect(jsonPath("$.ventasAbiertas[*].idVenta", hasItem(idVenta.intValue())));
+	}
+
+	// ------------------------------------------------------------------ [It. 2.1] D-22: cobros PENDIENTES de una venta (RN52)
+
+	@Test
+	void d22UnCobroPendienteApareceEnLaVentaDesdeOtraSesionYAlAprobarseSeRegistraElPago() throws Exception {
+		Long idVenta = ventaAbierta();
+		String codigo = "PEND-D22-" + idVenta;
+		when(pasarelaPagosPort.crearCobro(any())).thenReturn(new RespuestaPasarela("PENDIENTE", codigo, "https://pasarela-falsa.invalid/qr-d22", "En proceso"));
+
+		pagar(idVenta, medio("YAPE"), "35", "QR").andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.cobrosPendientes", hasSize(1)))
+			.andExpect(jsonPath("$.cobrosPendientes[0].idMedioPago").value(medio("YAPE")))
+			.andExpect(jsonPath("$.cobrosPendientes[0].monto").value(35.0))
+			.andExpect(jsonPath("$.cobrosPendientes[0].canal").value("QR"))
+			.andExpect(jsonPath("$.cobrosPendientes[0].estado").value("PENDIENTE"))
+			.andExpect(jsonPath("$.cobrosPendientes[0].enlacePago").value("https://pasarela-falsa.invalid/qr-d22"))
+			.andExpect(jsonPath("$.cobrosPendientes[0].fechaExpiracion").exists());
+		Long idTransaccion = id("SELECT id_transaccion FROM TRANSACCION_PASARELA WHERE codigo_operacion = ? AND id_venta = ?", codigo, idVenta);
+
+		// Desde otra sesión (la Administradora, en otro equipo) la venta trae su cobro PENDIENTE para retomarla
+		enviarEnSede("admin", sedeDeLaClase(), get("/api/v1/ventas/" + idVenta), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$.cobrosPendientes", hasSize(1)))
+			.andExpect(jsonPath("$.cobrosPendientes[0].idTransaccion").value(idTransaccion))
+			.andExpect(jsonPath("$.cobrosPendientes[0].monto").value(35.0));
+
+		// La pasarela lo aprueba (lo que hace el webhook): deja de estar pendiente y se registra el pago con su idTransaccion
+		comoDueno("UPDATE TRANSACCION_PASARELA SET estado = 'APROBADA', fecha_respuesta = SYSTIMESTAMP WHERE id_transaccion = " + idTransaccion);
+		enviar(get("/api/v1/ventas/" + idVenta), null).andExpect(status().isOk()).andExpect(jsonPath("$.cobrosPendientes", hasSize(0)));
+		enviar(post("/api/v1/ventas/" + idVenta + "/pagos"),
+				"{\"pagos\":[{\"idMedioPago\":" + medio("YAPE") + ",\"monto\":35,\"idTransaccion\":" + idTransaccion + "}]}")
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.pagos[0].idTransaccion").value(idTransaccion))
+			.andExpect(jsonPath("$.pendiente").value(0.0))
+			.andExpect(jsonPath("$.cobrosPendientes", hasSize(0)));
+	}
+
+	@Test
+	void d22ElPagoConLaTransaccionDeOtraVentaEs422() throws Exception {
+		Long idVentaX = ventaAbierta();
+		Long idVentaY = ventaAbierta();
+		String codigo = "PEND-X-" + idVentaX;
+		when(pasarelaPagosPort.crearCobro(any())).thenReturn(new RespuestaPasarela("PENDIENTE", codigo, null, "En proceso"));
+		pagar(idVentaX, medio("YAPE"), "35", "QR").andExpect(status().isAccepted());
+		Long idTransaccion = id("SELECT id_transaccion FROM TRANSACCION_PASARELA WHERE codigo_operacion = ?", codigo);
+		comoDueno("UPDATE TRANSACCION_PASARELA SET estado = 'APROBADA', fecha_respuesta = SYSTIMESTAMP WHERE id_transaccion = " + idTransaccion);
+
+		// TRG_VENTA_PAGO_REGLAS (-20107): la transacción cobró la venta X, no respalda un pago de la venta Y (RN42)
+		enviar(post("/api/v1/ventas/" + idVentaY + "/pagos"),
+				"{\"pagos\":[{\"idMedioPago\":" + medio("YAPE") + ",\"monto\":35,\"idTransaccion\":" + idTransaccion + "}]}")
+			.andExpect(status().isUnprocessableContent())
+			.andExpect(jsonPath("$.regla").value("RN42"));
+		assertThat(id("SELECT COUNT(*) FROM VENTA_PAGO WHERE id_venta = ?", idVentaY)).isZero();
 	}
 
 	@Test

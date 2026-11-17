@@ -22,7 +22,7 @@ import org.hibernate.generator.EventType;
 import org.springframework.http.HttpStatus;
 
 /**
- * fechaHoraFin la calcula TRG_CITA_REGLAS: inicio + duración + limpieza del recurso (RN03). El mismo trigger fija
+ * fechaHoraFin la calcula TRG_CITA_REGLAS: inicio + duración ([It. 2.1 · v5.2] sin limpieza, RN03). El mismo trigger fija
  * quién registró la cita y cuándo (idUsuario y fechaRegistro), así que Hibernate los vuelve a leer al insertar.
  */
 @Entity

@@ -53,7 +53,7 @@ public class ServicioParametro implements ParametroApi {
 		return repositorioParametro.findAll(Sort.by("codigo")).stream().map(ServicioParametro::aDTO).toList();
 	}
 
-	/** RF87: solo cambia el valor (CK_PARAMETRO_VALOR); AGENDA_PASO_MIN y LIMPIEZA_MAX_MIN tienen su rango (RN51, RN03). Código inexistente: 404. */
+	/** RF87: solo cambia el valor (CK_PARAMETRO_VALOR); AGENDA_PASO_MIN tiene su rango (RN51). Código inexistente (también LIMPIEZA_MAX_MIN, retirado en v5.2): 404. */
 	@Transactional
 	public ParametroDTO cambiarValor(String codigo, ParametroDTO oParametroDTO) {
 		Long idUsuario = usuarioActual.idUsuario();

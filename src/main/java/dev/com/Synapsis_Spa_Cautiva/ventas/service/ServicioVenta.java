@@ -19,12 +19,12 @@ import dev.com.Synapsis_Spa_Cautiva.comun.api.ReglaNegocioException;
 import dev.com.Synapsis_Spa_Cautiva.comun.api.UsuarioActual;
 import dev.com.Synapsis_Spa_Cautiva.inventario.api.InventarioApi;
 import dev.com.Synapsis_Spa_Cautiva.inventario.api.ProductoStockDTO;
+import dev.com.Synapsis_Spa_Cautiva.pagos.api.CobroPendienteDTO;
 import dev.com.Synapsis_Spa_Cautiva.pagos.api.PagosApi;
 import dev.com.Synapsis_Spa_Cautiva.pagos.api.TransaccionDTO;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.PersonaApi;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.ResultadoConsulta;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.CierreVentaDTO;
-import dev.com.Synapsis_Spa_Cautiva.ventas.controller.CobroPendienteDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.DescuentosDTO;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.MapperVenta;
 import dev.com.Synapsis_Spa_Cautiva.ventas.controller.PagoVentaDTO;
@@ -45,6 +45,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Lo que Oracle ya hace no se repite aquí: al cerrar, TRG_VENTA_EFECTOS marca las atenciones COBRADAS y registra la salida de productos;
@@ -78,6 +79,12 @@ public class ServicioVenta {
 
 	private final UsuarioActual usuarioActual;
 
+	/** [It. 2.1 · D-22] CUS26 con un medio de la pasarela confirma la venta antes de cobrar (DF-162). */
+	private final TransactionTemplate transacciones;
+
+	/** [It. 2.1 · nombres] La clienta, la descripción y la especialista de cada línea y el medio de cada pago, en lote. */
+	private final NombresVenta nombresVenta;
+
 	private final ParametroApi parametroApi;
 
 	private final MapperVenta mapperVenta;
@@ -95,9 +102,34 @@ public class ServicioVenta {
 	 * líneas (VENTA_DETALLE.id_personal = quien recomendó, sin comisión: RN38), el cobro (RN42), el comprobante (CUS19) y el cierre. La salida
 	 * de kardex la registra Oracle al cerrar (TRG_VENTA_EFECTOS): aquí no se repite. [RN52] Si el cobro digital queda PENDIENTE, la venta queda
 	 * ABIERTA con cobrosPendientes (el controlador responde 202) y se cierra con POST /ventas/{idVenta}/cierre cuando el webhook lo aprueba.
+	 * [It. 2.1 · D-22] Con un medio de la pasarela, la venta se confirma ABIERTA antes de cobrar, porque el cobro guarda id_venta desde su propia
+	 * transacción y Oracle la busca ABIERTA y de la misma sede (TRG_TRANS_PAS_REGLAS): si la pasarela rechaza (422), la venta queda ABIERTA sin
+	 * pago y se retoma o se descarta en CUS18 (DF-162). En efectivo, todo va en una transacción, como antes.
 	 */
-	@Transactional
 	public VentaDTO venderProductos(VentaProductosDTO oVentaProductosDTO) {
+		Long idMedioPago = oVentaProductosDTO.idMedioPago();
+		BigDecimal monto = oVentaProductosDTO.monto();
+		if (!pagosApi.usaPasarela(idMedioPago)) {
+			return transacciones.execute(estado -> {
+				Venta oVenta = registrarVentaDeProductos(oVentaProductosDTO);
+				oVenta.registrarPago(idMedioPago, monto, null);
+				return cerrarVentaDeProductos(oVenta, oVentaProductosDTO);
+			});
+		}
+		Long idVenta = transacciones.execute(estado -> registrarVentaDeProductos(oVentaProductosDTO).getIdVenta());
+		TransaccionDTO oTransaccionDTO = pagosApi.cobrar(idVenta, idMedioPago, monto, oVentaProductosDTO.canal());
+		if (!oTransaccionDTO.aprobada()) {
+			return transacciones.execute(estado -> nombresVenta.conNombres(mapperVenta.aDTO(buscar(idVenta), pagosApi.cobrosPendientes(idVenta))));
+		}
+		return transacciones.execute(estado -> {
+			Venta oVenta = buscar(idVenta);
+			oVenta.registrarPago(idMedioPago, monto, oTransaccionDTO.idTransaccion());
+			return cerrarVentaDeProductos(oVenta, oVentaProductosDTO);
+		});
+	}
+
+	/** CUS26: stock, caja, la venta con sus líneas y RN11 antes de cobrar; la deja guardada ABIERTA. */
+	private Venta registrarVentaDeProductos(VentaProductosDTO oVentaProductosDTO) {
 		Long idSede = usuarioActual.idSede();
 		for (VentaProductosDTO.Linea oLinea : oVentaProductosDTO.lineas()) {
 			inventarioApi.verificarStock(oLinea.idProducto(), idSede, oLinea.cantidad());
@@ -115,18 +147,11 @@ public class ServicioVenta {
 		if (oVentaProductosDTO.monto().compareTo(oVenta.getTotal()) != 0) {
 			throw new ReglaNegocioException("RN11", "El pago es de S/ " + oVentaProductosDTO.monto() + " y el total es S/ " + oVenta.getTotal() + ".");
 		}
-		repositorioVenta.saveAndFlush(oVenta);
-		if (pagosApi.usaPasarela(oVentaProductosDTO.idMedioPago())) {
-			TransaccionDTO oTransaccionDTO = pagosApi.cobrar(oVenta.getIdVenta(), oVentaProductosDTO.idMedioPago(), oVentaProductosDTO.monto(),
-					oVentaProductosDTO.canal());
-			if (!oTransaccionDTO.aprobada()) {
-				return mapperVenta.aDTO(oVenta, List.of(new CobroPendienteDTO(oTransaccionDTO.idTransaccion(), oTransaccionDTO.enlacePago())));
-			}
-			oVenta.registrarPago(oVentaProductosDTO.idMedioPago(), oVentaProductosDTO.monto(), oTransaccionDTO.idTransaccion());
-		}
-		else {
-			oVenta.registrarPago(oVentaProductosDTO.idMedioPago(), oVentaProductosDTO.monto(), null);
-		}
+		return repositorioVenta.saveAndFlush(oVenta);
+	}
+
+	/** CUS26: el comprobante (CUS19) y el cierre, con el pago ya registrado. */
+	private VentaDTO cerrarVentaDeProductos(Venta oVenta, VentaProductosDTO oVentaProductosDTO) {
 		CierreVentaDTO oCierreVentaDTO = new CierreVentaDTO(oVentaProductosDTO.tipo(), oVentaProductosDTO.idTipoDocComprador(),
 				oVentaProductosDTO.nroDocComprador(), oVentaProductosDTO.nombreComprador());
 		validarComprador(oVenta, oCierreVentaDTO);
@@ -135,7 +160,7 @@ public class ServicioVenta {
 		repositorioVenta.saveAndFlush(oVenta);
 		Comprobante oComprobante = oVenta.getComprobantes().getFirst();
 		servicioFacturacionElectronica.emitirComprobante(oComprobante.getIdComprobante());
-		return mapperVenta.aDTO(oVenta);
+		return nombresVenta.conNombres(mapperVenta.aDTO(oVenta));
 	}
 
 	/**
@@ -160,19 +185,20 @@ public class ServicioVenta {
 		List<AtencionCobrable> atenciones = atencionApi.listarCobrables(idSede).stream()
 			.filter(oAtencion -> !enVenta.contains(oAtencion.idAtencion()))
 			.toList();
-		return new PorCobrarDTO(atenciones, abiertas.stream().map(mapperVenta::aDTO).toList());
+		return new PorCobrarDTO(atenciones, nombresVenta.conNombres(abiertas.stream().map(mapperVenta::aDTO).toList()));
 	}
 
 	/** [It. 2] CUS18: la venta con el estado actual de sus cobros digitales en la pasarela (RN42, RN52). */
 	@Transactional(readOnly = true)
 	public VentaDTO obtenerVenta(Long idVenta) {
-		VentaDTO oVentaDTO = mapperVenta.aDTO(buscar(idVenta));
+		// [It. 2.1 · D-22, RN52] Los cobros PENDIENTES de la venta, también los que se iniciaron desde otro equipo
+		VentaDTO oVentaDTO = mapperVenta.aDTO(buscar(idVenta), pagosApi.cobrosPendientes(idVenta));
 		List<PagoVentaDTO> pagos = oVentaDTO.pagos().stream()
 			.map(oPago -> oPago.idTransaccion() == null ? oPago : oPago.conEstadoTransaccion(pagosApi.consultarTransaccion(oPago.idTransaccion()).estado()))
 			.toList();
-		return new VentaDTO(oVentaDTO.idVenta(), oVentaDTO.idSede(), oVentaDTO.idCaja(), oVentaDTO.idCliente(), oVentaDTO.estado(), oVentaDTO.detalles(),
-				oVentaDTO.subtotal(), oVentaDTO.igv(), oVentaDTO.descuento(), oVentaDTO.adelantoAplicado(), oVentaDTO.saldoFavorAplicado(), oVentaDTO.total(),
-				pagos, oVentaDTO.pagado(), oVentaDTO.pendiente(), oVentaDTO.cobrosPendientes(), oVentaDTO.comprobante());
+		return nombresVenta.conNombres(new VentaDTO(oVentaDTO.idVenta(), oVentaDTO.idSede(), oVentaDTO.idCaja(), oVentaDTO.idCliente(), oVentaDTO.estado(),
+				oVentaDTO.detalles(), oVentaDTO.subtotal(), oVentaDTO.igv(), oVentaDTO.descuento(), oVentaDTO.adelantoAplicado(), oVentaDTO.saldoFavorAplicado(),
+				oVentaDTO.total(), pagos, oVentaDTO.pagado(), oVentaDTO.pendiente(), oVentaDTO.cobrosPendientes(), oVentaDTO.comprobante(), null));
 	}
 
 	@Transactional
@@ -185,7 +211,7 @@ public class ServicioVenta {
 		BigDecimal precioUnitario = oAtencionCobrable.idClientePaquete() != null ? BigDecimal.ZERO
 				: catalogoApi.precioVigente(oAtencionCobrable.idVariante(), null, null);
 		oVenta.agregarServicio(idAtencion, precioUnitario, oAtencionCobrable.idPersonal());
-		return mapperVenta.aDTO(repositorioVenta.save(oVenta));
+		return nombresVenta.conNombres(mapperVenta.aDTO(repositorioVenta.save(oVenta)));
 	}
 
 	/** El flush hace que Oracle calcule el descuento de la promoción antes de leer los totales (DF-11). */
@@ -205,7 +231,7 @@ public class ServicioVenta {
 		if (total.compareTo(oVenta.getTotal()) != 0) {
 			throw new IllegalStateException("La venta " + idVenta + " calcula un total distinto del que guarda");
 		}
-		return mapperVenta.aDTO(repositorioVenta.saveAndFlush(oVenta));
+		return nombresVenta.conNombres(mapperVenta.aDTO(repositorioVenta.saveAndFlush(oVenta)));
 	}
 
 	/**
@@ -216,7 +242,7 @@ public class ServicioVenta {
 	@Transactional
 	public VentaDTO registrarPagos(Long idVenta, PagosDTO oPagosDTO) {
 		Venta oVenta = buscar(idVenta);
-		List<CobroPendienteDTO> cobrosPendientes = new ArrayList<>();
+		List<Long> idsPendientes = new ArrayList<>();
 		for (PagosDTO.Pago oPago : oPagosDTO.pagos()) {
 			if (oPago.idTransaccion() != null) {
 				pagosApi.exigirAprobada(oPago.idTransaccion());
@@ -228,14 +254,17 @@ public class ServicioVenta {
 					oVenta.registrarPago(oPago.idMedioPago(), oPago.monto(), oTransaccionDTO.idTransaccion());
 				}
 				else {
-					cobrosPendientes.add(new CobroPendienteDTO(oTransaccionDTO.idTransaccion(), oTransaccionDTO.enlacePago()));
+					idsPendientes.add(oTransaccionDTO.idTransaccion());
 				}
 			}
 			else {
 				oVenta.registrarPago(oPago.idMedioPago(), oPago.monto(), null);
 			}
 		}
-		return mapperVenta.aDTO(repositorioVenta.saveAndFlush(oVenta), cobrosPendientes);
+		// [It. 2.1 · D-22] Los cobros de este pedido que quedaron PENDIENTES, con su medio, monto, canal y enlace
+		List<CobroPendienteDTO> cobrosPendientes = idsPendientes.isEmpty() ? List.of()
+				: pagosApi.cobrosPendientes(idVenta).stream().filter(oCobro -> idsPendientes.contains(oCobro.idTransaccion())).toList();
+		return nombresVenta.conNombres(mapperVenta.aDTO(repositorioVenta.saveAndFlush(oVenta), cobrosPendientes));
 	}
 
 	public ResultadoConsulta consultarRuc(String ruc) {
@@ -256,11 +285,12 @@ public class ServicioVenta {
 		repositorioVenta.saveAndFlush(oVenta);
 		Comprobante oComprobante = oVenta.getComprobantes().getFirst();
 		servicioFacturacionElectronica.emitirComprobante(oComprobante.getIdComprobante());
-		return mapperVenta.aDTO(oVenta);
+		return nombresVenta.conNombres(mapperVenta.aDTO(oVenta));
 	}
 
 	public ProformaDTO armarProforma(ProformaDTO oProformaDTO) {
-		List<ProformaDTO.Item> items = oProformaDTO.items().stream().map(this::conPrecio).toList();
+		// [It. 2.1 · nombres] Cada ítem con su descripción («Servicio · Variante» o el paquete)
+		List<ProformaDTO.Item> items = nombresVenta.conDescripciones(oProformaDTO.items().stream().map(this::conPrecio).toList());
 		ProformaDTO conPrecios = new ProformaDTO(oProformaDTO.idCliente(), oProformaDTO.nombreCliente(), oProformaDTO.fechaValidez(), items, null);
 		return new ProformaDTO(oProformaDTO.idCliente(), oProformaDTO.nombreCliente(), oProformaDTO.fechaValidez(), items,
 				calculadoraVenta.calcularTotal(conPrecios));
@@ -308,7 +338,7 @@ public class ServicioVenta {
 		}
 		BigDecimal precioUnitario = catalogoApi.precioVigente(oItem.idVariante(), oItem.idPaquete(), oItem.idPromocion());
 		return new ProformaDTO.Item(oItem.tipoItem(), oItem.idVariante(), oItem.idPaquete(), oItem.idPromocion(), oItem.cantidad(), precioUnitario,
-				precioUnitario.multiply(BigDecimal.valueOf(oItem.cantidad())));
+				precioUnitario.multiply(BigDecimal.valueOf(oItem.cantidad())), null);
 	}
 
 	private Venta buscar(Long idVenta) {

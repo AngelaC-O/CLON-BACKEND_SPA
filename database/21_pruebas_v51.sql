@@ -9,7 +9,9 @@
 -- como recepcionista, especialista, almacén o Administradora, igual que el back-end.
 --
 --   0. Estructura v5.1 (tablas, triggers nuevos válidos)
---   1. Datos de la Iteración 2 (limpieza de 10 minutos, PARAMETRO, permisos, usuaria almacen)
+--   1. Datos de la Iteración 2 (PARAMETRO, permisos, usuaria almacen)
+-- [v5.2] (15/11/2026) Se corre después de 18_ajustes_v52.sql: las comprobaciones de la limpieza se retiraron
+--   (RN03) y la cuenta de claves foráneas acepta FK_TRANS_PAS_VENTA. Las reglas v5.2 se prueban en 22_pruebas_v52.sql.
 --   2. Consumo automático y consumo pendiente (RN17, RN53)
 --   3. Solicitud de anulación (RN32)
 --   4. Reapertura de la caja (RN30)
@@ -172,7 +174,8 @@ BEGIN
     SELECT COUNT(*) INTO v_n FROM user_tables;
     comprobar('57 tablas (55 de v5 + SOLICITUD_ANULACION + CONSUMO_PENDIENTE) -> ' || v_n, v_n = 57);
     SELECT COUNT(*) INTO v_n FROM user_constraints WHERE constraint_type = 'R' AND constraint_name NOT LIKE 'BIN$%';
-    comprobar('131 claves foráneas -> ' || v_n, v_n = 131);
+    SELECT COUNT(*) INTO v_n2 FROM user_constraints WHERE constraint_name = 'FK_TRANS_PAS_VENTA';   -- [v5.2] la agrega 18
+    comprobar('131 claves foráneas (132 con FK_TRANS_PAS_VENTA de v5.2) -> ' || v_n, v_n = 131 + v_n2);
     SELECT COUNT(*) INTO v_n FROM user_triggers
      WHERE trigger_name IN ('TRG_SOLICITUD_ANULACION_REGLAS', 'TRG_CONSUMO_PENDIENTE_REGLAS',
                             'TRG_AUD_SOLICITUD_ANULACION', 'TRG_AUD_CONSUMO_PENDIENTE') AND status = 'ENABLED';
@@ -181,17 +184,11 @@ BEGIN
     comprobar('Ningún objeto inválido', v_n = 0);
 
     -- -----------------------------------------------------------------
-    DBMS_OUTPUT.PUT_LINE('=== 1. Datos de la Iteración 2 (RN03, RN51, permisos) ===');
-    SELECT minutos_limpieza INTO v_n FROM RECURSO WHERE id_recurso = r1;
-    comprobar('Un recurso nuevo queda con 10 minutos de limpieza por defecto (RN03) -> ' || v_n, v_n = 10);
-    debe_fallar('Recurso con 30 minutos de limpieza (máximo 10, RN03)',
-        'INSERT INTO RECURSO (id_sede, nombre, tipo, minutos_limpieza) VALUES (' || v_sede || ', ''Sillón V51-2'', ''SILLON'', 30)', -2290);
-    SELECT COUNT(*) INTO v_n FROM RECURSO WHERE minutos_limpieza > 10;
-    comprobar('Ningún recurso tiene más de 10 minutos de limpieza', v_n = 0);
-    SELECT NVL(MAX(CASE WHEN codigo = 'AGENDA_PASO_MIN' THEN valor_numero END), -1),
-           NVL(MAX(CASE WHEN codigo = 'LIMPIEZA_MAX_MIN' THEN valor_numero END), -1)
-      INTO v_n, v_n2 FROM PARAMETRO;
-    comprobar('PARAMETRO AGENDA_PASO_MIN = 15 (RN51) y LIMPIEZA_MAX_MIN = 10 (RN03) -> ' || v_n || ' / ' || v_n2, v_n = 15 AND v_n2 = 10);
+    DBMS_OUTPUT.PUT_LINE('=== 1. Datos de la Iteración 2 (RN51, permisos) ===');
+    -- retirado en v5.2 (RN03): las comprobaciones de la limpieza (DEFAULT 10, el recurso con 30 minutos y
+    -- LIMPIEZA_MAX_MIN = 10). RECURSO ya no tiene minutos_limpieza ni PARAMETRO la fila LIMPIEZA_MAX_MIN (22_pruebas_v52.sql).
+    SELECT NVL(MAX(CASE WHEN codigo = 'AGENDA_PASO_MIN' THEN valor_numero END), -1) INTO v_n FROM PARAMETRO;
+    comprobar('PARAMETRO AGENDA_PASO_MIN = 15 (RN51) -> ' || v_n, v_n = 15);
     SELECT COUNT(*) INTO v_n FROM ROL_PERMISO rp JOIN PERMISO p ON p.id_permiso = rp.id_permiso
      WHERE rp.id_rol = v_rol_rec AND (p.modulo, p.accion) IN (('CATALOGO', 'VER'), ('VENTAS', 'ANULAR'));
     comprobar('RECEPCIONISTA tiene CATALOGO:VER y VENTAS:ANULAR', v_n = 2);

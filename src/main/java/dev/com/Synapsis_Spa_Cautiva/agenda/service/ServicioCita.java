@@ -33,6 +33,7 @@ import dev.com.Synapsis_Spa_Cautiva.pagos.api.EnlacePagoDTO;
 import dev.com.Synapsis_Spa_Cautiva.pagos.api.PagosApi;
 import dev.com.Synapsis_Spa_Cautiva.personal.api.EspecialistaHorario;
 import dev.com.Synapsis_Spa_Cautiva.personal.api.PersonalApi;
+import dev.com.Synapsis_Spa_Cautiva.sedes.api.DatosRecurso;
 import dev.com.Synapsis_Spa_Cautiva.sedes.api.RecursoApi;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.PersonaApi;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.PersonaDTO;
@@ -72,6 +73,9 @@ public class ServicioCita {
 
 	private final MapperCita mapperCita;
 
+	/** [It. 2.1 · nombres] Clienta, especialista, servicio y recurso de cada cita y nombre del recurso de cada franja, en lote. */
+	private final NombresAgenda nombresAgenda;
+
 	@Transactional(readOnly = true)
 	public List<HoraLibre> consultarDisponibilidad(Long idVariante, Long idSede, LocalDate fecha) {
 		return gestorDisponibilidadAgenda.calcularHorasLibres(idVariante, idSede, fecha);
@@ -93,12 +97,12 @@ public class ServicioCita {
 				oCitaDTO.fechaHoraInicio(), oCitaDTO.duracionMin(), usuarioActual.idUsuario());
 		repositorioCita.save(oCita);
 		if (oCitaDTO.idEspera() == null) {
-			return mapperCita.aDTO(oCita);
+			return conNombres(mapperCita.aDTO(oCita));
 		}
 		ListaEspera oListaEspera = buscarEspera(oCitaDTO.idEspera());
 		oListaEspera.asignarCita(oCita.getIdCita());
 		repositorioListaEspera.save(oListaEspera);
-		return mapperCita.aDTO(oCita, oListaEspera.getIdEspera());
+		return conNombres(mapperCita.aDTO(oCita, oListaEspera.getIdEspera()));
 	}
 
 	/**
@@ -113,7 +117,7 @@ public class ServicioCita {
 				oCita.getDuracionMin(), idCita);
 		Cita oCitaNueva = oCita.reprogramar(oReprogramacionDTO.fechaHoraInicio(), oReprogramacionDTO.idPersonal(), oReprogramacionDTO.idRecurso());
 		repositorioCita.saveAndFlush(oCita);
-		return mapperCita.aDTO(repositorioCita.save(oCitaNueva));
+		return conNombres(mapperCita.aDTO(repositorioCita.save(oCitaNueva)));
 	}
 
 	/**
@@ -131,7 +135,7 @@ public class ServicioCita {
 			oCliente.abonarSaldo(oCita.getAdelantoMonto(), idCita, motivoSaldo(idCita, oCita.getMotivoCancelacion()));
 			repositorioCliente.save(oCliente);
 		}
-		return mapperCita.aDTO(oCita);
+		return conNombres(mapperCita.aDTO(oCita));
 	}
 
 	/** [It. 2 · CUS06, RF09] Las esperas PENDIENTES del día con el nombre de la clienta (PersonaApi) y del servicio (CatalogoApi). */
@@ -173,7 +177,7 @@ public class ServicioCita {
 		Long idCaja = cajaAbiertaProvider.obtenerCajaAbierta(usuarioActual.idSede());
 		Cita oCita = buscarCita(idCita);
 		oCita.registrarAdelanto(adelantoMonto, idMedioPago, LocalDateTime.now(), idCaja);
-		return mapperCita.aDTO(repositorioCita.saveAndFlush(oCita));
+		return conNombres(mapperCita.aDTO(repositorioCita.saveAndFlush(oCita)));
 	}
 
 	/** Aquí la cita no cambia: el adelanto queda registrado cuando la pasarela confirma (RN04). */
@@ -217,11 +221,30 @@ public class ServicioCita {
 		Map<Long, DatosVariante> variantes = catalogoApi.obtenerVariantes(agenda.stream().map(FranjaAgendaDTO::idVariante).filter(Objects::nonNull).toList())
 			.stream()
 			.collect(Collectors.toMap(DatosVariante::idVariante, Function.identity()));
+		// [It. 2.1 · nombres] El nombre del recurso de cada franja: una sola llamada con los recursos de la sede
+		Map<Long, String> recursos = recursoApi.listarRecursos(idSede).stream().collect(Collectors.toMap(DatosRecurso::idRecurso, DatosRecurso::nombre));
 		return agenda.stream()
 			.map(oFranja -> oFranja.conNombres(
 					oFranja.idCliente() == null ? oFranja.nombreCliente() : nombreDe(personas.get(oFranja.idCliente())),
 					oFranja.idPersonal() == null ? null : nombreDe(personas.get(oFranja.idPersonal())),
-					oFranja.idVariante() == null || !variantes.containsKey(oFranja.idVariante()) ? null : variantes.get(oFranja.idVariante()).nombre()))
+					oFranja.idVariante() == null || !variantes.containsKey(oFranja.idVariante()) ? null : variantes.get(oFranja.idVariante()).nombre(),
+					oFranja.idRecurso() == null ? null : recursos.get(oFranja.idRecurso())))
+			.toList();
+	}
+
+	/** [It. 2.1 · nombres] La cita de la respuesta con clienta, especialista, «Servicio · Variante» y recurso. */
+	private CitaDTO conNombres(CitaDTO oCitaDTO) {
+		return conNombres(List.of(oCitaDTO)).getFirst();
+	}
+
+	/** [It. 2.1 · nombres] Las citas de una respuesta (también las pendientes de la ficha, CUS03), con una búsqueda por tipo de nombre. */
+	List<CitaDTO> conNombres(List<CitaDTO> citas) {
+		NombresAgenda.Nombres nombres = nombresAgenda.buscar(
+				citas.stream().flatMap(oCitaDTO -> Stream.of(oCitaDTO.idCliente(), oCitaDTO.idPersonal())).toList(),
+				citas.stream().map(CitaDTO::idVariante).toList(), citas.stream().map(CitaDTO::idRecurso).toList(), List.of(), List.of());
+		return citas.stream()
+			.map(oCitaDTO -> oCitaDTO.conNombres(nombres.persona(oCitaDTO.idCliente()), nombres.persona(oCitaDTO.idPersonal()),
+					nombres.servicio(oCitaDTO.idVariante()), nombres.recurso(oCitaDTO.idRecurso())))
 			.toList();
 	}
 

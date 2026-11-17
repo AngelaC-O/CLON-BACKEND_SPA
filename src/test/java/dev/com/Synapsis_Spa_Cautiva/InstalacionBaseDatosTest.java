@@ -20,14 +20,18 @@ class InstalacionBaseDatosTest extends OracleTestcontainer {
 	private JdbcTemplate jdbcTemplate;
 
 	@Test
-	void instalaLas57TablasDelModeloV51SinObjetosInvalidos() throws SQLException {
+	void instalaLas57TablasDelModeloV52SinObjetosInvalidos() throws SQLException {
 		try (Connection dueno = DriverManager.getConnection(ORACLE.getJdbcUrl(), DUENO, CLAVE_DUENO);
 				Statement sentencia = dueno.createStatement()) {
 			assertThat(contar(sentencia, "SELECT COUNT(*) FROM user_tables")).isEqualTo(57);
 			assertThat(contar(sentencia,
 					"SELECT COUNT(*) FROM user_constraints WHERE constraint_type = 'R' AND constraint_name NOT LIKE 'BIN$%'"))
-				.isEqualTo(131);
+				.isEqualTo(132);
 			assertThat(contar(sentencia, "SELECT COUNT(*) FROM user_objects WHERE status = 'INVALID'")).isZero();
+			// [It. 2.1 · v5.2] RECURSO sin tiempo de limpieza (RN03) y TRANSACCION_PASARELA con id_venta (FK_TRANS_PAS_VENTA, la FK 132)
+			assertThat(contar(sentencia,
+					"SELECT COUNT(*) FROM user_tab_columns WHERE table_name = 'RECURSO' AND column_name = 'MINUTOS_LIMPIEZA'")).isZero();
+			assertThat(contar(sentencia, "SELECT COUNT(*) FROM user_constraints WHERE constraint_name = 'FK_TRANS_PAS_VENTA'")).isEqualTo(1);
 		}
 	}
 

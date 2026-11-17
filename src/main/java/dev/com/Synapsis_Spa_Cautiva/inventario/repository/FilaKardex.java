@@ -33,4 +33,10 @@ public interface FilaKardex {
 
 	Long getIdAtencion();
 
+	/** [It. 2.1] V_KARDEX v5.2: serie-número del comprobante de la venta. */
+	String getComprobante();
+
+	/** [It. 2.1] V_KARDEX v5.2: COMPRA.documento. */
+	String getDocumentoCompra();
+
 }

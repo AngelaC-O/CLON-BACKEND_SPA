@@ -1,5 +1,6 @@
 package dev.com.Synapsis_Spa_Cautiva.catalogo.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,6 +26,10 @@ public interface RepositorioServicio extends JpaRepository<Servicio, Long> {
 
 	@Query("select s from Servicio s join s.variantes v where v.idVariante = :idVariante")
 	Optional<Servicio> findByVariante(@Param("idVariante") Long idVariante);
+
+	/** [It. 2.1 · nombres] Los servicios de varias variantes, en una consulta (CatalogoApi.obtenerVariantes). */
+	@Query("select distinct s from Servicio s join s.variantes v where v.idVariante in :idsVariante")
+	List<Servicio> findByVariantes(@Param("idsVariante") Collection<Long> idsVariante);
 
 	@Query("select v from VarianteServicio v where v.idVariante = :idVariante")
 	Optional<VarianteServicio> findVariante(@Param("idVariante") Long idVariante);

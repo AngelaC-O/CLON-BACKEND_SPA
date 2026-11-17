@@ -1,6 +1,8 @@
 -- =============================================================================
 -- Cautiva Spa E.I.R.L. · BackOffice web · Base de datos Oracle 19c · VERSIÓN 5
 -- Elimina las 55 tablas, 27 vistas, 5 paquetes y 2 funciones del esquema v5 (para reinstalar desde cero)
+-- [v5.2] (15/11/2026, D-17) y las 2 tablas de v5.1, SOLICITUD_ANULACION y CONSUMO_PENDIENTE, antes que sus tablas padre:
+-- 57 tablas en total.
 -- Rediseño del 26/10/2026 por la observación del docente: jerarquías de herencia
 -- (PERSONA y COMPROBANTE) y retiro de las tablas que no sostenían un requerimiento.
 -- Tipos, tamaños, nulabilidad, DEFAULT y CHECK: los del Diccionario de Datos v4,
@@ -76,6 +78,11 @@ BEGIN EXECUTE IMMEDIATE 'DROP PACKAGE PKG_INVENTARIO'; EXCEPTION WHEN OTHERS THE
 BEGIN EXECUTE IMMEDIATE 'DROP PACKAGE PKG_AGENDA'; EXCEPTION WHEN OTHERS THEN IF SQLCODE <> -4043 THEN RAISE; END IF; END;
 /
 BEGIN EXECUTE IMMEDIATE 'DROP PACKAGE PKG_SESION'; EXCEPTION WHEN OTHERS THEN IF SQLCODE <> -4043 THEN RAISE; END IF; END;
+/
+-- [v5.2] Tablas de v5.1 (17_datos_iteracion2.sql), antes que VENTA, NOTA_CREDITO, ATENCION, PRODUCTO y MOVIMIENTO_KARDEX
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE SOLICITUD_ANULACION CASCADE CONSTRAINTS PURGE'; EXCEPTION WHEN OTHERS THEN IF SQLCODE <> -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE CONSUMO_PENDIENTE CASCADE CONSTRAINTS PURGE'; EXCEPTION WHEN OTHERS THEN IF SQLCODE <> -942 THEN RAISE; END IF; END;
 /
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE COMPRA_DETALLE CASCADE CONSTRAINTS PURGE'; EXCEPTION WHEN OTHERS THEN IF SQLCODE <> -942 THEN RAISE; END IF; END;
 /

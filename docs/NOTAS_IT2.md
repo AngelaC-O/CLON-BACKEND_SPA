@@ -412,3 +412,197 @@ Cruce del 09/11/2026 de los diagramas de clases del diseño de las 39 páginas C
 
 Entidades del diagrama sin métodos dibujados (solo atributos): RecomendacionProducto, PaqueteServicio y PromocionServicio (los crean Atencion.recomendarProducto, Paquete.incluirServicio y Promocion.aplicarAServicio), ConciliacionItem (lo crea Conciliacion.generarItems), InventarioSede y MovimientoKardex (los crea Producto), CajaArqueo, VentaDetalle, VentaPago, Comprobante, SaldoFavorMov, ServicioInsumo, VarianteServicio, RolPermiso, PersonalArea, Permiso, Persona, Personal y Sede. El constructor de la DEVOLUCION de TransaccionPasarela (CUS24) es una sobrecarga nueva de 8 parámetros: la tabla lo cuenta como existente porque ya había un constructor con ese nombre. Métodos y consultas que no están en el diagrama: DF-69, DF-73, DF-74 y DF-77.
 
+## Iteración 2.1 (ajustes, desde el 15/11/2026)
+
+La Iteración 2 está cerrada (v0.2.0-it2). La 2.1 no tiene CUS nuevos: manda `docs/Iteracion_2_1_Cautiva_Spa.drawio` en sus 21 páginas «modificado It. 2.1» y en «02 Nombres en las respuestas · It. 2.1», y el diccionario v5.2 (hoja «Cambios v5.2», 22 cambios). La numeración sigue: D-39 y DF-144 en adelante.
+
+### Dudas
+
+Nuevas (15/11/2026):
+
+- **D-39. `docs/openapi.yaml` vuelve a quedar desactualizado.** Sin `minutosLimpieza` (`RecursoDTO`) ni `finServicio` (`FranjaAgendaDTO`), y con los ejemplos nuevos de `openapi/contrato.yaml`, la salida de springdoc ya no es igual a `docs/openapi.yaml`, y `ContratoOpenApiTest.docsOpenapiEsLaSalidaDelCodigo` falla (ver «Verificación de la Iteración 2.1»). `docs/` sigue cerrado salvo este archivo, así que no se volvió a exportar. Se exporta con `./mvnw test -Dtest=ContratoOpenApiTest -Dcautiva.openapi.exportar=true`. ¿Se autoriza, como en B15 (D-24)?
+- **D-40. Código HTTP de `-20107`.** `ApiExceptionHandler` lo traduce con la regla por defecto: 422 con la regla `RN42` que trae el mensaje. Java todavía no guarda `id_venta` en la transacción (B17), así que hoy no se puede dar. ¿Es 422 (dato inválido) o 409 (la transacción ya es de otra venta)?
+
+Nuevas (16/11/2026, B17):
+
+- **D-39 (sigue abierta).** B17 vuelve a cambiar el contrato (`CobroPendienteDTO` con medio, monto, canal, estado y vencimiento), así que `docs/openapi.yaml` sigue sin ser la salida de springdoc y `docsOpenapiEsLaSalidaDelCodigo` sigue en rojo.
+- **D-41. La fecha de apertura de una caja cerrada se puede cambiar.** `TRG_CAJA_REGLAS` (17 y 18) revisa, con la caja CERRADA, el monto inicial, el cierre y la reapertura, pero no `fecha_apertura`: cualquier sesión que actualice CAJA podría mover la caja de ayer a hoy y saltarse D-16. Java nunca la cambia (la prueba de D-16 la mueve como dueño, en mantenimiento, para tener una caja de ayer). ¿Se agrega `fecha_apertura` a los datos que no cambian en la próxima migración?
+
+Nuevas (16/11/2026, B18 · nombres en las respuestas):
+
+- **D-39 (sigue abierta).** B18 vuelve a cambiar el contrato (nombres en muchos DTO y `ItemConciliacion`): `docs/openapi.yaml` sigue sin ser la salida de springdoc.
+- **D-42. `FranjaAgendaDTO.nombreServicio` sin la variante.** La página pide «Servicio · Variante» en los DTO de agenda, pero en `FranjaAgendaDTO` solo agrega `nombreRecurso`, y su `nombreServicio` existe desde la Iteración 2 con el nombre del servicio (`AgendaFlujoTest` espera «Corte de Cabello Caballero»). Para no cambiar ese valor esperado se dejó igual. ¿Se unifica con «Servicio · Variante» (cambiando esa prueba)?
+
+Siguen abiertas, con su destino:
+
+- **D-05, D-32, D-34 y DF-49** → Izipay real, cuando la dueña consiga las claves TEST (código de operación del enlace, `uuid` del reembolso, formato del reporte de liquidación y columnas que se importan).
+- **D-09** (almuerzo de la especialista) → Iteración 3.
+- **DF-52** (importe del comprobante con adelanto) → la contadora.
+- **D-19 y D-35** (reglas de la conciliación y conciliación por empresa o por sede) → la dueña y la contadora.
+- **D-26, D-27, D-28, D-29, D-30 y D-36** (sede del consumo automático, espera de otra clienta, saldo en la respuesta de CUS10, estado de la atención en CUS12, insumos que dejan de usarse y restablecer una cuenta INACTIVA) → planificación de la Iteración 3.
+
+### Diferencias encontradas
+
+Migración 18 (v5.1 → v5.2):
+
+- **DF-144. Posición de `TRANSACCION_PASARELA.id_venta`.** El diccionario la pone como columna 7 (después de `id_cita`), pero `ALTER TABLE ADD` la deja al final (columna 20): Oracle no reordena columnas. No cambia nada para JPA ni para las vistas. `TRG_AUD_TRANSACCION_PASARELA` sigue el orden del diccionario (con el molde de 10, que usa el orden del diccionario).
+- **DF-145. `IX_TRANS_PAS_VENTA` no está en la hoja Restricciones.** El cambio 4 de «Cambios v5.2» y la tarea lo piden; la hoja Restricciones solo lista `FK_TRANS_PAS_VENTA` y `CK_TRANS_PAS_VENTA`. Se creó (como los demás índices de FK): 106 índices IX_.
+- **DF-146. Comentarios.** El cambio 22 nombra el comentario de `IX_CITA_AGENDA_RECURSO`, pero Oracle no guarda comentarios de índices: es solo el texto del diccionario y 18 no hace nada. Además de RECURSO, PARAMETRO y `CITA.fecha_hora_fin`, 18 pone el comentario nuevo de la tabla CITA (cambio 5) y el de `TRANSACCION_PASARELA.id_cita` (marcado «v5.2 cambió» en el diccionario), con los textos del diccionario. Las vistas cambiadas llevan su `COMMENT ON TABLE` ajustado (sin «limpieza» y con las columnas nuevas).
+- **DF-147. `V_KARDEX.comprobante`.** En Oracle `NULL || '-' || NULL` da `'-'`, no nulo: la primera versión de la vista ponía «-» en las entradas y los ajustes, y 22 lo detectó. Queda `CASE WHEN cp.id_comprobante IS NOT NULL THEN cp.serie || '-' || cp.numero END`, nulo cuando el movimiento no viene de una venta (lo pide el cambio 20).
+- **DF-148. `TRG_NOTA_CREDITO_REGLAS` lee la solicitud con `MAX`.** El trigger de 09 tiene un `WHEN NO_DATA_FOUND` que responde -20094 («primero registre el comprobante NC_*»); un `SELECT ... INTO` sin fila de SOLICITUD_ANULACION caería ahí. Con `MAX` la falta de solicitud es nula y se usa el usuario de la sesión, como antes.
+- **DF-149. 18 y 19 se detienen con `-20099`.** Un `CREATE OR REPLACE` con errores de compilación no es un SQLERROR para SQL*Plus; 18 revisa `user_errors` de sus 9 objetos y se detiene con `-20099` (como 15, un error del script, no una regla). 19 usa el mismo código si falta un usuario de 15 o 17. No es un código de regla nuevo.
+- **DF-150. 21 con 18 instalado.** Además de las comprobaciones de la limpieza de la sección 1 (retiradas con el comentario «retirado en v5.2 (RN03)»), la sección 0 contaba 131 FK: ahora acepta 131 más `FK_TRANS_PAS_VENTA` si existe; sin eso, 21 daba 1 FALLO después de 18. 21 pasa de 58 a 55 casos (salen 4 comprobaciones de la limpieza y entra la de AGENDA_PASO_MIN sola).
+- **DF-151. Casos de 20 en v5.2.** Los cinco casos de la sección 3 que dependían de la limpieza se marcaron [v5.2]: el fin es 10:30 (antes 11:00); la misma especialista a las 10:30 en otro sillón y el mismo sillón a las 10:30 con otra especialista **sí** se agendan (dentro de un SAVEPOINT, para no cambiar los casos que siguen); la misma especialista en el mismo sillón se agenda a las 10:30 (antes a las 11:00), y la atención de 60 minutos de la cita de las 10:00 choca con esa cita de las 10:30 (RN41, `-20010`). Sigue habiendo 144 casos.
+- **DF-152. Recalculo de CITA y llenado de `id_venta`.** En la base del contenedor limpio no hay citas ni cobros, así que 18 informa 0 y 0. Se probó aparte con datos v5.1 (una cita de 10:00 con 30 minutos cuyo fin era 10:40, un cobro APROBADO con su VENTA_PAGO y un cobro PENDIENTE sin venta): 18 llenó 1 cobro, informó 1 cobro PENDIENTE sin venta y dejó la cita en 10:30.
+
+Código Java (páginas «modificado It. 2.1» de CUS05, CUS08, CUS11, CUS61 y CUS65):
+
+- **DF-153. `ServicioRecurso` ya no inyecta `ParametroApi`.** El diagrama de CUS61 It. 2.1 no lo tiene: `registrarRecurso` crea `new Recurso(idSede, nombre, tipo)` y lo guarda. `Recurso`, `RecursoDTO` y `DatosRecurso` pierden `minutosLimpieza` (y `Recurso` su validación de 0 a 10).
+- **DF-154. `POST /recursos` con `minutosLimpieza`.** Jackson en Spring Boot no falla por propiedades desconocidas (`FAIL_ON_UNKNOWN_PROPERTIES` en falso por defecto) y el proyecto no lo cambió (`application.yaml` solo fija la zona horaria): el campo se ignora y el recurso se registra (201). Lo prueba `SeguridadCatalogoFlujoTest.cus61ListaLosRecursosDeLaSedeSinTiempoDeLimpieza`.
+- **DF-155. `Parametro.cambiarValor` y CUS65.** Solo valida el rango de AGENDA_PASO_MIN (RN51). `PATCH /parametros/LIMPIEZA_MAX_MIN` es 404 (RF87) porque 18 borró la fila, como cualquier código que no existe.
+- **DF-156. `ApiExceptionHandler`.** No tenía un mensaje para `CK_RECURSO_MINUTOS_LIMPIEZA` (la tarea pedía quitarlo): no hubo nada que quitar. `-20107` cae en la regla general (D-40).
+- **DF-157. Agenda con un solo fin.** `FranjaAgendaDTO` deja `finServicio` (el front-end se ajusta en F12) y `FilaBloqueAgenda` deja `getFinServicio`. `RepositorioCita.findBloques` lee `NVL(f.hora_fin, b.fin)`: la columna `fin` de V_AGENDA_BLOQUES o, si la atención de la cita ya terminó, su `hora_fin`. `GestorDisponibilidadAgenda` usa ese fin para la especialista y para el recurso en las horas libres, la agenda y `validarSinCruce` (con `Cita.fechaHoraFin`, que ahora es inicio + duración, y `hora_fin` de la atención si terminó), igual que `PKG_AGENDA.validar_cruce`. El mensaje del 409 del recurso ya no dice «(incluye su limpieza)». El método privado `finServicio(Atencion)` pasó a `finDeAtencion`.
+- **DF-158. `TransaccionPasarela` sin `id_venta`.** La entidad no mapea la columna nueva (lo hace B17); con `ddl-auto=validate` una columna de más no falla.
+- **DF-159. Prueba nueva fuera del diagrama.** `AgendaSinLimpiezaFlujoTest` (sede propia de `VentasFlujoApoyo` más una segunda especialista de Peluquería que crea el dueño) prueba que la especialista y el recurso quedan libres a la hora de fin y que una atención que termina antes libera desde `hora_fin` en Java (venta rápida, `validarSinCruce`) y en Oracle (sin `-20011`). `MigracionV52Test` corre 22.
+
+Valores esperados de las pruebas Java que cambian con v5.2:
+
+| Prueba | Antes (v5.1) | Ahora (v5.2) | Por qué |
+| --- | --- | --- | --- |
+| `AgendaFlujoTest` (disponibilidad tras la cita de 09:00) | 09:30 sin el sillón 0 | 09:30 con el sillón 0 | El sillón queda libre a las 09:30, no a las 09:40 |
+| `AgendaFlujoTest.rn03…` | sillón libre desde 10:40 | especialista y sillón libres desde 10:30; además se agenda a las 10:30 | Sin limpieza |
+| `AgendaFlujoTest.cus05AgendaYOracleCalculaElFin…` | `fechaHoraFin` 10:40 | 10:30 | `TRG_CITA_REGLAS`: inicio + duración |
+| `AgendaFlujoTest.cus05ElCruce…` | recurso choca a las 10:35; libre a las 10:40 | recurso choca a las 10:15; libre a las 10:30 | A las 10:35 el sillón ya está libre |
+| `AgendaFlujoTest.cus08…` | `fin` 10:40, `finServicio` 10:30, franja libre del sillón desde 10:40 | `fin` 10:30, sin `finServicio`, franja libre del sillón desde 10:30 | Un solo fin |
+| `AgendaFlujoTest` (CUS11, 45 min declarados) | fin de la cita 10:55 | 10:45 | 10:00 + 45, sin los 10 de limpieza |
+| `MapeoEntidadesTest.oracleCalculaElFinDeLaCitaSinLimpieza` | 10:40 y 10:50 (con 40 min) | 10:30 y 10:40 | Sin limpieza |
+| `CajaConfiguracionFlujoTest.cus65…` | `LIMPIEZA_MAX_MIN` = 15 es 422 (RN03) | `LIMPIEZA_MAX_MIN` es 404 (RF87); el rango, el 403 y la auditoría se prueban con AGENDA_PASO_MIN | 18 borró la fila |
+| `SeguridadCatalogoFlujoTest.cus61…` | 15 minutos de limpieza es 422; 11 es 422 | `minutosLimpieza` se ignora (201); el caso de 11 se retiró; el listado no trae `minutosLimpieza` | Sin limpieza (DF-154) |
+| `MapeoIteracion2Test` | `new Recurso(…, 30)` lanzaba RN03 | `new Recurso(idSede, nombre, tipo)` nace DISPONIBLE | No hay regla de limpieza |
+| `InventarioFlujoTest`, `VentasFlujoApoyo` | recursos con `minutosLimpieza` 0 | recursos sin la columna | La columna ya no existe |
+| `InstalacionBaseDatosTest` | 131 FK | 132 FK y RECURSO sin `minutos_limpieza` | `FK_TRANS_PAS_VENTA` |
+
+Lado Java de D-22, D-37, D-21, D-16 y D-15 (16/11/2026, B17; páginas «modificado It. 2.1» de CUS13, CUS18, CUS23, CUS26, CUS46 y CUS48). La tarea pedía numerar «desde DF-144», pero DF-144 a DF-159 ya los usó B16: se sigue en DF-160.
+
+- **DF-160. Métodos que no están en el diagrama.** `TransaccionPasarela.registrarVenta(idVenta)` (solo un COBRO nuevo sin cita; así no choca con el constructor de la devolución, que tiene los mismos tipos) y `RepositorioTransaccionPasarela.findPendientesDeVenta(idVenta)` (los COBRO PENDIENTES de la venta, por `IX_TRANS_PAS_VENTA`). `PagosApi.cobrosPendientes(idVenta)` sí está en la secuencia y en la clase de CUS18. La entidad mapea `id_venta` con `updatable = false`.
+- **DF-161. `CobroPendienteDTO` pasa a `pagos.api`.** El diagrama dice que `cobrosPendientes` devuelve `List`, sin el tipo. El DTO estaba en `ventas.controller` con `idTransaccion` y `enlacePago`; ahora lo arma `PagosApi` y lo usa `ventas`: `CobroPendienteDTO(idTransaccion, idMedioPago, monto, canal, estado, enlacePago, fechaExpiracion)`. `canal` y `estado` son texto, como en `TransaccionDTO`. El JSON de `VentaDTO.cobrosPendientes` solo crece.
+- **DF-162. CUS13 y CUS26 confirman la venta antes de cobrar (decisión del 16/11/2026).** `PagosApi.cobrar` guarda la transacción en su propia transacción (REQUIRES_NEW, RN52), y con `id_venta` Oracle busca la venta ABIERTA y de la misma sede desde esa otra transacción (`TRG_TRANS_PAS_REGLAS`, y la FK esperaría a la transacción de afuera). En CUS18 la venta ya existe; en CUS13 y CUS26 se creaba en la misma operación y no se veía. Con un medio de la pasarela, `ServicioVentaRapida.registrarYCobrar` y `ServicioVenta.venderProductos` (ya sin `@Transactional`, con `TransactionTemplate`) guardan y confirman primero la atención y la venta (revisando RN11 y, en CUS26, el stock y la caja); después cobran, y si la pasarela aprueba registran el pago y cierran en otra transacción. Si la pasarela rechaza, la venta queda ABIERTA sin pago y la respuesta es 422 (antes se deshacía todo): se retoma o se descarta en CUS18. En efectivo no cambia nada: todo en una transacción. Los diagramas de CUS13 y CUS26 dibujan una sola operación.
+- **DF-163. Los cobros PENDIENTES en el 202 y en el GET.** `GET /ventas/{idVenta}` trae todos los cobros PENDIENTES de la venta (`PagosApi.cobrosPendientes`), también los iniciados en otro equipo. El 202 de `POST /ventas/{idVenta}/pagos` trae solo los de ese pedido (filtrados de la misma lista), para que un cobro viejo no convierta un pago en efectivo en un 202. Un cobro que la pasarela aprueba deja de estar PENDIENTE y desaparece de la lista; el pago se registra con su `idTransaccion` (RN42).
+- **DF-164. `ApiExceptionHandler`.** `-20072` (cobro de una venta CERRADA o de otra sede, o cambiar `id_venta`) y `-20107` (pago con la transacción de otra venta) quedan nombrados y responden 422 con el mensaje de Oracle (la regla es la RN que trae el mensaje: RN52 o RN42); `CK_TRANS_PAS_VENTA` responde 422 con su mensaje. Cierra D-40.
+- **DF-165. Reportes por id (D-37).** `RepositorioReporte` une V_VENTA_LINEA con V_MARGEN_PRODUCTO por `id_producto` y con V_COSTO_SERVICIO por `id_variante` (columnas nuevas de v5.2). Reemplaza la unión por nombre de DF-133. El grupo del reporte de productos sigue siendo «código - nombre», así que dos productos con el mismo nombre salen en filas separadas.
+- **DF-166. Pruebas.** El webhook que aprueba un cobro PENDIENTE se simula con un UPDATE del dueño (la pasarela de `PasarelaYFacturacionFlujoTest` es un mock y el webhook firmado ya lo prueba `CajaVentasFlujoTest`). La caja de ayer se arma cerrando una caja de hoy y moviendo su `fecha_apertura` como dueño (D-41); el `-20060` se fuerza con `PKG_SESION.iniciar` de la Administradora en una conexión del dueño. D-21 y D-15 se comprueban en las pruebas de CUS23 y CUS46 que ya existían.
+
+Nombres en las respuestas (16/11/2026, B18; página «02 Nombres en las respuestas · It. 2.1»). Ningún DTO pierde campos: los nombres se agregan al final y, en las peticiones, se ignoran.
+
+- **DF-167. Las cuatro interfaces de la página.** `InventarioApi.obtenerProductos(ids)` → `DatosProducto(idProducto, nombre, unidad)` (nuevo, `inventario.api`); `CatalogoApi.obtenerPaquetes(ids)` → `DatosPaquete(idPaquete, nombre, tipo)` (nuevo, `catalogo.api`); `UsuarioApi.nombresUsuarios(ids)` → `Map<idUsuario, «nombres apellidos»>` (nuevo, `seguridad.api`, lo implementa `ServicioUsuario` con una consulta de usuarios y una de personas); `SedeApi.obtenerSede(idSede)` → `DatosSede(idSede, nombre)` (nuevo, `sedes.api`, lo implementa `ServicioRecurso`, que ya leía SEDE). Todas reciben la lista de ids y hacen una consulta; los ids que no existen no vienen. Ninguna crea un ciclo (caja → seguridad y seguridad → sedes son dependencias nuevas que no vuelven), así que no hizo falta un SPI en `comun.api`: `ModularidadTest` en verde.
+- **DF-168. `DatosVariante` y `obtenerVariantes`.** `DatosVariante.nombre` es el nombre del SERVICIO (así lo usaban la agenda y la lista de espera); se agregó `nombreVariante` al final y el método `nombreServicio()` que da «Servicio · Variante». `CatalogoApi.obtenerVariantes` hacía una consulta por variante: ahora es una sola (`RepositorioServicio.findByVariantes`, no está en el diagrama) y las variantes que no existen no vienen (antes respondía 404).
+- **DF-169. `ItemConciliacion` (Duda 22 del front-end).** El contrato no se arregla en `contrato.yaml`: los esquemas los genera springdoc con el nombre simple de la clase, y `ConciliacionDTO.Item` y `ProformaDTO.Item` se llamaban igual, así que `ConciliacionDTO.items` apuntaba al ítem de la proforma. Se renombró el record anidado a `ConciliacionDTO.ItemConciliacion` (y `MapperConciliacion`); el JSON no cambia.
+- **DF-170. Interfaces que no están en la lista de la página.** `PagosApi.nombresMediosPago(ids)` (la página dice «PagosApi (medios de pago)» para `PagoVentaDTO.nombreMedioPago`) y `AtencionApi.obtenerAtenciones(ids)` (la página dice «AtencionApi» para la descripción de las líneas de servicio de la venta): las atenciones de la venta con sus nombres, en lote y sin revisar su estado. `AtencionCobrable` suma `nombreCliente` (o el de paso), `nombreServicio` y `nombreEspecialista`.
+- **DF-171. `NombresAgenda` y `NombresVenta`.** Dos componentes (`agenda.service`, `ventas.service`) que no están en los diagramas: la página dice que los mensajes que buscan los nombres no se dibujan en cada CUS. Juntan los ids de toda la respuesta y hacen una llamada por tipo de nombre (personas, «Servicio · Variante», recursos, productos, paquetes, medios, usuarios). En caja y seguridad la búsqueda va en el propio servicio (`ServicioCaja.conNombres`, `ServicioUsuario.conNombres`). Cada DTO tiene su método `conNombres(...)` y los mappers ignoran los campos nuevos.
+- **DF-172. Recursos de otra sede.** La página dice `RecursoApi.listarRecursos` (los de una sede). `NombresAgenda` lista los de la sede de la sesión y, si falta alguno (no debería: las citas y atenciones de la respuesta son de esa sede), lo busca aparte con `obtenerRecurso`.
+- **DF-173. Dónde se ponen los nombres.** Agenda: `ServicioCita` (todas las respuestas con `CitaDTO` y el `nombreRecurso` de la agenda, con una sola llamada a `listarRecursos`), `ServicioAtencion` (Mi agenda, iniciar, en curso, finalizar, recomendación y cobrables), `ServicioCliente` (toda la ficha con una búsqueda por tipo) y `GestorDisponibilidadAgenda` (`HoraLibre.especialistas` con una búsqueda de personas; `recursos` sale de los `DatosRecurso` que ya tenía). Ventas: todas las respuestas de `ServicioVenta` con `VentaDTO` (también `ventasAbiertas` de por cobrar), la proforma y las tres respuestas de `ServicioAnulacion`. Caja: las siete respuestas de `ServicioCaja`. Seguridad: la sesión y las cuatro respuestas de usuarios.
+- **DF-174. Formatos.** El nombre de una persona es «nombres apellidos» (sin apellidos, solo los nombres). La descripción de una línea de venta es «Servicio · Variante» (servicio), el nombre del producto o el del paquete. `PaqueteDTO` y `PromocionDTO` suman `servicios [{idServicio, nombre}]`; la petición sigue con `idsServicio`. `HoraLibre` suma `especialistas [{idPersonal, nombre}]` y `recursos [{idRecurso, nombre}]` y conserva `idsPersonal` e `idsRecurso`.
+- **DF-175. CPE (D-33).** Solo cambia la línea de producto, que lleva el nombre del producto (una consulta para todas las líneas). La de servicio sigue con el nombre del servicio y la de paquete con «PAQUETE», como antes: la tarea solo pedía el producto.
+- **DF-176. Pruebas.** Las de nombres se agregaron a las clases que ya arman cada flujo, comparando con la base: `AgendaFlujoTest.nombresEnHorasLibresCitaAgendaMiAgendaAtencionRecomendacionYFicha` (PERSONA, SERVICIO y VARIANTE, RECURSO, PRODUCTO; también `AtencionCobrable`), `AnulacionVentasFlujoTest.nombresEnVentaDetallePagoPorCobrarProformaKardexYSolicitud` (PERSONA, MEDIO_PAGO, PRODUCTO, servicio, comprobante del kardex y USUARIO de la solicitud), `SeguridadCatalogoFlujoTest.nombresEnLaSesionYEnLaListaDeUsuarios` (SEDE, PERSONA y ROL), las de CUS59 y CUS60 de `ClientasCitasCatalogoFlujoTest` (SERVICIO y PAQUETE de la ficha), la de CUS46 de `CajaConfiguracionFlujoTest` (USUARIO de apertura, cierre, revisión y reapertura) e `IntegracionesRealesFlujoTest.elCpeDeUnProductoLlevaSuNombre` (WireMock recibe el nombre en `details[0].descripcion`). Ninguna prueba anterior cambió sus valores esperados: solo se agregaron los nombres.
+
+### Decisiones tomadas
+
+15/11/2026:
+
+- **Se elimina el tiempo de limpieza** (RN03, RF06, RF14, RF85 y RES06 ajustados): la especialista y el recurso quedan libres en cuanto termina el servicio, en Oracle (18: `PKG_AGENDA.fin_atencion`, `TRG_CITA_REGLAS`, V_AGENDA_BLOQUES con `fin`, sin `RECURSO.minutos_limpieza` ni `LIMPIEZA_MAX_MIN`) y en Java (`sedes`, `seguridad`, `agenda`, `reportes`). Cierra **D-14**, **DF-58**, **DF-59** y **DF-81**.
+- **Migración 18** (`database/18_ajustes_v52.sql`, v5.1 → v5.2) con **D-15** (`TRG_AUD_CAJA` con la reapertura), **D-16** (solo se reabre la caja del día, `-20060`), **D-17** (99 borra SOLICITUD_ANULACION y CONSUMO_PENDIENTE), **D-21** (la nota de crédito guarda a quien pidió la anulación), **D-22** (`TRANSACCION_PASARELA.id_venta`, `-20072` y el código nuevo **`-20107`**) y **D-37** (V_VENTA_LINEA con `id_producto`, `id_variante` e `id_paquete`). Las cierra en la base; el uso desde Java de `id_venta`, V_VENTA_LINEA y V_KARDEX es de B17.
+- **Nombres en todas las respuestas que muestra una pantalla** (página «02 Nombres en las respuestas · It. 2.1»): cierra **D-31** y **D-33**, y las dudas 1, 2, 7, 9, 14, 21 y 25 del front-end. V_KARDEX ya trae `comprobante` y `documento_compra` (cambio 20, duda 21 del front-end); el resto se programa en B17.
+- **D-18 cerrada:** el script 17 ya está en `oracle-local`.
+- **Horario de los datos de prueba** (`database/19_datos_prueba_horario.sql`): la sede abre todos los días de 09:00 a 20:00 y cada persona descansa un día; agrega `especialista3` (70000007, áreas de especialista1) y `especialista4` (70000008, áreas de especialista2). Solo en la base local y en la de la e2e: `OracleTestcontainer` no instala 19 y las pruebas Java siguen con los datos de 15 y 17.
+- **D-23** (`AvisoProvider.avisos(idSede)`), **D-25** (rutas de los avisos de almacén) y **D-38** (nombres de los tipos de reporte) se aceptan como están.
+
+16/11/2026 (B17):
+
+- **D-22 en Java:** `TRANSACCION_PASARELA.id_venta` se guarda en todo cobro de una venta (CUS13, CUS18 y CUS26) y `GET /ventas/{idVenta}` lista los cobros PENDIENTES (`PagosApi.cobrosPendientes`), con la venta confirmada antes de cobrar en CUS13 y CUS26 (DF-162, decisión del 16/11/2026). Cierra la duda 4 del front-end.
+- **D-37 en Java:** los reportes de productos y de margen se unen por `id_producto` e `id_variante` (DF-165).
+- **D-21, D-16 y D-15 comprobados desde Java:** la nota de crédito guarda a la recepcionista que pidió la anulación y a la Administradora que la autorizó; la caja de ayer no se reabre en Java (422) ni en Oracle (`-20060`); la reapertura queda en V_AUDITORIA con su motivo y quién reabrió.
+- **D-40 cerrada:** `-20107` es 422 (la tarea lo fijó así, DF-164).
+
+16/11/2026 (B18):
+
+- **Nombres en todas las respuestas que muestra una pantalla:** programados según la página «02 Nombres en las respuestas · It. 2.1» (DF-167 a DF-176). Cierra **D-31** (quién pidió y resolvió la anulación) y **D-33** (nombre del producto en el CPE), y las dudas 1, 2, 7, 9, 14, 21, 22 y 25 del front-end.
+
+16/11/2026 (B19 · cierre):
+
+- **D-39 cerrada:** la tarea de cierre autorizó escribir `docs/openapi.yaml` y `docs/trazabilidad_it21.md`. Se exportó el contrato. Su título pasa a «Cautiva Spa · BackOffice · Iteración 2.1», versión 2.1 (`ContratoOpenApi.contratoDeLaIteracion`, que dice también «Iteraciones 1, 2 y 2.1»).
+
+### Verificación de la Iteración 2.1
+
+Rama `tineo-feature/b16-v52-sin-limpieza`, JDK 26 con `--release 21` (15/11/2026).
+
+Base de datos, en un contenedor limpio `gvenzl/oracle-free:23.26.2`, en el orden 00 → 14 → 13 → 15 → 17 → 18 → 16 (sin ningún `ORA-`, `PLS-` ni `SP2-` en la salida de los scripts de instalación):
+
+| Script | Cuenta | Resultado |
+| --- | --- | --- |
+| `18_ajustes_v52.sql` | APP_USER | 57 tablas; P 57, R 132, U 35, C 183; 106 índices IX_; FUNCTION 2, PACKAGE 5, PACKAGE BODY 5, TRIGGER 129, VIEW 27; 0 inválidos; RECURSO sin `minutos_limpieza`; PARAMETRO sin `LIMPIEZA_MAX_MIN`; 0 cobros llenados y 0 citas recalculadas (base vacía; con datos v5.1, ver DF-152) |
+| `97_prueba_rapida_v5.sql` | APP_USER | 14 OK, 0 FALLO |
+| `20_pruebas_reglas_v5.sql` | APP_USER | 144 OK, 0 FALLO |
+| `21_pruebas_v51.sql` | APP_USER | 55 OK, 0 FALLO |
+| `22_pruebas_v52.sql` | APP_USER | 44 OK, 0 FALLO |
+| `16_verificar_cuenta_aplicacion.sql` | CAUTIVA_APP | 11 OK, 0 FALLO |
+| `18_ajustes_v52.sql` (repetido) | APP_USER | No cambia nada (ningún «+», 0 filas en a, g y h); 0 inválidos |
+
+En otro contenedor limpio, 00 → 14 → 13 → 15 → 17 → 18 → 19 y 19 otra vez: la primera vez crea a `especialista3` y `especialista4` con sus áreas y usuarios y deja los 8 horarios; la segunda solo rehace los horarios. Las dos veces: «OK: los 7 días hay al menos una especialista activa por cada área de PERSONAL_AREA».
+
+Back-end, `./mvnw verify` (una corrida; no hubo ORA-03114 ni ORA-12516): 195 pruebas, 194 OK y 1 fallo, `ContratoOpenApiTest.docsOpenapiEsLaSalidaDelCodigo`, porque `docs/openapi.yaml` ya no es la salida de springdoc (sin `minutosLimpieza` ni `finServicio`; D-39). Pasan `ModularidadTest`, `InstalacionBaseDatosTest` (132 FK, RECURSO sin la columna), `MigracionV51Test`, `MigracionV52Test`, `AgendaSinLimpiezaFlujoTest` y las demás. Una primera corrida cayó entera por un YAML mal escrito en `openapi/contrato.yaml` (un texto con «: » sin comillas); se corrigió antes de la corrida que vale.
+
+El front-end no se tocó en esta tarea (no se corrió `npm run build` ni `npm test`): retirar `finServicio` y el bloque «Limpieza» es de F12.
+
+### Verificación de B17 (16/11/2026)
+
+Rama de trabajo sin confirmar sobre `main` (después del merge de B16), JDK 26 con `--release 21`. `./mvnw -q verify` (una corrida; no hubo ORA-03114 ni ORA-12516): 199 pruebas, 198 OK y 1 fallo, `ContratoOpenApiTest.docsOpenapiEsLaSalidaDelCodigo`, el mismo de D-39 (`docs/openapi.yaml` sigue sin exportarse). Antes se corrieron solas las 59 pruebas de `PasarelaYFacturacionFlujoTest`, `AnulacionVentasFlujoTest`, `ReportesFlujoTest`, `CajaConfiguracionFlujoTest`, `CajaVentasFlujoTest` y `ModularidadTest`: todas OK. Pruebas nuevas o ampliadas: `d22UnCobroPendienteApareceEnLaVentaDesdeOtraSesionYAlAprobarseSeRegistraElPago`, `d22ElPagoConLaTransaccionDeOtraVentaEs422`, la venta rápida y la venta de productos con cobro PENDIENTE (id_venta y GET), `d37DosProductosConElMismoNombreNoSeMezclan`, la nota de crédito de CUS23 (D-21), `cus46LaCajaDeAyerNoSeReabreNiEnJavaNiEnOracle` (D-16) y la auditoría de la reapertura en `cus46…` (D-15). `database/` no cambió. El front-end no se tocó: no se corrió `npm run build` ni `npm test`.
+
+### Verificación de B18 (16/11/2026)
+
+Rama `tineo-feature/b18-nombres`, JDK 26 con `--release 21`. `./mvnw -q verify` (una corrida completa; no hubo ORA-03114 ni ORA-12516): 203 pruebas, 202 OK y 1 fallo, `ContratoOpenApiTest.docsOpenapiEsLaSalidaDelCodigo`, el mismo de D-39 (`docs/openapi.yaml` sigue sin exportarse). La otra prueba del contrato (los ejemplos de `contrato.yaml` coinciden con los esquemas) y `ModularidadTest` pasan, y la salida de springdoc ya trae `ItemConciliacion` en `ConciliacionDTO.items`.
+
+Antes de la corrida completa: la primera corrida de las clases tocadas dio 4 fallos por `Map.get(null)` en `NombresVenta` (clienta de paso sin id sobre un `Map.of()`; se corrigió con un acceso que devuelve null). Una segunda corrida se colgó al instalar la base en el contenedor (Docker no pudo detener ese contenedor) y se cortó; repetida, `AnulacionVentasFlujoTest` e `IntegracionesRealesFlujoTest` dieron 21 OK, incluida la prueba del CPE contra WireMock. El front-end no se tocó: no se corrió `npm run build` ni `npm test`.
+
+### Verificación del cierre
+
+Rama `tineo-chore/b19-contrato-it21`, JDK 26 con `--release 21` (16/11/2026).
+
+**Contrato.** `./mvnw test -Dtest=ContratoOpenApiTest -Dcautiva.openapi.exportar=true` exportó `docs/openapi.yaml` (3 de 3 pruebas OK). Se comprobó en el archivo:
+
+- Siguen 103 operaciones, cada una con su `x-permiso`.
+- Ya no aparecen `minutosLimpieza`, `finServicio` ni `LIMPIEZA_MAX_MIN`.
+- Está `CobroPendienteDTO` con `idTransaccion`, `idMedioPago`, `monto`, `canal`, `estado`, `enlacePago` y `fechaExpiracion`.
+- Está `ItemConciliacion`.
+- Están los campos de nombres de la página 02, por ejemplo `nombreCliente`, `nombreEspecialista`, `nombreServicio`, `nombreRecurso`, `nombreMedioPago`, `nombreUsuarioSolicita`, `nombreUsuarioResuelve`, `nombreSede`, los cuatro `nombreUsuario…` de `CajaDTO`, `especialistas` y `recursos` de `HoraLibre`, y `servicios` de paquetes y promociones.
+
+La trazabilidad de las 21 páginas «modificado It. 2.1» y el estado de cada DTO de la página de nombres están en `docs/trazabilidad_it21.md`.
+
+**Base de datos en un contenedor limpio.** Se usó `gvenzl/oracle-free:23.26.2`, en el orden 00 → 14 → 13 → 15 → 17 → 18 → `ALTER USER CAUTIVA_APP` → 16. La instalación (00 a 18) no dio ningún `ORA-`, `PLS-` ni `SP2-`. Resultado de 18:
+
+- 57 tablas y 106 índices IX_.
+- FUNCTION 2, PACKAGE 5, PACKAGE BODY 5, TRIGGER 129 y VIEW 27.
+- 0 objetos inválidos.
+- RECURSO sin `minutos_limpieza` y PARAMETRO sin `LIMPIEZA_MAX_MIN`.
+- 0 cobros llenados y 0 citas recalculadas, porque la base está vacía.
+
+| Script | Cuenta | OK | FALLO |
+| --- | --- | --- | --- |
+| `97_prueba_rapida_v5.sql` | dueño | 14 | 0 |
+| `20_pruebas_reglas_v5.sql` | dueño | 144 | 0 |
+| `21_pruebas_v51.sql` | dueño | 55 | 0 |
+| `22_pruebas_v52.sql` | dueño | 44 | 0 |
+| `16_verificar_cuenta_aplicacion.sql` | CAUTIVA_APP | 11 | 0 |
+
+Los `ORA-` que salen en 20, 21 y 22 son los errores esperados que imprime cada caso. Los cuatro scripts de prueba terminan en ROLLBACK.
+
+**`./mvnw verify`.** Se corrió dos veces, como pide el cierre ante un `ORA-12516`:
+
+- **Primera corrida:** 203 pruebas, 197 OK, 3 errores y 3 fallos, todos en `SeguridadCatalogoFlujoTest`.
+  - Los 3 errores son `ORA-12516`: el listener del contenedor se quedó sin procesos para la conexión directa como dueño (`comoDueno`). Fallaron `cus50LaClaveErradaSoloSumaIntentosYOracleBloquea`, `cus50UnaCuentaInactivaRecibe423YUnUsuarioDesconocido401` y `cus52ListaElPersonalSinUsuarioConSusNombres`.
+  - Los 3 fallos son una consecuencia: `cus50LaClaveErrada…` cortó antes de desbloquear la cuenta que había bloqueado. Por eso `conClaveTemporalSoloSePuedeCambiarLaClave`, `cus50LaSesionVigenteVuelveAlRecargarYSinSesionEs401` y `cus50ElIngresoEntregaPermisosSedeYVenceSegunElParametro` recibieron 423 en vez de 200.
+  - Ninguna es una aserción del código en rojo.
+- **Segunda corrida:** 203 pruebas, 203 OK, 0 fallos, 0 errores y 0 omitidas. `BUILD SUCCESS`.
+- Pasan `ContratoOpenApiTest` (ya sin el fallo de D-39), `ModularidadTest`, `InstalacionBaseDatosTest`, `MigracionV51Test`, `MigracionV52Test` y `AgendaSinLimpiezaFlujoTest`.
+- Ninguna prueba falla por el JDK 26.
+
+Este repositorio es solo el back-end: no se corrió `npm run build` ni `npm test` del front-end.

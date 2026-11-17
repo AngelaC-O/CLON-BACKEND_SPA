@@ -16,6 +16,16 @@ public interface RepositorioTransaccionPasarela extends JpaRepository<Transaccio
 
 	Optional<TransaccionPasarela> findByCodigoOperacion(String codigoOperacion);
 
+	/** [It. 2.1 · D-22, RN52] Los cobros PENDIENTES de una venta (IX_TRANS_PAS_VENTA). No está en el diagrama (DF-160). */
+	@Query("""
+			select t from TransaccionPasarela t
+			where t.idVenta = :idVenta
+			and t.tipoOperacion = dev.com.Synapsis_Spa_Cautiva.pagos.domain.TipoOperacion.COBRO
+			and t.estado = dev.com.Synapsis_Spa_Cautiva.pagos.domain.EstadoTransaccion.PENDIENTE
+			order by t.idTransaccion
+			""")
+	List<TransaccionPasarela> findPendientesDeVenta(@Param("idVenta") Long idVenta);
+
 	@Query("select m from MedioPago m where m.idMedioPago = :idMedioPago")
 	Optional<MedioPago> findMedioPago(@Param("idMedioPago") Long idMedioPago);
 

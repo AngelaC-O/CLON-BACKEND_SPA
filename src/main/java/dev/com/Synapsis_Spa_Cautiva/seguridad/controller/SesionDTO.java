@@ -4,8 +4,9 @@ import java.util.List;
 
 /**
  * permisos: MODULO:ACCION, con los que la IGU habilita los módulos (RF78). [It. 2] idPersonal, nombres, apellidos y rol: GET /auth/sesion
- * devuelve la sesión vigente al recargar, para que el navegador no la guarde (CUS50 modificado).
+ * devuelve la sesión vigente al recargar, para que el navegador no la guarde (CUS50 modificado). [It. 2.1 · nombres] nombreSede, de
+ * SedeApi.obtenerSede (Duda 7).
  */
 public record SesionDTO(Long idUsuario, String nombreUsuario, Long idSede, Boolean debeCambiarClave, List<String> permisos, Long idPersonal,
-		String nombres, String apellidos, String rol) {
+		String nombres, String apellidos, String rol, String nombreSede) {
 }

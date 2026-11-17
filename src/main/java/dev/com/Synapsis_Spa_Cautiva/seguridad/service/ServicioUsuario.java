@@ -13,6 +13,7 @@ import dev.com.Synapsis_Spa_Cautiva.personal.api.EspecialistaHorario;
 import dev.com.Synapsis_Spa_Cautiva.personal.api.PersonalApi;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.PersonaApi;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.api.PersonaDTO;
+import dev.com.Synapsis_Spa_Cautiva.seguridad.api.UsuarioApi;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.controller.MapperUsuario;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.controller.PermisoDTO;
 import dev.com.Synapsis_Spa_Cautiva.seguridad.controller.PersonalSinUsuarioDTO;
@@ -32,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class ServicioUsuario {
+public class ServicioUsuario implements UsuarioApi {
 
 	private static final String SEGURIDAD = "SEGURIDAD";
 
@@ -84,13 +85,49 @@ public class ServicioUsuario {
 		}
 		String claveHash = codificadorClave.codificar(oUsuarioDTO.clave());
 		Usuario oUsuario = new Usuario(oUsuarioDTO.idPersonal(), oUsuarioDTO.idRol(), oUsuarioDTO.nombreUsuario(), claveHash);
-		return mapperUsuario.aDTO(repositorioUsuario.save(oUsuario));
+		return conNombres(mapperUsuario.aDTO(repositorioUsuario.save(oUsuario)));
 	}
 
-	/** [It. 2] CUS53: la lista de usuarios para asignar el rol (diferencia 14 del front-end). */
+	/** [It. 2] CUS53: la lista de usuarios para asignar el rol (diferencia 14 del front-end). [It. 2.1] Con nombres, rol y último acceso (Duda 2). */
 	@Transactional(readOnly = true)
 	public List<UsuarioDTO> listarUsuarios() {
-		return repositorioUsuario.findAll().stream().map(mapperUsuario::aDTO).toList();
+		return conNombres(repositorioUsuario.findAll().stream().map(mapperUsuario::aDTO).toList());
+	}
+
+	/** [It. 2.1 · nombres, D-31] Una consulta de usuarios y una de personas para toda la lista. */
+	@Override
+	@Transactional(readOnly = true)
+	public Map<Long, String> nombresUsuarios(List<Long> idsUsuario) {
+		List<Long> ids = idsUsuario.stream().filter(java.util.Objects::nonNull).distinct().toList();
+		if (ids.isEmpty()) {
+			return Map.of();
+		}
+		List<Usuario> usuarios = repositorioUsuario.findAllById(ids);
+		Map<Long, PersonaDTO> personas = personaApi.obtenerPersonas(usuarios.stream().map(Usuario::getIdPersonal).distinct().toList()).stream()
+			.collect(Collectors.toMap(PersonaDTO::idPersona, Function.identity()));
+		return usuarios.stream()
+			.filter(oUsuario -> personas.containsKey(oUsuario.getIdPersonal()))
+			.collect(Collectors.toMap(Usuario::getIdUsuario, oUsuario -> nombreCompleto(personas.get(oUsuario.getIdPersonal()))));
+	}
+
+	/** [It. 2.1 · nombres] nombres y apellidos de la persona y el nombre del rol, en lote (Duda 2). */
+	private List<UsuarioDTO> conNombres(List<UsuarioDTO> usuarios) {
+		Map<Long, PersonaDTO> personas = personaApi.obtenerPersonas(usuarios.stream().map(UsuarioDTO::idPersonal).distinct().toList()).stream()
+			.collect(Collectors.toMap(PersonaDTO::idPersona, Function.identity()));
+		Map<Long, String> roles = repositorioRol.findAll().stream().collect(Collectors.toMap(Rol::getIdRol, Rol::getNombre));
+		return usuarios.stream().map(oUsuarioDTO -> {
+			PersonaDTO oPersonaDTO = personas.get(oUsuarioDTO.idPersonal());
+			return oUsuarioDTO.conNombres(oPersonaDTO == null ? null : oPersonaDTO.nombres(), oPersonaDTO == null ? null : oPersonaDTO.apellidos(),
+					roles.get(oUsuarioDTO.idRol()));
+		}).toList();
+	}
+
+	private UsuarioDTO conNombres(UsuarioDTO oUsuarioDTO) {
+		return conNombres(List.of(oUsuarioDTO)).getFirst();
+	}
+
+	private static String nombreCompleto(PersonaDTO oPersonaDTO) {
+		return oPersonaDTO.apellidos() == null ? oPersonaDTO.nombres() : oPersonaDTO.nombres() + " " + oPersonaDTO.apellidos();
 	}
 
 	/** [It. 2] CUS53: los permisos (módulo y acción) que existen, para armar los de un rol (diferencia 16 del front-end). */
@@ -110,7 +147,7 @@ public class ServicioUsuario {
 			throw new ReglaNegocioException("RN48", "Siempre queda al menos una usuaria activa con el rol ADMINISTRADORA.");
 		}
 		oUsuario.asignarRol(idRol);
-		return mapperUsuario.aDTO(repositorioUsuario.save(oUsuario));
+		return conNombres(mapperUsuario.aDTO(repositorioUsuario.save(oUsuario)));
 	}
 
 	/**
@@ -124,7 +161,7 @@ public class ServicioUsuario {
 			.orElseThrow(() -> new ReglaNegocioException("RF82", "El usuario " + idUsuario + " no existe.", HttpStatus.NOT_FOUND));
 		String claveHash = codificadorClave.codificar(clave);
 		oUsuario.restablecerClave(claveHash);
-		return mapperUsuario.aDTO(repositorioUsuario.saveAndFlush(oUsuario));
+		return conNombres(mapperUsuario.aDTO(repositorioUsuario.saveAndFlush(oUsuario)));
 	}
 
 	/** Los permisos del pedido reemplazan a los del rol, porque es un PUT. [It. 2] RN48: ADMINISTRADORA conserva SEGURIDAD:VER, CREAR y EDITAR (422). */

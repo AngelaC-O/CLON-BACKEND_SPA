@@ -25,7 +25,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 /**
  * [It. 2] CUS03, CUS04, CUS05 y CUS06 con lista de espera, CUS09, CUS10, CUS12, CUS58, CUS59 y CUS60, y la rama de paquete de CUS11 que en
- * la Iteración 1 no se pudo probar (D-04). La clase trabaja en su propia sede (VentasFlujoApoyo): caja, especialista y sillones con limpieza 0.
+ * la Iteración 1 no se pudo probar (D-04). La clase trabaja en su propia sede (VentasFlujoApoyo): caja, especialista y sillones.
  * CUS12 usa a especialista1 y especialista2 del script 15 sobre una atención FINALIZADA en un día pasado, para no ocupar a nadie ahora.
  */
 @SpringBootTest
@@ -358,7 +358,10 @@ class ClientasCitasCatalogoFlujoTest extends VentasFlujoApoyo {
 				+ "\"fechaInicio\":\"" + hoy.minusDays(1) + "\",\"fechaFin\":\"" + hoy.plusDays(5) + "\",\"idsServicio\":[" + idServicioCorte() + "]}")
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.estado").value("ACTIVA"))
-			.andExpect(jsonPath("$.idsServicio[0]").value(idServicioCorte())), "idPromocion");
+			.andExpect(jsonPath("$.idsServicio[0]").value(idServicioCorte()))
+			// [It. 2.1 · nombres] PromocionDTO.servicios: cada servicio con su nombre (SERVICIO)
+			.andExpect(jsonPath("$.servicios[0].idServicio").value(idServicioCorte()))
+			.andExpect(jsonPath("$.servicios[0].nombre").value(jdbc.queryForObject("SELECT nombre FROM SERVICIO WHERE id_servicio = ?", String.class, idServicioCorte()))), "idPromocion");
 		Long futura = idDe(como("admin", post("/api/v1/promociones"), "{\"nombre\":\"Futura It2\",\"tipoDescuento\":\"MONTO\",\"valor\":5,"
 				+ "\"fechaInicio\":\"" + hoy.plusDays(10) + "\",\"fechaFin\":\"" + hoy.plusDays(20) + "\"}").andExpect(status().isCreated()), "idPromocion");
 		assertThat(id("SELECT COUNT(*) FROM PROMOCION_SERVICIO WHERE id_promocion = ?", vigente)).isEqualTo(1);
@@ -367,7 +370,8 @@ class ClientasCitasCatalogoFlujoTest extends VentasFlujoApoyo {
 			.andExpect(jsonPath("$[*].idPromocion", hasItem(vigente.intValue())))
 			.andExpect(jsonPath("$[*].idPromocion", not(hasItem(futura.intValue()))));
 		como("recepcion", get("/api/v1/promociones"), null).andExpect(status().isOk())
-			.andExpect(jsonPath("$[*].idPromocion", hasItem(futura.intValue())));
+			.andExpect(jsonPath("$[*].idPromocion", hasItem(futura.intValue())))
+			.andExpect(jsonPath("$[?(@.idPromocion == " + vigente + ")].servicios[0].nombre", hasItem(jdbc.queryForObject("SELECT nombre FROM SERVICIO WHERE id_servicio = ?", String.class, idServicioCorte()))));
 
 		// CK_PROMOCION_VALOR: un porcentaje sobre 100 es 422; la recepcionista no crea promociones
 		como("admin", post("/api/v1/promociones"), "{\"nombre\":\"Imposible\",\"tipoDescuento\":\"PORCENTAJE\",\"valor\":150,\"fechaInicio\":\"" + hoy
@@ -384,10 +388,13 @@ class ClientasCitasCatalogoFlujoTest extends VentasFlujoApoyo {
 				+ "\",\"tipo\":\"PAQUETE\",\"numSesiones\":3,\"precio\":60,\"vigenciaDias\":90,\"idsServicio\":[" + idServicioCorte() + "]}")
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.estado").value("ACTIVO"))
-			.andExpect(jsonPath("$.idsServicio[0]").value(idServicioCorte())), "idPaquete");
+			.andExpect(jsonPath("$.idsServicio[0]").value(idServicioCorte()))
+			// [It. 2.1 · nombres] PaqueteDTO.servicios
+			.andExpect(jsonPath("$.servicios[0].nombre").value(jdbc.queryForObject("SELECT nombre FROM SERVICIO WHERE id_servicio = ?", String.class, idServicioCorte()))), "idPaquete");
 		assertThat(id("SELECT COUNT(*) FROM PAQUETE_SERVICIO WHERE id_paquete = ? AND id_servicio = ?", idPaquete, idServicioCorte())).isEqualTo(1);
 		como("recepcion", get("/api/v1/paquetes").param("tipo", "PAQUETE"), null).andExpect(status().isOk())
-			.andExpect(jsonPath("$[*].idPaquete", hasItem(idPaquete.intValue())));
+			.andExpect(jsonPath("$[*].idPaquete", hasItem(idPaquete.intValue())))
+			.andExpect(jsonPath("$[?(@.idPaquete == " + idPaquete + ")].servicios[0].nombre", hasItem(jdbc.queryForObject("SELECT nombre FROM SERVICIO WHERE id_servicio = ?", String.class, idServicioCorte()))));
 		como("recepcion", post("/api/v1/paquetes"), "{\"nombre\":\"Ajeno\",\"tipo\":\"PAQUETE\",\"numSesiones\":1,\"precio\":1}")
 			.andExpect(status().isForbidden());
 		como("admin", post("/api/v1/paquetes"), "{\"nombre\":\"Sin sesiones\",\"tipo\":\"PAQUETE\",\"numSesiones\":0,\"precio\":1}")
@@ -427,6 +434,8 @@ class ClientasCitasCatalogoFlujoTest extends VentasFlujoApoyo {
 		// CUS03: la ficha muestra el paquete con sus sesiones y el producto comprado (HistorialComprasProvider de ventas)
 		enviar(get("/api/v1/clientes/" + idCliente), null).andExpect(status().isOk())
 			.andExpect(jsonPath("$.paquetes[0].idClientePaquete").value(idClientePaquete))
+			// [It. 2.1 · nombres] FichaClienteDTO.PaqueteFicha.nombrePaquete (PAQUETE)
+			.andExpect(jsonPath("$.paquetes[0].nombrePaquete").value(jdbc.queryForObject("SELECT nombre FROM PAQUETE WHERE id_paquete = ?", String.class, idPaquete)))
 			.andExpect(jsonPath("$.paquetes[0].sesionesTotales").value(3))
 			.andExpect(jsonPath("$.paquetes[0].sesionesUsadas").value(1))
 			.andExpect(jsonPath("$.paquetes[0].sesionesRestantes").value(2))

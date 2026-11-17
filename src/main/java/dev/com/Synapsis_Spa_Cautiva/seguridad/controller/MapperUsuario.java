@@ -13,6 +13,9 @@ import org.mapstruct.Mapping;
 public interface MapperUsuario {
 
 	@Mapping(target = "clave", ignore = true)
+	@Mapping(target = "nombres", ignore = true)
+	@Mapping(target = "apellidos", ignore = true)
+	@Mapping(target = "nombreRol", ignore = true)
 	UsuarioDTO aDTO(Usuario oUsuario);
 
 	PermisoDTO aDTO(Permiso oPermiso);

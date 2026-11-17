@@ -30,9 +30,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 /**
- * Cruces de especialista y recurso (RN02, RN03, RN34, RN41). [It. 2 · RN03 v5.1] La limpieza solo ocupa al recurso: la especialista queda libre
- * al terminar el servicio (o desde hora_fin, si terminó antes de lo declarado). Oracle repite la validación (TRG_CITA_CRUCE,
- * TRG_ATENCION_CRUCE) y es quien resuelve dos pedidos simultáneos; PKG_AGENDA aún ocupa a la especialista durante la limpieza (DF-58, D-14).
+ * Cruces de especialista y recurso (RN02, RN03, RN34, RN41). [It. 2.1 · RN03 v5.2] Sin tiempo de limpieza: la especialista y el recurso quedan
+ * libres a la misma hora, al terminar el servicio (o desde hora_fin, si la atención terminó antes de lo declarado). Oracle repite la validación
+ * con el mismo fin (PKG_AGENDA.validar_cruce, TRG_CITA_CRUCE, TRG_ATENCION_CRUCE) y es quien resuelve dos pedidos simultáneos.
  */
 @Service
 @RequiredArgsConstructor
@@ -56,6 +56,9 @@ public class GestorDisponibilidadAgenda {
 
 	private final ParametroApi parametroApi;
 
+	/** [It. 2.1 · nombres] El nombre de las especialistas de cada hora libre, en una búsqueda (diferencia 11 del front-end). */
+	private final NombresAgenda nombresAgenda;
+
 	/** [It. 2 · RN51] Desde la apertura de la sede, cada AGENDA_PASO_MIN minutos de PARAMETRO (antes, la duración de referencia: D-08). */
 	public List<HoraLibre> calcularHorasLibres(Long idVariante, Long idSede, LocalDate fecha) {
 		DatosVariante oVariante = catalogoApi.obtenerVariante(idVariante);
@@ -76,7 +79,7 @@ public class GestorDisponibilidadAgenda {
 				evaluarHora(inicio, duracion, especialistas, recursos, bloques).ifPresent(horasLibres::add);
 			}
 		}
-		return horasLibres;
+		return conEspecialistas(horasLibres);
 	}
 
 	public boolean validarSinCruce(Long idPersonal, Long idRecurso, LocalDateTime fechaHoraInicio, Integer duracionMin) {
@@ -85,34 +88,30 @@ public class GestorDisponibilidadAgenda {
 
 	/**
 	 * CUS11: la cita que se está iniciando no choca consigo misma (DF-30). Si hay cruce, responde 409 e indica el conflicto (RF08).
-	 * [It. 2 · RN03] La especialista se compara sin limpieza y el recurso con ella.
+	 * [It. 2.1 · RN03] La especialista y el recurso se comparan con el mismo fin, el del servicio.
 	 */
 	public boolean validarSinCruce(Long idPersonal, Long idRecurso, LocalDateTime horaInicio, Integer tiempoDeclaradoMin, Long idCitaPropia) {
 		if (personalApi.obtenerIdSede(idPersonal).isEmpty()) {
 			throw new ReglaNegocioException("RF07", "La especialista " + idPersonal + " no existe.");
 		}
 		DatosRecurso oRecurso = recursoApi.obtenerRecurso(idRecurso);
-		LocalDateTime finServicio = horaInicio.plusMinutes(tiempoDeclaradoMin);
-		LocalDateTime finRecurso = finServicio.plusMinutes(oRecurso.minutosLimpieza());
+		LocalDateTime fin = horaInicio.plusMinutes(tiempoDeclaradoMin);
 		for (Cita oCita : repositorioCita.findOcupacion(oRecurso.idSede(), horaInicio.toLocalDate())) {
 			if (!oCita.getIdCita().equals(idCitaPropia)) {
-				LocalDateTime finServicioCita = oCita.getFechaHoraInicio().plusMinutes(oCita.getDuracionMin());
-				exigirLibre(idPersonal.equals(oCita.getIdPersonal()) && seCruzan(horaInicio, finServicio, oCita.getFechaHoraInicio(), finServicioCita),
-						idRecurso.equals(oCita.getIdRecurso()) && seCruzan(horaInicio, finRecurso, oCita.getFechaHoraInicio(), oCita.getFechaHoraFin()),
+				boolean seCruza = seCruzan(horaInicio, fin, oCita.getFechaHoraInicio(), oCita.getFechaHoraFin());
+				exigirLibre(seCruza && idPersonal.equals(oCita.getIdPersonal()), seCruza && idRecurso.equals(oCita.getIdRecurso()),
 						"RN02", "la cita N° " + oCita.getIdCita());
 			}
 		}
 		for (Atencion oAtencion : repositorioAtencion.findOcupacionSinCita(oRecurso.idSede(), horaInicio.toLocalDate())) {
-			LocalDateTime finServicioAtencion = finServicio(oAtencion);
-			LocalDateTime finRecursoAtencion = finServicioAtencion.plusMinutes(recursoApi.obtenerRecurso(oAtencion.getIdRecurso()).minutosLimpieza());
-			exigirLibre(idPersonal.equals(oAtencion.getIdPersonal()) && seCruzan(horaInicio, finServicio, oAtencion.getHoraInicio(), finServicioAtencion),
-					idRecurso.equals(oAtencion.getIdRecurso()) && seCruzan(horaInicio, finRecurso, oAtencion.getHoraInicio(), finRecursoAtencion),
+			boolean seCruza = seCruzan(horaInicio, fin, oAtencion.getHoraInicio(), finDeAtencion(oAtencion));
+			exigirLibre(seCruza && idPersonal.equals(oAtencion.getIdPersonal()), seCruza && idRecurso.equals(oAtencion.getIdRecurso()),
 					"RN34", "la atención N° " + oAtencion.getIdAtencion());
 		}
 		return true;
 	}
 
-	/** [It. 2 · RN03] Las franjas libres de la especialista empiezan al terminar el servicio; las del recurso, después de su limpieza. */
+	/** [It. 2.1 · RN03] Las franjas libres de la especialista y del recurso empiezan al terminar el servicio. */
 	public List<FranjaAgendaDTO> armarAgenda(Long idSede, LocalDate fecha, Long idPersonal, Long idRecurso) {
 		List<FilaBloqueAgenda> bloques = bloquesDelDia(idSede, fecha);
 		List<FranjaAgendaDTO> agenda = new ArrayList<>();
@@ -120,8 +119,8 @@ public class GestorDisponibilidadAgenda {
 			.filter(oBloque -> (idPersonal == null || idPersonal.equals(oBloque.getIdPersonal()))
 					&& (idRecurso == null || idRecurso.equals(oBloque.getIdRecurso())))
 			.map(oBloque -> new FranjaAgendaDTO(OCUPADA, oBloque.getOrigen(), oBloque.getIdOrigen(), oBloque.getIdPersonal(), oBloque.getIdRecurso(),
-					oBloque.getIdVariante(), oBloque.getInicio(), oBloque.getFin(), oBloque.getEstado(), oBloque.getFinServicio(), oBloque.getIdCliente(),
-					oBloque.getNombreClientePaso(), null, null))
+					oBloque.getIdVariante(), oBloque.getInicio(), oBloque.getFin(), oBloque.getEstado(), oBloque.getIdCliente(),
+					oBloque.getNombreClientePaso(), null, null, null))
 			.forEach(agenda::add);
 		if (idRecurso == null) {
 			agregarFranjasDeEspecialistas(agenda, idSede, fecha, idPersonal, bloques);
@@ -136,8 +135,19 @@ public class GestorDisponibilidadAgenda {
 	public List<HoraLibre> especialistasYRecursosLibres(Long idVariante, Long idSede, LocalDateTime fechaHora) {
 		DatosVariante oVariante = catalogoApi.obtenerVariante(idVariante);
 		LocalDate fecha = fechaHora.toLocalDate();
-		return evaluarHora(fechaHora, oVariante.duracionRefMin(), personalApi.listarEspecialistas(idSede, oVariante.idArea(), fecha),
-				recursosDelTipo(idSede, oVariante), bloquesDelDia(idSede, fecha)).stream().toList();
+		return conEspecialistas(evaluarHora(fechaHora, oVariante.duracionRefMin(), personalApi.listarEspecialistas(idSede, oVariante.idArea(), fecha),
+				recursosDelTipo(idSede, oVariante), bloquesDelDia(idSede, fecha)).stream().toList());
+	}
+
+	/** [It. 2.1 · nombres] Las especialistas de todas las horas con su nombre, en una sola búsqueda de personas. */
+	private List<HoraLibre> conEspecialistas(List<HoraLibre> horasLibres) {
+		NombresAgenda.Nombres nombres = nombresAgenda.buscar(horasLibres.stream().flatMap(oHora -> oHora.idsPersonal().stream()).toList(), List.of(),
+				List.of(), List.of(), List.of());
+		return horasLibres.stream()
+			.map(oHora -> oHora.conEspecialistas(oHora.idsPersonal().stream()
+				.map(idPersonal -> new HoraLibre.EspecialistaLibre(idPersonal, nombres.persona(idPersonal)))
+				.toList()))
+			.toList();
 	}
 
 	private List<DatosRecurso> recursosDelTipo(Long idSede, DatosVariante oVariante) {
@@ -148,30 +158,31 @@ public class GestorDisponibilidadAgenda {
 		return repositorioCita.findBloques(idSede, fecha.atStartOfDay(), fecha.plusDays(1).atStartOfDay());
 	}
 
-	/** Vacío si falta especialista o recurso. [It. 2 · RN03] El recurso se cuenta con su limpieza; la especialista, solo con el servicio. */
+	/** Vacío si falta especialista o recurso. [It. 2.1 · RN03] La especialista y el recurso se cuentan solo con el servicio (sin limpieza). */
 	private Optional<HoraLibre> evaluarHora(LocalDateTime inicio, int duracion, List<EspecialistaHorario> especialistas, List<DatosRecurso> recursos,
 			List<FilaBloqueAgenda> bloques) {
-		LocalDateTime finServicio = inicio.plusMinutes(duracion);
+		LocalDateTime fin = inicio.plusMinutes(duracion);
 		List<DatosRecurso> recursosLibres = recursos.stream()
 			.filter(oRecurso -> bloques.stream()
 				.noneMatch(oBloque -> oRecurso.idRecurso().equals(oBloque.getIdRecurso())
-						&& seCruzan(inicio, finServicio.plusMinutes(oRecurso.minutosLimpieza()), oBloque.getInicio(), oBloque.getFin())))
+						&& seCruzan(inicio, fin, oBloque.getInicio(), oBloque.getFin())))
 			.toList();
 		if (recursosLibres.isEmpty()) {
 			return Optional.empty();
 		}
 		List<Long> idsPersonal = especialistas.stream()
 			.filter(oEspecialista -> !inicio.toLocalTime().isBefore(oEspecialista.horaEntrada())
-					&& !finServicio.toLocalTime().isAfter(oEspecialista.horaSalida()))
+					&& !fin.toLocalTime().isAfter(oEspecialista.horaSalida()))
 			.filter(oEspecialista -> bloques.stream()
 				.noneMatch(oBloque -> oEspecialista.idPersonal().equals(oBloque.getIdPersonal())
-						&& seCruzan(inicio, finServicio, oBloque.getInicio(), oBloque.getFinServicio())))
+						&& seCruzan(inicio, fin, oBloque.getInicio(), oBloque.getFin())))
 			.map(EspecialistaHorario::idPersonal)
 			.toList();
 		if (idsPersonal.isEmpty()) {
 			return Optional.empty();
 		}
-		return Optional.of(new HoraLibre(inicio, duracion, idsPersonal, recursosLibres.stream().map(DatosRecurso::idRecurso).toList()));
+		return Optional.of(new HoraLibre(inicio, duracion, idsPersonal, recursosLibres.stream().map(DatosRecurso::idRecurso).toList(), List.of(),
+				recursosLibres.stream().map(oRecurso -> new HoraLibre.RecursoLibre(oRecurso.idRecurso(), oRecurso.nombre())).toList()));
 	}
 
 	private void agregarFranjasDeEspecialistas(List<FranjaAgendaDTO> agenda, Long idSede, LocalDate fecha, Long idPersonal,
@@ -180,7 +191,7 @@ public class GestorDisponibilidadAgenda {
 			if (idPersonal == null || idPersonal.equals(oEspecialista.idPersonal())) {
 				List<FilaBloqueAgenda> ocupadas = bloques.stream().filter(oBloque -> oEspecialista.idPersonal().equals(oBloque.getIdPersonal())).toList();
 				agregarFranjasLibres(agenda, fecha.atTime(oEspecialista.horaEntrada()), fecha.atTime(oEspecialista.horaSalida()), ocupadas,
-						FilaBloqueAgenda::getFinServicio, oEspecialista.idPersonal(), null);
+						FilaBloqueAgenda::getFin, oEspecialista.idPersonal(), null);
 			}
 		}
 	}
@@ -218,8 +229,8 @@ public class GestorDisponibilidadAgenda {
 		return new FranjaAgendaDTO(LIBRE, null, null, idPersonal, idRecurso, null, inicio, fin, null, null, null, null, null, null);
 	}
 
-	/** Sin limpieza: hasta cuándo la atención ocupa a la especialista (RN03, v5.1). */
-	private static LocalDateTime finServicio(Atencion oAtencion) {
+	/** Hasta cuándo la atención ocupa a la especialista y al recurso: hora_fin si terminó, o el tiempo declarado (RN03, v5.2). */
+	private static LocalDateTime finDeAtencion(Atencion oAtencion) {
 		return oAtencion.getHoraFin() != null ? oAtencion.getHoraFin() : oAtencion.getHoraInicio().plusMinutes(oAtencion.getTiempoDeclaradoMin());
 	}
 
@@ -228,7 +239,7 @@ public class GestorDisponibilidadAgenda {
 			throw new ReglaNegocioException(regla, "Cruce de horario: la especialista ya tiene " + ocupacion + ".", HttpStatus.CONFLICT);
 		}
 		if (recursoOcupado) {
-			throw new ReglaNegocioException(regla, "Cruce de horario: el recurso ya tiene " + ocupacion + " (incluye su limpieza).", HttpStatus.CONFLICT);
+			throw new ReglaNegocioException(regla, "Cruce de horario: el recurso ya tiene " + ocupacion + ".", HttpStatus.CONFLICT);
 		}
 	}
 

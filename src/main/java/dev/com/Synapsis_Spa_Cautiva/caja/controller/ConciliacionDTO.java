@@ -11,10 +11,13 @@ import dev.com.Synapsis_Spa_Cautiva.caja.domain.EstadoConciliacionItem;
  * diferencias faltan para poder cerrarla. El diagrama solo nombra el tipo.
  */
 public record ConciliacionDTO(Long idConciliacion, Integer anio, Integer mes, Long idUsuario, EstadoConciliacion estado, LocalDateTime fechaCierre,
-		Long sinJustificar, List<Item> items) {
+		Long sinJustificar, List<ItemConciliacion> items) {
 
-	/** Una diferencia (CONCILIACION_ITEM): de una venta, de SUNAT o de la pasarela (CK_CONC_ITEM_ORIGEN). */
-	public record Item(Long idItem, Long idVenta, String referenciaSunat, Long idTransaccion, Boolean aceptadoSunat, Boolean pagoRespaldado,
+	/**
+	 * Una diferencia (CONCILIACION_ITEM): de una venta, de SUNAT o de la pasarela (CK_CONC_ITEM_ORIGEN). [It. 2.1] Antes se llamaba Item, igual
+	 * que ProformaDTO.Item: springdoc usa el nombre simple y el contrato apuntaba al ítem de la proforma (Duda 22 del front-end).
+	 */
+	public record ItemConciliacion(Long idItem, Long idVenta, String referenciaSunat, Long idTransaccion, Boolean aceptadoSunat, Boolean pagoRespaldado,
 			EstadoConciliacionItem estado, String justificacion) {
 	}
 

@@ -1,6 +1,7 @@
 package dev.com.Synapsis_Spa_Cautiva;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
@@ -15,6 +16,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -72,7 +77,10 @@ class CajaConfiguracionFlujoTest extends VentasFlujoApoyo {
 	@Test
 	void cus46LaAdministradoraApruebaElCierreConDiferenciaYReabreLaCajaDelDia() throws Exception {
 		Long idCaja = cajaAbierta();
-		cerrarCaja(idCaja, "1").andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("CERRADA"));
+		cerrarCaja(idCaja, "1").andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("CERRADA"))
+			// [It. 2.1 · nombres] CajaDTO: quién abrió y quién cerró (USUARIO → PERSONA, Duda 25)
+			.andExpect(jsonPath("$.nombreUsuarioApertura").value(jdbc.queryForObject("SELECT TRIM(p.nombres || ' ' || p.apellidos) FROM USUARIO u JOIN PERSONA p ON p.id_persona = u.id_personal WHERE u.nombre_usuario = ?", String.class, "recepcion")))
+			.andExpect(jsonPath("$.nombreUsuarioCierre").value(jdbc.queryForObject("SELECT TRIM(p.nombres || ' ' || p.apellidos) FROM USUARIO u JOIN PERSONA p ON p.id_persona = u.id_personal WHERE u.nombre_usuario = ?", String.class, "recepcion")));
 
 		// La recepcionista cierra su caja (CAJA:EDITAR) pero no la aprueba ni la reabre
 		enviar(get("/api/v1/cajas/con-diferencia"), null).andExpect(status().isForbidden());
@@ -88,7 +96,8 @@ class CajaConfiguracionFlujoTest extends VentasFlujoApoyo {
 		como("admin", patch("/api/v1/cajas/" + idCaja + "/revision"), null).andExpect(status().isOk())
 			.andExpect(jsonPath("$.estado").value("CERRADA"))
 			.andExpect(jsonPath("$.idUsuarioRevisa").value(id("SELECT id_usuario FROM USUARIO WHERE nombre_usuario = 'admin'")))
-			.andExpect(jsonPath("$.fechaRevision").exists());
+			.andExpect(jsonPath("$.fechaRevision").exists())
+			.andExpect(jsonPath("$.nombreUsuarioRevisa").value(jdbc.queryForObject("SELECT TRIM(p.nombres || ' ' || p.apellidos) FROM USUARIO u JOIN PERSONA p ON p.id_persona = u.id_personal WHERE u.nombre_usuario = ?", String.class, "admin")));
 		como("admin", patch("/api/v1/cajas/" + idCaja + "/revision"), null).andExpect(status().isUnprocessableContent());
 		como("admin", get("/api/v1/cajas/con-diferencia"), null).andExpect(status().isOk())
 			.andExpect(jsonPath("$[*].idCaja", not(hasItem(idCaja.intValue()))));
@@ -102,11 +111,40 @@ class CajaConfiguracionFlujoTest extends VentasFlujoApoyo {
 			.andExpect(jsonPath("$.estado").value("ABIERTA"))
 			.andExpect(jsonPath("$.motivoReapertura").value("Venta registrada después del cierre"))
 			.andExpect(jsonPath("$.idUsuarioReapertura").isNumber())
+			.andExpect(jsonPath("$.nombreUsuarioReapertura").value(jdbc.queryForObject("SELECT TRIM(p.nombres || ' ' || p.apellidos) FROM USUARIO u JOIN PERSONA p ON p.id_persona = u.id_personal WHERE u.nombre_usuario = ?", String.class, "admin")))
 			.andExpect(jsonPath("$.fechaRevision").value(nullValue()))
 			.andExpect(jsonPath("$.fechaCierre").value(nullValue()));
+		// [It. 2.1 · D-15] La reapertura queda en la auditoría: quién la hizo y su motivo (TRG_AUD_CAJA de v5.2)
+		assertThat(id("SELECT COUNT(*) FROM V_AUDITORIA WHERE entidad = 'CAJA' AND id_entidad = ? AND usuario = 'admin'"
+				+ " AND detalle LIKE '%motivo_reapertura:%Venta registrada después del cierre%'"
+				+ " AND detalle LIKE '%id_usuario_reapertura:%' AND detalle LIKE '%estado: CERRADA -> ABIERTA%'", idCaja)).isEqualTo(1);
 
 		// La recepcionista vuelve a arquear y cerrar (CUS45, sin cambios)
 		cerrarCaja(idCaja, "100").andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("CERRADA"));
+	}
+
+	@Test
+	void cus46LaCajaDeAyerNoSeReabreNiEnJavaNiEnOracle() throws Exception {
+		Long idCaja = cajaAbierta();
+		cerrarCaja(idCaja, "100").andExpect(status().isOk());
+		// La caja pasa a ser de ayer (el dueño, en mantenimiento; TRG_CAJA_REGLAS no protege la fecha de apertura de una caja cerrada)
+		comoDueno("UPDATE CAJA SET fecha_apertura = fecha_apertura - INTERVAL '1' DAY WHERE id_caja = " + idCaja);
+
+		// Java: Caja.reabrir responde 422 (RN30)
+		como("admin", patch("/api/v1/cajas/" + idCaja + "/reapertura"), "{\"motivoReapertura\":\"Venta de ayer\"}").andExpect(status().isUnprocessableContent())
+			.andExpect(jsonPath("$.regla").value("RN30"));
+
+		// [It. 2.1 · D-16] Oracle también: aunque se fuerce por SQL con la sesión de la Administradora, TRG_CAJA_REGLAS responde -20060
+		Long idAdmin = id("SELECT id_usuario FROM USUARIO WHERE nombre_usuario = 'admin'");
+		try (Connection dueno = DriverManager.getConnection(ORACLE.getJdbcUrl(), DUENO, CLAVE_DUENO); Statement sentencia = dueno.createStatement()) {
+			sentencia.execute("BEGIN PKG_SESION.iniciar(" + idAdmin + "); END;");
+			assertThatThrownBy(() -> sentencia.executeUpdate("UPDATE CAJA SET estado = 'ABIERTA', motivo_reapertura = 'Venta de ayer' WHERE id_caja = " + idCaja))
+				.isInstanceOf(SQLException.class)
+				.hasMessageContaining("ORA-20060")
+				.hasMessageContaining("Solo se reabre la caja del d");
+			sentencia.execute("BEGIN PKG_SESION.terminar; END;");
+		}
+		assertThat(estadoCaja(idCaja)).isEqualTo("CERRADA");
 	}
 
 	@Test
@@ -252,19 +290,21 @@ class CajaConfiguracionFlujoTest extends VentasFlujoApoyo {
 
 	@Test
 	void cus65CambiaParametrosConSuRangoYConfiguraTiposDeDocumento() throws Exception {
-		como("admin", get("/api/v1/parametros"), null).andExpect(status().isOk()).andExpect(jsonPath("$[*].codigo", hasItem("LIMPIEZA_MAX_MIN")));
-		BigDecimal limpieza = jdbc.queryForObject("SELECT valor_numero FROM PARAMETRO WHERE codigo = 'LIMPIEZA_MAX_MIN'", BigDecimal.class);
+		// [It. 2.1 · v5.2] LIMPIEZA_MAX_MIN se retiró con el tiempo de limpieza (RN03): ya no se lista y su PATCH es 404, como cualquier código
+		como("admin", get("/api/v1/parametros"), null).andExpect(status().isOk()).andExpect(jsonPath("$[*].codigo", hasItem("AGENDA_PASO_MIN")))
+			.andExpect(jsonPath("$[*].codigo", not(hasItem("LIMPIEZA_MAX_MIN"))));
+		BigDecimal paso = jdbc.queryForObject("SELECT valor_numero FROM PARAMETRO WHERE codigo = 'AGENDA_PASO_MIN'", BigDecimal.class);
 
-		como("admin", patch("/api/v1/parametros/LIMPIEZA_MAX_MIN"), "{\"valorNumero\":15}").andExpect(status().isUnprocessableContent())
-			.andExpect(jsonPath("$.regla").value("RN03"));
+		como("admin", patch("/api/v1/parametros/LIMPIEZA_MAX_MIN"), "{\"valorNumero\":10}").andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.regla").value("RF87"));
 		como("admin", patch("/api/v1/parametros/AGENDA_PASO_MIN"), "{\"valorNumero\":0}").andExpect(status().isUnprocessableContent())
 			.andExpect(jsonPath("$.regla").value("RN51"));
 		como("admin", patch("/api/v1/parametros/NO_EXISTE"), "{\"valorNumero\":1}").andExpect(status().isNotFound());
-		enviar(patch("/api/v1/parametros/LIMPIEZA_MAX_MIN"), "{\"valorNumero\":5}").andExpect(status().isForbidden());
+		enviar(patch("/api/v1/parametros/AGENDA_PASO_MIN"), "{\"valorNumero\":5}").andExpect(status().isForbidden());
 		// El mismo valor: queda auditado a nombre de la Administradora y no cambia nada para las demás pruebas
-		como("admin", patch("/api/v1/parametros/LIMPIEZA_MAX_MIN"), "{\"valorNumero\":" + limpieza.toPlainString() + "}").andExpect(status().isOk())
+		como("admin", patch("/api/v1/parametros/AGENDA_PASO_MIN"), "{\"valorNumero\":" + paso.toPlainString() + "}").andExpect(status().isOk())
 			.andExpect(jsonPath("$.idUsuario").value(id("SELECT id_usuario FROM USUARIO WHERE nombre_usuario = 'admin'")));
-		assertThat(jdbc.queryForObject("SELECT valor_numero FROM PARAMETRO WHERE codigo = 'LIMPIEZA_MAX_MIN'", BigDecimal.class)).isEqualByComparingTo(limpieza);
+		assertThat(jdbc.queryForObject("SELECT valor_numero FROM PARAMETRO WHERE codigo = 'AGENDA_PASO_MIN'", BigDecimal.class)).isEqualByComparingTo(paso);
 
 		// GET /tipos-documento lo lee cualquier usuario con sesión; solo DNI y RUC se consultan en APISPERU (RN45)
 		como("especialista1", get("/api/v1/tipos-documento"), null).andExpect(status().isOk()).andExpect(jsonPath("$[*].abreviatura", hasItem("DNI")));

@@ -266,12 +266,12 @@ class AgendaFlujoTest extends OracleTestcontainer {
 		Long idCliente = registrarClienta("Disponibilidad");
 		agendar(idCliente, idEspecialista, recurso("SILLON", 0), idVariante, dia.atTime(9, 0), 30).andExpect(status().isCreated());
 
-		// [It. 2] RN03 y RN51: la cita ocupa a especialista1 de 09:00 a 09:30 y al sillón 0 hasta 09:40 (limpieza de 10 min). Con horas cada
-		// AGENDA_PASO_MIN = 15 min, la siguiente libre es 09:30, en otro sillón (en la Iteración 1 eran 10:00: paso de 30 min y limpieza para ella)
+		// [It. 2.1] RN03 v5.2 y RN51: la cita ocupa a especialista1 y al sillón 0 de 09:00 a 09:30, sin limpieza. Con horas cada
+		// AGENDA_PASO_MIN = 15 min, la siguiente libre es 09:30, también en el sillón 0 (en v5.1 el sillón seguía en limpieza hasta las 09:40)
 		enviar("recepcion", get("/api/v1/citas/disponibilidad").param("idVariante", idVariante.toString()).param("fecha", dia.toString()), null)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$[0].inicio").value(containsString("09:30")))
-			.andExpect(jsonPath("$[0].idsRecurso", not(hasItem(recurso("SILLON", 0).intValue()))));
+			.andExpect(jsonPath("$[0].idsRecurso", hasItem(recurso("SILLON", 0).intValue())));
 	}
 
 	@Test
@@ -287,31 +287,34 @@ class AgendaFlujoTest extends OracleTestcontainer {
 	}
 
 	@Test
-	void rn03LaEspecialistaQuedaLibreAlTerminarAunqueElRecursoSigaEnLimpieza() throws Exception {
-		Long idCliente = registrarClienta("Con limpieza");
+	void rn03LaEspecialistaYElRecursoQuedanLibresALaHoraDeFin() throws Exception {
+		Long idCliente = registrarClienta("Sin limpieza");
 		Long idEspecialista = idPersonal("especialista1");
 		Long sillon = recurso("SILLON", 0);
 		LocalDate dia = lunes(18);
 		agendar(idCliente, idEspecialista, sillon, idVariante(CORTE), dia.atTime(10, 0), 30).andExpect(status().isCreated());
 
-		// Horas libres: a las 10:15 especialista1 aún atiende; a las 10:30 ya está libre, pero el sillón 0 sigue en limpieza hasta las 10:40
+		// [It. 2.1] Horas libres: a las 10:15 especialista1 aún atiende; a las 10:30 ella y el sillón 0 ya están libres (RN03 v5.2)
 		String horas = enviar("recepcion", get("/api/v1/citas/disponibilidad").param("idVariante", idVariante(CORTE).toString()).param("fecha", dia.toString()), null)
 			.andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
 		assertThat(JsonPath.<List<String>>read(horas, "$[*].inicio")).doesNotContain(dia.atTime(10, 15).toString() + ":00");
 		assertThat(JsonPath.<List<Number>>read(horas, "$[?(@.inicio == '" + dia.atTime(10, 30) + ":00')].idsPersonal[*]")).extracting(Number::longValue)
 			.contains(idEspecialista);
 		assertThat(JsonPath.<List<Number>>read(horas, "$[?(@.inicio == '" + dia.atTime(10, 30) + ":00')].idsRecurso[*]")).extracting(Number::longValue)
-			.isNotEmpty()
-			.doesNotContain(sillon);
+			.contains(sillon);
 
-		// Agenda: la especialista queda libre desde las 10:30 y el recurso desde las 10:40
+		// Agenda: la especialista y el recurso quedan libres desde las 10:30 (en v5.1 el recurso, desde las 10:40)
 		enviar("recepcion", get("/api/v1/citas/agenda").param("fecha", dia.toString()).param("idPersonal", idEspecialista.toString()), null)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$[?(@.franja == 'LIBRE')].inicio", hasItem(dia.atTime(10, 30) + ":00")));
 		enviar("recepcion", get("/api/v1/citas/agenda").param("fecha", dia.toString()).param("idRecurso", sillon.toString()), null)
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$[?(@.franja == 'LIBRE')].inicio", hasItem(dia.atTime(10, 40) + ":00")))
-			.andExpect(jsonPath("$[?(@.franja == 'LIBRE')].inicio", not(hasItem(dia.atTime(10, 30) + ":00"))));
+			.andExpect(jsonPath("$[?(@.franja == 'LIBRE')].inicio", hasItem(dia.atTime(10, 30) + ":00")))
+			.andExpect(jsonPath("$[?(@.franja == 'LIBRE')].inicio", not(hasItem(dia.atTime(10, 40) + ":00"))));
+
+		// Java y Oracle (PKG_AGENDA) aceptan a la misma especialista en el mismo sillón justo a la hora de fin
+		agendar(idCliente, idEspecialista, sillon, idVariante(CORTE), dia.atTime(10, 30), 30).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.fechaHoraFin").value(containsString("11:00")));
 	}
 
 	@Test
@@ -322,7 +325,7 @@ class AgendaFlujoTest extends OracleTestcontainer {
 	}
 
 	@Test
-	void cus05AgendaYOracleCalculaElFinConLimpieza() throws Exception {
+	void cus05AgendaYOracleCalculaElFinDelServicio() throws Exception {
 		Long idCliente = registrarClienta("Agendada");
 		LocalDateTime inicio = lunes(11).atTime(10, 0);
 
@@ -330,7 +333,7 @@ class AgendaFlujoTest extends OracleTestcontainer {
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.estado").value("PENDIENTE"))
 			.andExpect(jsonPath("$.idSede").value(idSede()))
-			.andExpect(jsonPath("$.fechaHoraFin").value(containsString("10:40")));
+			.andExpect(jsonPath("$.fechaHoraFin").value(containsString("10:30")));
 
 		Long idCita = idDe(resultado, "idCita");
 		resultado.andExpect(header().string("Location", "/api/v1/citas/" + idCita));
@@ -338,25 +341,25 @@ class AgendaFlujoTest extends OracleTestcontainer {
 	}
 
 	@Test
-	void cus05ElCruceDeEspecialistaODeRecursoConLimpiezaEs409() throws Exception {
+	void cus05ElCruceDeEspecialistaODeRecursoEs409() throws Exception {
 		Long idCliente = registrarClienta("Con cruce");
 		Long idEspecialista = idPersonal("especialista1");
 		Long idVariante = idVariante(CORTE);
 		LocalDate dia = lunes(12);
 		agendar(idCliente, idEspecialista, recurso("SILLON", 0), idVariante, dia.atTime(10, 0), 30).andExpect(status().isCreated());
 
-		// La misma especialista en otro sillón, dentro del servicio (10:00 a 10:30; con la limpieza de 10 min termina 10:40)
+		// La misma especialista en otro sillón, dentro del servicio (10:00 a 10:30; [It. 2.1] sin limpieza, RN03 v5.2)
 		agendar(idCliente, idEspecialista, recurso("SILLON", 1), idVariante, dia.atTime(10, 15), 30).andExpect(status().isConflict())
 			.andExpect(jsonPath("$.regla").value("RN02"))
 			.andExpect(jsonPath("$.detail").value(containsString("especialista")));
 		agendar(idCliente, idEspecialista, recurso("SILLON", 1), idVariante, dia.atTime(10, 20), 30).andExpect(status().isConflict());
 
-		// El mismo sillón con otra especialista, dentro de la limpieza: el recurso también choca
-		agendar(idCliente, idPersonal("especialista2"), recurso("SILLON", 0), idVariante, dia.atTime(10, 35), 30).andExpect(status().isConflict())
+		// El mismo sillón con otra especialista, dentro del servicio: el recurso también choca
+		agendar(idCliente, idPersonal("especialista2"), recurso("SILLON", 0), idVariante, dia.atTime(10, 15), 30).andExpect(status().isConflict())
 			.andExpect(jsonPath("$.detail").value(containsString("recurso")));
 
-		// Justo al terminar la limpieza ya no hay cruce
-		agendar(idCliente, idEspecialista, recurso("SILLON", 0), idVariante, dia.atTime(10, 40), 30).andExpect(status().isCreated());
+		// Justo al terminar el servicio ya no hay cruce (en v5.1, a las 10:40, al terminar la limpieza)
+		agendar(idCliente, idEspecialista, recurso("SILLON", 0), idVariante, dia.atTime(10, 30), 30).andExpect(status().isCreated());
 	}
 
 	@Test
@@ -429,7 +432,7 @@ class AgendaFlujoTest extends OracleTestcontainer {
 	// ------------------------------------------------------------------ CUS08
 
 	@Test
-	void cus08LaAgendaTraeBloquesOcupadosConLimpiezaYFranjasLibres() throws Exception {
+	void cus08LaAgendaTraeBloquesOcupadosHastaElFinDelServicioYFranjasLibres() throws Exception {
 		Long idCliente = registrarClienta("De agenda");
 		Long idEspecialista = idPersonal("especialista1");
 		Long idRecurso = recurso("SILLON", 3);
@@ -445,12 +448,12 @@ class AgendaFlujoTest extends OracleTestcontainer {
 			.andExpect(jsonPath("$[1].franja").value("OCUPADA"))
 			.andExpect(jsonPath("$[1].origen").value("CITA"))
 			.andExpect(jsonPath("$[1].idOrigen").value(idCita))
-			.andExpect(jsonPath("$[1].fin").value(containsString("10:40")))
-			.andExpect(jsonPath("$[1].finServicio").value(containsString("10:30")))
+			.andExpect(jsonPath("$[1].fin").value(containsString("10:30")))
+			.andExpect(jsonPath("$[1].finServicio").doesNotExist())
 			.andExpect(jsonPath("$[1].nombreCliente").value("De agenda De Prueba"))
 			.andExpect(jsonPath("$[1].nombreServicio").value(CORTE))
 			.andExpect(jsonPath("$[1].nombreEspecialista").isNotEmpty())
-			// [It. 2] RN03: la especialista queda libre al terminar (10:30), aunque el sillón siga en limpieza hasta las 10:40
+			// [It. 2.1] RN03 v5.2: la especialista queda libre al terminar el servicio (10:30)
 			.andExpect(jsonPath("$[2].franja").value("LIBRE"))
 			.andExpect(jsonPath("$[2].inicio").value(containsString("10:30")))
 			.andExpect(jsonPath("$[2].fin").value(containsString("19:00")));
@@ -459,6 +462,8 @@ class AgendaFlujoTest extends OracleTestcontainer {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$", hasSize(3)))
 			.andExpect(jsonPath("$[2].idRecurso").value(idRecurso))
+			// [It. 2.1] el sillón también queda libre a las 10:30 (en v5.1, a las 10:40)
+			.andExpect(jsonPath("$[2].inicio").value(containsString("10:30")))
 			.andExpect(jsonPath("$[2].fin").value(containsString("20:00")));
 
 		// Sin filtros: el bloque, dos franjas de especialista1, una de especialista2 y una por recurso, más la que parte el sillón
@@ -504,9 +509,9 @@ class AgendaFlujoTest extends OracleTestcontainer {
 		Long idAtencion = idDe(inicio, "idAtencion");
 		inicio.andExpect(header().string("Location", "/api/v1/atenciones/" + idAtencion));
 
-		// RF13: la cita pasa a EN_ATENCION y el tiempo declarado actualiza su bloque, con la limpieza (45 + 10)
+		// RF13: la cita pasa a EN_ATENCION y el tiempo declarado actualiza su bloque ([It. 2.1] sin limpieza: 10:00 + 45, antes 10:55)
 		assertThat(jdbc.queryForObject("SELECT estado FROM CITA WHERE id_cita = ?", String.class, idCita)).isEqualTo("EN_ATENCION");
-		assertThat(jdbc.queryForObject("SELECT TO_CHAR(fecha_hora_fin, 'HH24:MI') FROM CITA WHERE id_cita = ?", String.class, idCita)).isEqualTo("10:55");
+		assertThat(jdbc.queryForObject("SELECT TO_CHAR(fecha_hora_fin, 'HH24:MI') FROM CITA WHERE id_cita = ?", String.class, idCita)).isEqualTo("10:45");
 
 		// [It. 2] Mi agenda sale de la sesión y trae la atención EN_CURSO; en-curso la retoma desde otro equipo
 		enviar("especialista1", get("/api/v1/atenciones/mi-agenda").param("fecha", dia.toString()), null).andExpect(status().isOk())
@@ -604,6 +609,98 @@ class AgendaFlujoTest extends OracleTestcontainer {
 			estado.setRollbackOnly();
 		});
 		assertThatThrownBy(() -> atencionApi.obtenerAtencionCobrable(999_999L)).isInstanceOf(ReglaNegocioException.class);
+	}
+
+	// ------------------------------------------------------------------ [It. 2.1] Nombres en las respuestas (página «02 Nombres»)
+
+	private String texto(String sql, Object... parametros) {
+		return jdbc.queryForObject(sql, String.class, parametros);
+	}
+
+	/** PERSONA: «nombres apellidos». */
+	private String persona(Long idPersona) {
+		return texto("SELECT TRIM(nombres || ' ' || apellidos) FROM PERSONA WHERE id_persona = ?", idPersona);
+	}
+
+	/** SERVICIO y VARIANTE_SERVICIO: «Servicio · Variante». */
+	private String servicioVariante(Long idVariante) {
+		return texto("SELECT s.nombre || ' · ' || v.nombre FROM VARIANTE_SERVICIO v JOIN SERVICIO s ON s.id_servicio = v.id_servicio WHERE v.id_variante = ?",
+				idVariante);
+	}
+
+	private String nombreRecurso(Long idRecurso) {
+		return texto("SELECT nombre FROM RECURSO WHERE id_recurso = ?", idRecurso);
+	}
+
+	@Test
+	void nombresEnHorasLibresCitaAgendaMiAgendaAtencionRecomendacionYFicha() throws Exception {
+		Long idCliente = registrarClienta("Con nombres");
+		Long idEspecialista = idPersonal("especialista1");
+		Long idRecurso = recurso("SILLON", 5);
+		Long idVariante = idVariante(CORTE);
+		LocalDate dia = lunes(25);
+
+		// HoraLibre: cada especialista y cada recurso libre con su nombre (se conservan idsPersonal e idsRecurso)
+		String horas = enviar("recepcion", get("/api/v1/citas/disponibilidad").param("idVariante", idVariante.toString()).param("fecha", dia.toString()), null)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].idsPersonal", hasItem(idEspecialista.intValue())))
+			.andExpect(jsonPath("$[0].especialistas[?(@.idPersonal == " + idEspecialista + ")].nombre", hasItem(persona(idEspecialista))))
+			.andReturn().getResponse().getContentAsString();
+		Number idRecursoLibre = JsonPath.read(horas, "$[0].recursos[0].idRecurso");
+		assertThat(JsonPath.<String>read(horas, "$[0].recursos[0].nombre")).isEqualTo(nombreRecurso(idRecursoLibre.longValue()));
+
+		// CitaDTO: clienta, especialista, «Servicio · Variante» y recurso
+		Long idCita = idDe(agendar(idCliente, idEspecialista, idRecurso, idVariante, dia.atTime(10, 0), 30).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.nombreCliente").value(persona(idCliente)))
+			.andExpect(jsonPath("$.nombreEspecialista").value(persona(idEspecialista)))
+			.andExpect(jsonPath("$.nombreServicio").value(servicioVariante(idVariante)))
+			.andExpect(jsonPath("$.nombreRecurso").value(nombreRecurso(idRecurso))), "idCita");
+
+		// FranjaAgendaDTO: el nombre del recurso
+		enviar("recepcion", get("/api/v1/citas/agenda").param("fecha", dia.toString()).param("idRecurso", idRecurso.toString()), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$[?(@.idOrigen == " + idCita + ")].nombreRecurso", hasItem(nombreRecurso(idRecurso))));
+
+		// CitaAtencionDTO: «Mi agenda» de especialista1 (Duda 1)
+		enviar("especialista1", get("/api/v1/atenciones/mi-agenda").param("fecha", dia.toString()), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$[?(@.idCita == " + idCita + ")].nombreCliente", hasItem(persona(idCliente))))
+			.andExpect(jsonPath("$[?(@.idCita == " + idCita + ")].nombreServicio", hasItem(servicioVariante(idVariante))))
+			.andExpect(jsonPath("$[?(@.idCita == " + idCita + ")].nombreRecurso", hasItem(nombreRecurso(idRecurso))));
+
+		// AtencionDTO al iniciar
+		Long idAtencion = idDe(enviar("especialista1", post("/api/v1/atenciones"), "{\"idCita\":" + idCita + ",\"tiempoDeclaradoMin\":30}")
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.nombreCliente").value(persona(idCliente)))
+			.andExpect(jsonPath("$.nombreEspecialista").value(persona(idEspecialista)))
+			.andExpect(jsonPath("$.nombreServicio").value(servicioVariante(idVariante)))
+			.andExpect(jsonPath("$.nombreRecurso").value(nombreRecurso(idRecurso))), "idAtencion");
+
+		// RecomendacionDTO: el nombre del producto (PRODUCTO)
+		Long idProducto = id("SELECT MIN(id_producto) FROM PRODUCTO WHERE tipo_uso = 'VENTA'");
+		String nombreProducto = texto("SELECT nombre FROM PRODUCTO WHERE id_producto = ?", idProducto);
+		enviar("especialista1", post("/api/v1/atenciones/" + idAtencion + "/recomendaciones"), "{\"idProducto\":" + idProducto + ",\"observacion\":\"De noche\"}")
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.nombreProducto").value(nombreProducto));
+
+		// AtencionDTO al finalizar, y AtencionCobrable (por cobrar, CUS18)
+		enviar("especialista1", patch("/api/v1/atenciones/" + idAtencion + "/fin"), "{\"observaciones\":\"Sin novedad\"}").andExpect(status().isOk())
+			.andExpect(jsonPath("$.nombreCliente").value(persona(idCliente)))
+			.andExpect(jsonPath("$.nombreRecurso").value(nombreRecurso(idRecurso)));
+		SecurityContextHolder.getContext().setAuthentication(sesion("recepcion"));
+		AtencionCobrable oCobrable = atencionApi.obtenerAtencionCobrable(idAtencion);
+		assertThat(oCobrable.nombreCliente()).isEqualTo(persona(idCliente));
+		assertThat(oCobrable.nombreEspecialista()).isEqualTo(persona(idEspecialista));
+		assertThat(oCobrable.nombreServicio()).isEqualTo(servicioVariante(idVariante));
+
+		// FichaClienteDTO: el historial (servicio, especialista, recurso y producto recomendado) y las citas pendientes con sus nombres
+		agendar(idCliente, idEspecialista, idRecurso, idVariante, lunes(26).atTime(11, 0), 30).andExpect(status().isCreated());
+		enviar("recepcion", get("/api/v1/clientes/" + idCliente), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$.atenciones[?(@.idAtencion == " + idAtencion + ")].nombreServicio", hasItem(servicioVariante(idVariante))))
+			.andExpect(jsonPath("$.atenciones[?(@.idAtencion == " + idAtencion + ")].nombreEspecialista", hasItem(persona(idEspecialista))))
+			.andExpect(jsonPath("$.atenciones[?(@.idAtencion == " + idAtencion + ")].nombreRecurso", hasItem(nombreRecurso(idRecurso))))
+			.andExpect(jsonPath("$.atenciones[?(@.idAtencion == " + idAtencion + ")].recomendaciones[0].nombreProducto", hasItem(nombreProducto)))
+			.andExpect(jsonPath("$.citasPendientes[0].nombreCliente").value(persona(idCliente)))
+			.andExpect(jsonPath("$.citasPendientes[0].nombreServicio").value(servicioVariante(idVariante)))
+			.andExpect(jsonPath("$.citasPendientes[0].nombreRecurso").value(nombreRecurso(idRecurso)));
 	}
 
 }

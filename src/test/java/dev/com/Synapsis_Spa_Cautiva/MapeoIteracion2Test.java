@@ -50,6 +50,7 @@ import dev.com.Synapsis_Spa_Cautiva.inventario.repository.RepositorioProducto;
 import dev.com.Synapsis_Spa_Cautiva.pagos.domain.EstadoMedioPago;
 import dev.com.Synapsis_Spa_Cautiva.pagos.domain.MedioPago;
 import dev.com.Synapsis_Spa_Cautiva.pagos.repository.RepositorioMedioPago;
+import dev.com.Synapsis_Spa_Cautiva.sedes.domain.EstadoRecurso;
 import dev.com.Synapsis_Spa_Cautiva.sedes.domain.Recurso;
 import dev.com.Synapsis_Spa_Cautiva.sedes.domain.TipoRecurso;
 import dev.com.Synapsis_Spa_Cautiva.sedes.repository.RepositorioRecurso;
@@ -230,7 +231,7 @@ class MapeoIteracion2Test extends OracleTestcontainer {
 		Long idEspecialista = id("SELECT id_personal FROM USUARIO WHERE nombre_usuario = 'especialista2'");
 		Long idVariante = id("SELECT v.id_variante FROM VARIANTE_SERVICIO v JOIN SERVICIO s ON s.id_servicio = v.id_servicio"
 				+ " WHERE s.nombre = 'Limpieza Facial Profunda Estándar'");
-		Recurso cabina = repositorioRecurso.saveAndFlush(new Recurso(idSede, "Cabina de mapeo It2", TipoRecurso.CABINA, 10));
+		Recurso cabina = repositorioRecurso.saveAndFlush(new Recurso(idSede, "Cabina de mapeo It2", TipoRecurso.CABINA));
 		Atencion atencion = repositorioAtencion.saveAndFlush(
 				new Atencion(null, "Clienta de paso", idEspecialista, cabina.getIdRecurso(), idVariante, 30));
 		atencion.recomendarProducto(insumo.getIdProducto(), "Aplicar de noche");
@@ -335,7 +336,7 @@ class MapeoIteracion2Test extends OracleTestcontainer {
 		Long idEspecialista = id("SELECT id_personal FROM USUARIO WHERE nombre_usuario = 'especialista1'");
 		Long idVariante = id("SELECT v.id_variante FROM VARIANTE_SERVICIO v JOIN SERVICIO s ON s.id_servicio = v.id_servicio"
 				+ " WHERE s.nombre = 'Corte de Cabello Caballero'");
-		Recurso sillon = repositorioRecurso.saveAndFlush(new Recurso(idSede, "Sillón de mapeo It2", TipoRecurso.SILLON, 10));
+		Recurso sillon = repositorioRecurso.saveAndFlush(new Recurso(idSede, "Sillón de mapeo It2", TipoRecurso.SILLON));
 		Caja caja = repositorioCaja.saveAndFlush(new Caja(idSede, idAdmin, BigDecimal.TEN));
 		LocalDate lunes = hoy.with(TemporalAdjusters.next(DayOfWeek.MONDAY));
 
@@ -401,7 +402,8 @@ class MapeoIteracion2Test extends OracleTestcontainer {
 
 		MedioPago efectivo = repositorioMedioPago.findAll().stream().filter(medio -> medio.getNombre().equals("EFECTIVO")).findFirst().orElseThrow();
 		assertThatThrownBy(() -> efectivo.configurar(EstadoMedioPago.ACTIVO, Boolean.TRUE)).isInstanceOf(ReglaNegocioException.class);
-		assertThatThrownBy(() -> new Recurso(idSede, "Sillón de 30 minutos", TipoRecurso.SILLON, 30)).isInstanceOf(ReglaNegocioException.class);
+		// [It. 2.1 · v5.2] El recurso ya no tiene tiempo de limpieza que validar (RN03): se registra con su sede y su tipo, DISPONIBLE
+		assertThat(new Recurso(idSede, "Sillón sin limpieza", TipoRecurso.SILLON).getEstado()).isEqualTo(EstadoRecurso.DISPONIBLE);
 	}
 
 	private Long id(String consulta) {

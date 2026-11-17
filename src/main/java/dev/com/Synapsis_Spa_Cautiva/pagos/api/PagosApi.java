@@ -13,8 +13,13 @@ public interface PagosApi {
 	/**
 	 * canal: POS, QR, LINK o API. Una respuesta RECHAZADA responde 422 (RF103); PENDIENTE no respalda ningún pago (RN42). [It. 2 · RN52] La
 	 * transacción se guarda en su propia transacción de base: APROBADA, RECHAZADA o PENDIENTE, queda aunque la venta haga rollback.
+	 * [It. 2.1 · D-22] Guarda idVenta (TRANSACCION_PASARELA.id_venta): la venta ya tiene que estar confirmada, porque Oracle la busca ABIERTA y de
+	 * la misma sede desde esa otra transacción (DF-162).
 	 */
 	TransaccionDTO cobrar(Long idVenta, Long idMedioPago, BigDecimal monto, String canal);
+
+	/** [It. 2.1 · CUS18, D-22, RN52] Los cobros PENDIENTES de la venta, para retomarla en cualquier equipo (GET /ventas/{idVenta}). */
+	List<CobroPendienteDTO> cobrosPendientes(Long idVenta);
 
 	/** El cobro que quedó PENDIENTE y el webhook ya aprobó: 422 si aún no lo está (RN42). */
 	void exigirAprobada(Long idTransaccion);
@@ -46,6 +51,12 @@ public interface PagosApi {
 
 	/** [It. 2 · CUS47, RF105] Las transacciones APROBADAS del mes con su comisión y su abono, para conciliar (RN31). */
 	List<TransaccionLiquidadaDTO> liquidacion(Integer anio, Integer mes);
+
+	/**
+	 * [It. 2.1 · nombres] idMedioPago → nombre (EFECTIVO, TARJETA, YAPE, PLIN), en lote, para los pagos de la venta (CUS18, CUS24). No está en la
+	 * lista de interfaces nuevas de la página de nombres, que dice «PagosApi (medios de pago)» (DF-170).
+	 */
+	Map<Long, String> nombresMediosPago(List<Long> idsMedioPago);
 
 	/** Cobros APROBADOS del día por idMedioPago (RF64, RN42). */
 	Map<Long, BigDecimal> aprobadosDelDia(Long idSede, LocalDateTime fecha);

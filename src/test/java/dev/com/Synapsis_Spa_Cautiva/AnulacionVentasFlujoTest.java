@@ -164,6 +164,11 @@ class AnulacionVentasFlujoTest extends VentasFlujoApoyo {
 
 		assertThat(estadoVenta(idVenta)).isEqualTo("ABIERTA");
 		assertThat(stock(idProducto)).isEqualTo(3);
+		// [It. 2.1 · D-22] La venta se confirmó antes de cobrar: el cobro guarda id_venta y la venta lo lista al retomarla
+		assertThat(id("SELECT id_venta FROM TRANSACCION_PASARELA WHERE codigo_operacion = ?", "PEND-PROD-" + idProducto)).isEqualTo(idVenta);
+		enviar(get("/api/v1/ventas/" + idVenta), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$.cobrosPendientes", hasSize(1)))
+			.andExpect(jsonPath("$.cobrosPendientes[0].enlacePago").value("https://pasarela-falsa.invalid/qr"));
 	}
 
 	@Test
@@ -243,6 +248,10 @@ class AnulacionVentasFlujoTest extends VentasFlujoApoyo {
 			.isEqualTo("SALDO_FAVOR");
 		assertThat(id("SELECT id_usuario_autoriza FROM NOTA_CREDITO WHERE id_nota_credito = ?", idNotaCredito))
 			.isEqualTo(id("SELECT id_usuario FROM USUARIO WHERE nombre_usuario = 'admin'"));
+		// [It. 2.1 · D-21] TRG_NOTA_CREDITO_REGLAS toma de la solicitud a quien pidió la anulación: la recepcionista, no la Administradora
+		assertThat(id("SELECT id_usuario_solicita FROM NOTA_CREDITO WHERE id_nota_credito = ?", idNotaCredito))
+			.isEqualTo(id("SELECT id_usuario FROM USUARIO WHERE nombre_usuario = 'recepcion'"))
+			.isEqualTo(id("SELECT id_usuario_solicita FROM SOLICITUD_ANULACION WHERE id_solicitud = ?", idSolicitud));
 		assertThat(id("SELECT id_nota_credito FROM SOLICITUD_ANULACION WHERE id_solicitud = ?", idSolicitud)).isEqualTo(idNotaCredito);
 		// PKG_VENTA.al_anular: el ABONO del total y el reingreso del producto los hace Oracle
 		assertThat(jdbc.queryForObject("SELECT SUM(monto) FROM SALDO_FAVOR_MOV WHERE id_venta = ? AND tipo = 'ABONO'", BigDecimal.class, idVenta))
@@ -334,6 +343,81 @@ class AnulacionVentasFlujoTest extends VentasFlujoApoyo {
 		assertThat(id("SELECT COUNT(*) FROM TRANSACCION_PASARELA WHERE tipo_operacion = 'DEVOLUCION' AND canal = 'QR' AND estado = 'APROBADA'"
 				+ " AND codigo_operacion = ? AND id_transaccion_origen = ? AND id_nota_credito = ?", operacion, idCobro, idNotaCredito)).isEqualTo(1);
 		assertThat(id("SELECT COUNT(*) FROM SALDO_FAVOR_MOV WHERE id_venta = ?", idVenta)).isZero();
+	}
+
+	// ------------------------------------------------------------------ [It. 2.1] Nombres en las respuestas (página «02 Nombres»)
+
+	private String texto(String sql, Object... parametros) {
+		return jdbc.queryForObject(sql, String.class, parametros);
+	}
+
+	private String persona(Long idPersona) {
+		return texto("SELECT TRIM(nombres || ' ' || apellidos) FROM PERSONA WHERE id_persona = ?", idPersona);
+	}
+
+	/** USUARIO → PERSONA: el nombre completo de quien usa la cuenta. */
+	private String usuario(String nombreUsuario) {
+		return texto("SELECT TRIM(p.nombres || ' ' || p.apellidos) FROM USUARIO u JOIN PERSONA p ON p.id_persona = u.id_personal WHERE u.nombre_usuario = ?",
+				nombreUsuario);
+	}
+
+	private String servicioVariante(Long idVariante) {
+		return texto("SELECT s.nombre || ' · ' || v.nombre FROM VARIANTE_SERVICIO v JOIN SERVICIO s ON s.id_servicio = v.id_servicio WHERE v.id_variante = ?",
+				idVariante);
+	}
+
+	@Test
+	void nombresEnVentaDetallePagoPorCobrarProformaKardexYSolicitud() throws Exception {
+		cajaAbierta();
+		Long idCliente = clientaNueva("Con nombres");
+		Long idProducto = productoConStock("Crema con nombre", 5);
+		String nombreProducto = texto("SELECT nombre FROM PRODUCTO WHERE id_producto = ?", idProducto);
+
+		// VentaDTO, DetalleVentaDTO (producto) y PagoVentaDTO (MEDIO_PAGO)
+		Long idVenta = idDe(vender(idCliente, idProducto, 1, "EFECTIVO", null).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.nombreCliente").value(persona(idCliente)))
+			.andExpect(jsonPath("$.detalles[0].descripcion").value(nombreProducto))
+			.andExpect(jsonPath("$.detalles[0].nombreEspecialista").value(persona(especialista())))
+			.andExpect(jsonPath("$.pagos[0].nombreMedioPago").value(texto("SELECT nombre FROM MEDIO_PAGO WHERE id_medio_pago = ?", medio("EFECTIVO")))),
+				"idVenta");
+		enviar(get("/api/v1/ventas/" + idVenta), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$.nombreCliente").value(persona(idCliente)))
+			.andExpect(jsonPath("$.detalles[0].descripcion").value(nombreProducto));
+
+		// DetalleVentaDTO de un servicio: «Servicio · Variante» y la especialista; AtencionCobrable de una clienta de paso (por cobrar)
+		Long idAtencion = atencionFinalizada(idCliente, variante(CORTE));
+		enviar(get("/api/v1/ventas/por-cobrar"), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$.atenciones[?(@.idAtencion == " + idAtencion + ")].nombreCliente", hasItem(persona(idCliente))))
+			.andExpect(jsonPath("$.atenciones[?(@.idAtencion == " + idAtencion + ")].nombreServicio", hasItem(servicioVariante(variante(CORTE)))))
+			.andExpect(jsonPath("$.atenciones[?(@.idAtencion == " + idAtencion + ")].nombreEspecialista", hasItem(persona(especialista()))));
+		Long deServicio = idDe(crearVenta(idAtencion).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.detalles[0].descripcion").value(servicioVariante(variante(CORTE))))
+			.andExpect(jsonPath("$.detalles[0].nombreEspecialista").value(persona(especialista()))), "idVenta");
+		enviar(get("/api/v1/ventas/por-cobrar"), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$.ventasAbiertas[?(@.idVenta == " + deServicio + ")].nombreCliente", hasItem(persona(idCliente))));
+		Long dePaso = atencionFinalizada(null, variante(CORTE));
+		enviar(get("/api/v1/ventas/por-cobrar"), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$.atenciones[?(@.idAtencion == " + dePaso + ")].nombreCliente", hasItem("Clienta de paso")));
+
+		// ProformaDTO.Item: «Servicio · Variante»
+		enviar(post("/api/v1/proformas"), "{\"nombreCliente\":\"Novia\",\"items\":[{\"tipoItem\":\"SERVICIO\",\"idVariante\":" + variante(CORTE) + ",\"cantidad\":1}]}")
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[0].descripcion").value(servicioVariante(variante(CORTE))));
+
+		// MovimientoKardexDTO: la salida de la venta trae su comprobante (V_KARDEX v5.2)
+		String comprobante = texto("SELECT serie || '-' || numero FROM COMPROBANTE WHERE id_venta = ? AND tipo = 'BOLETA'", idVenta);
+		como("almacen", get("/api/v1/productos/" + idProducto + "/kardex"), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$[?(@.tipo == 'SALIDA')].comprobante", hasItem(comprobante)));
+
+		// SolicitudAnulacionDTO (D-31): la clienta y quién pidió y quién resolvió
+		Long idSolicitud = idDe(solicitar(idVenta, "MEDIO_ORIGINAL").andExpect(status().isCreated())
+			.andExpect(jsonPath("$.nombreCliente").value(persona(idCliente)))
+			.andExpect(jsonPath("$.nombreUsuarioSolicita").value(usuario("recepcion"))), "idSolicitud");
+		como("admin", get("/api/v1/solicitudes-anulacion"), null).andExpect(status().isOk())
+			.andExpect(jsonPath("$[?(@.idSolicitud == " + idSolicitud + ")].nombreUsuarioSolicita", hasItem(usuario("recepcion"))));
+		como("admin", post("/api/v1/solicitudes-anulacion/" + idSolicitud + "/rechazo"), "{\"motivoRechazo\":\"La venta es correcta\"}")
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.nombreUsuarioResuelve").value(usuario("admin")));
 	}
 
 }
